@@ -123,7 +123,11 @@ async function runGen() {
     await refreshSkills()
     previewId.value = row.id // 直接预览新候选，做对比
     msg.value = '已生成新候选，预览/对比后点「启用」'
-  } catch (e: any) { msg.value = e?.data?.statusMessage || '生成失败' }
+  } catch (e: any) {
+    // HTTP 可能超时但 skill 其实已生成并写库 → 刷新一下看是否多了候选
+    await refreshSkills().catch(() => {})
+    msg.value = e?.data?.statusMessage || '生成请求中断——若上方多出候选则已生成，否则重试'
+  }
   finally { generating.value = false; genProgress.value = ''; es?.close() }
 }
 const showNew = ref(false)

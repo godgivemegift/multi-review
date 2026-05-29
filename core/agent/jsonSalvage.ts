@@ -26,7 +26,7 @@ export async function salvageJson(raw: string, _model?: string): Promise<unknown
   // 兜底：快模型 + 低 effort 修成合法 JSON
   const target = m ? m[0] : cleaned
   const prompt = `The following is meant to be a single JSON object but is malformed (likely unescaped quotes/newlines inside string values). Fix it into ONE valid JSON object. Output ONLY the JSON — no code fences, no commentary. Preserve all content; just make it valid JSON.\n\n${target}`
-  const stdout = await runClaude(['--print', '--model', 'sonnet', '--effort', 'low', prompt], { timeout: 120_000 })
+  const stdout = await runClaude(['--print', '--model', 'sonnet', '--effort', 'low'], { input: prompt, timeout: 120_000 })
   const fixed = String(stdout).trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim()
   const fm = fixed.match(/\{[\s\S]*\}/)
   const final = tryParse(fm ? fm[0] : fixed)

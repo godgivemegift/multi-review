@@ -32,16 +32,21 @@ const SAFE_TOOLS = new Set(['Read', 'Grep', 'Glob'])
 
 // 危险命令（真正能造成外部破坏 / 越权写的）
 const DANGER: RegExp[] = [
-  // git 写 / 改历史 / 动远端
-  /\bgit\b[^\n]*\b(add|commit|push|reset|rebase|merge|checkout|switch|restore|stash|clean|cherry-pick|revert|am|apply|tag|branch|gc|prune|worktree|config|remote|fetch|pull|mv|rm)\b/i,
+  // git 写 / 改历史 / 动远端 / 拉外部
+  /\bgit\b[^\n]*\b(add|commit|push|reset|rebase|merge|checkout|switch|restore|stash|clean|cherry-pick|revert|am|apply|tag|branch|gc|prune|worktree|config|remote|fetch|pull|clone|mv|rm)\b/i,
   // gh 写操作
   /\bgh\s+(pr|issue|release|repo|api)\b[^\n]*\b(comment|review|merge|close|edit|create|delete|reopen|lock|unlock)\b/i,
   /\bgh\s+api\b[^\n]*(--method\s+(POST|PUT|PATCH|DELETE)|-X\s+(POST|PUT|PATCH|DELETE))/i,
-  // 破坏性 / 提权 / 管道执行
+  // 网络出站（审核只读本地，不需要联网下载）
+  /\b(curl|wget|nc|ncat|telnet|ssh|scp|rsync)\b/i,
+  // 管道到解释器 / shell -c 执行任意代码（绕过手段）
+  /\|\s*(sh|bash|zsh|fish|python3?|node|deno|bun|perl|ruby|php)\b/i,
+  /\b(bash|sh|zsh|fish)\b\s+-c\b/i,
+  /\beval\b/i,
+  // 破坏性 / 提权
   /\brm\s+-[rf]/i,
   /\bsudo\b/i,
-  /\b(curl|wget)\b[^\n]*\|\s*(sh|bash|zsh)\b/i,
-  /\b(chmod|chown|dd|mkfs|truncate)\b/i,
+  /\b(chmod|chown|dd|mkfs|truncate|kill|pkill)\b/i,
 ]
 
 function isDangerousBash(cmd: string): boolean {

@@ -132,13 +132,16 @@ async function runReviewJob(ctx: ReviewJobCtx) {
       result = r.result
       costUsd = r.costUsd
       if (taskGone()) { emit('error', '任务已被删除，丢弃审核结果'); return }
-      db.delete(schema.findings).where(eq(schema.findings.reviewId, reviewId)).run()
-      result.findings.forEach((f: any, i: number) => {
-        db.insert(schema.findings).values({
-          id: nanoid(), reviewId, fid: `F${i + 1}`, severity: f.severity, title: f.title,
-          location: f.location || null, problem: f.problem || null, detail: f.detail || null, fix: f.fix || null,
-          introducedByPr: f.introducedByPr, checked: false, notes: null, sortOrder: i, createdAt: now(),
-        }).run()
+      // 清空+写入放进一个事务：要么全写要么全不写，避免崩在中间留下空 findings
+      db.transaction((tx: any) => {
+        tx.delete(schema.findings).where(eq(schema.findings.reviewId, reviewId)).run()
+        result.findings.forEach((f: any, i: number) => {
+          tx.insert(schema.findings).values({
+            id: nanoid(), reviewId, fid: `F${i + 1}`, severity: f.severity, title: f.title,
+            location: f.location || null, problem: f.problem || null, detail: f.detail || null, fix: f.fix || null,
+            introducedByPr: f.introducedByPr, checked: false, notes: null, sortOrder: i, createdAt: now(),
+          }).run()
+        })
       })
     }
 

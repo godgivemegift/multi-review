@@ -1,15 +1,16 @@
 import { spawn } from 'node:child_process'
 
-// 跑 `claude --print ...`。关键：stdin 设为 'ignore'(/dev/null)，否则在 server 里 claude 会等一个
-// 永远不来的 stdin（"no stdin data received in 3s"）然后失败。prompt 走命令行参数。
+// 跑 `claude --print ...`。prompt 走 stdin（写完立即 end）：既不会因超长参数撞 ARG_MAX，
+// 也不会出现 "no stdin data received" 卡死（我们主动写入并关闭 stdin）。
 export function runClaude(
   args: string[],
-  opts: { timeout?: number; maxBuffer?: number } = {},
+  opts: { input?: string; timeout?: number; maxBuffer?: number } = {},
 ): Promise<string> {
   const timeout = opts.timeout ?? 120_000
   const maxBuffer = opts.maxBuffer ?? 1024 * 1024 * 32
+  const hasInput = typeof opts.input === 'string'
   return new Promise((resolve, reject) => {
-    const cp = spawn('claude', args, { stdio: ['ignore', 'pipe', 'pipe'] })
+    const cp = spawn('claude', args, { stdio: [hasInput ? 'pipe' : 'ignore', 'pipe', 'pipe'] })
     let out = ''
     let err = ''
     let done = false
@@ -29,5 +30,10 @@ export function runClaude(
     cp.on('close', (code) =>
       finish(() => (code === 0 ? resolve(out) : reject(new Error(`claude 退出码 ${code}: ${err.slice(0, 300)}`)))),
     )
+    if (hasInput) {
+      cp.stdin!.on('error', () => {}) // 防 EPIPE 崩溃
+      cp.stdin!.write(opts.input!)
+      cp.stdin!.end()
+    }
   })
 }

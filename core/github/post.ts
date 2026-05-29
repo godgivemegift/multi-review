@@ -1,6 +1,6 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { writeFile, unlink, mkdtemp } from 'node:fs/promises'
+import { writeFile, rm, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runClaude } from '../agent/claudeCli'
@@ -55,7 +55,7 @@ function parseLoc(loc: string | null): { path: string; line: number } | null {
 // 把中文 findings 翻成英文 PR 评论正文（GitHub 对外内容用英文）
 // 一次 claude --print 调用（用 runClaude：stdin=/dev/null，避免 server 里等 stdin 卡死/失败）。
 async function claudePrint(model: string, prompt: string): Promise<string> {
-  const out = await runClaude(['--print', '--model', model || 'sonnet', prompt], { timeout: 120_000 })
+  const out = await runClaude(['--print', '--model', model || 'sonnet'], { input: prompt, timeout: 120_000 })
   return String(out).trim()
 }
 
@@ -95,7 +95,8 @@ ${JSON.stringify(one)}`
     tasks.push(claudePrint(model, prompt).then((t) => { bodies[f.fid] = t.replace(/^```(?:markdown|md)?\s*/i, '').replace(/```\s*$/i, '').trim() }))
   }
 
-  await Promise.all(tasks)
+  // 单条翻译失败不毁掉整次发布：失败的 finding 在 assemble 时回退到原标题
+  await Promise.allSettled(tasks)
   return { globalNotesEn, bodies }
 }
 
@@ -178,7 +179,7 @@ export async function postReview(opts: {
       )
       return JSON.parse(stdout)
     } finally {
-      await unlink(file).catch(() => {})
+      await rm(dir, { recursive: true, force: true }).catch(() => {})
     }
   }
 

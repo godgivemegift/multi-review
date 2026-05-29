@@ -13,7 +13,7 @@
 2. **绝不 git 写**：禁止 add/commit/push/reset/rebase/merge/checkout/restore/stash/clean，禁止改文件，禁止 `gh` 写（comment/review/merge/close/edit/写 API）。`git push` 会改同事的 PR 分支，是头号红线。
 3. **只审不改**：agent 产出是审核意见（findings / 结构化 JSON），不是代码改动。发现 bug 只描述，不"顺手修"。
 4. **机制归引擎、准则归 skill**：worktree、分支、发评论、是否修复 = 引擎控制；skill 只决定"审什么、怎么判"。skill 无权改变运行机制。
-5. **发评论是唯一对外写**：只在用户点「确认发布」时，由引擎用 `gh api .../reviews` 发，每次落库。
+5. **对外写仅限发评论**：只在用户点「确认发布」时，由引擎用 `gh api .../reviews` 发，每次落库。发布前会自愈式删除本人残留的 PENDING review（GitHub 每人每 PR 限一个 pending，否则新 review 会 422）——这也是一次对外写，但仅删自己未提交的草稿，不影响已发内容。
 
 ## 这些不变量怎么强制（纵深防御）
 
