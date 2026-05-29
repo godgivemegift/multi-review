@@ -6,7 +6,10 @@ const { data: projects } = await useFetch<Project[]>('/api/projects')
 
 <template>
   <div class="max-w-xl mx-auto px-10 py-24">
-    <h1 class="text-4xl font-light tracking-tight">Multi Review</h1>
+    <div class="flex items-center gap-3">
+      <img src="/logo.svg" alt="" class="w-10 h-10 rounded-lg" />
+      <h1 class="text-4xl font-light tracking-tight">Multi Review</h1>
+    </div>
     <div class="w-10 border-t border-neutral-300 my-6" />
     <p class="text-sm text-neutral-500 leading-relaxed">
       本地批量 PR 审核。终端 agent 为核心，web 做把关与状态管理。

@@ -4,6 +4,7 @@ import type { Project } from '~core/db/schema'
 useHead({
   title: 'Multi Review',
   meta: [{ name: 'description', content: '本地批量 PR 审核管理' }],
+  link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
   htmlAttrs: { class: 'light' },
 })
 
@@ -37,8 +38,9 @@ async function createProject() {
     <div class="min-h-screen flex bg-white text-neutral-900 antialiased">
       <!-- 左侧导航 -->
       <aside class="w-60 shrink-0 border-r border-neutral-100 flex flex-col">
-        <NuxtLink to="/" class="px-6 h-16 flex items-center text-sm font-medium tracking-[0.2em] uppercase">
-          Multi&nbsp;<span class="text-neutral-300">Review</span>
+        <NuxtLink to="/" class="px-6 h-16 flex items-center gap-2.5">
+          <img src="/logo.svg" alt="" class="w-6 h-6 rounded-md" />
+          <span class="text-sm font-medium tracking-[0.18em] uppercase">Multi&nbsp;<span class="text-neutral-300">Review</span></span>
         </NuxtLink>
 
         <div class="px-6 pt-3 pb-3 flex items-center justify-between">
