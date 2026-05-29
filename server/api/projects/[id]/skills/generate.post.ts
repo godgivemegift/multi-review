@@ -1,0 +1,67 @@
+import { nanoid } from 'nanoid'
+import { z } from 'zod'
+import { eq } from 'drizzle-orm'
+import { schema } from '~core/db/client'
+import { generateSkill } from '~core/agent/skillgen'
+import { cockpitBus } from '~core/events'
+
+// AI 读本地项目生成/赋能审核 skill。结果存为**新候选**(不激活、不覆盖)，返回新 skill 供预览/对比。
+const Body = z.object({
+  baseSkillId: z.string().optional(),
+  name: z.string().optional(),
+  instruction: z.string().optional(), // 用户自定义指令（介入生成方向）
+})
+
+export default defineEventHandler(async (event) => {
+  const id = getRouterParam(event, 'id')!
+  const b = Body.parse((await readBody(event)) || {})
+  const d = db()
+
+  const project = d.select().from(schema.projects).where(eq(schema.projects.id, id)).get()
+  if (!project) throw createError({ statusCode: 404, statusMessage: '项目不存在' })
+  if (!project.localPath) throw createError({ statusCode: 400, statusMessage: '项目未配置本地 clone 路径（生成需要读代码）' })
+
+  let baseContent: string | null = null
+  if (b.baseSkillId) {
+    const base = d.select().from(schema.skills).where(eq(schema.skills.id, b.baseSkillId)).get()
+    baseContent = base?.content ?? null
+  }
+
+  // 走项目配置的 model + effort（与审核引擎一致）
+  const rc = resolveReviewConfig(d, project)
+  // 进度事件用项目级 key 推到事件总线，前端开 SSE 监听（见 genstream.get.ts）
+  const key = `skillgen:${id}`
+  const emit = (kind: string, message: string) =>
+    cockpitBus.emit({ reviewId: key, ts: new Date().toISOString(), kind, message })
+
+  let content: string
+  let toolN = 0
+  try {
+    emit('stage', `开始调研项目（${rc.model}${rc.effort ? ' · ' + rc.effort : ''}）…`)
+    const res = await generateSkill({
+      cwd: project.localPath,
+      model: rc.model,
+      effort: rc.effort,
+      baseContent,
+      instruction: b.instruction || null,
+      onTool: (name, info) => emit('tool', `[${++toolN}] ${name} ${info}`),
+    })
+    content = res.content
+    emit('done', `生成完成 · 读取/搜索 ${toolN} 次 · $${res.costUsd.toFixed(3)}`)
+  } catch (e) {
+    emit('error', (e as Error).message)
+    throw createError({ statusCode: 502, statusMessage: (e as Error).message })
+  }
+
+  const stamp = new Date().toISOString().slice(0, 16).replace('T', ' ')
+  const row = {
+    id: nanoid(),
+    projectId: id,
+    name: b.name || (baseContent ? `AI 优化 · ${stamp}` : `AI 生成 · ${stamp}`),
+    content,
+    source: (baseContent ? 'optimized' : 'ai') as 'optimized' | 'ai',
+    createdAt: new Date().toISOString(),
+  }
+  d.insert(schema.skills).values(row).run()
+  return row // 不激活；前端做 diff 预览后由用户决定激活
+})

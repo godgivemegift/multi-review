@@ -1,0 +1,223 @@
+import { nanoid } from 'nanoid'
+import { eq } from 'drizzle-orm'
+import { reviewQueue } from './queue'
+import { cockpitBus } from './events'
+import { prepareWorktree } from './git/worktree'
+import { runReviewAgent, runGuidedReviewAgent } from './agent/review'
+import { runRecheckAgent } from './agent/recheck'
+
+// 这里不直接 import db client，避免 core 依赖运行时；由调用方注入 db + 表 + 配置。
+export type ReviewJobCtx = {
+  db: any
+  schema: any
+  reviewId: string
+  repo: string
+  prNumber: number
+  branch: string
+  defaultBranch: string
+  localPath: string | null
+  methodology: string // 已解析的方法学（active skill 或默认）
+  reposDir: string
+  model: string
+  effort: string
+  guided?: boolean // true=带反馈针对性复审；false/undefined=全新首审
+}
+
+export function enqueueReview(ctx: ReviewJobCtx) {
+  reviewQueue.add(() => runReviewJob(ctx))
+}
+
+export function enqueueRecheck(ctx: ReviewJobCtx) {
+  reviewQueue.add(() => runRecheckJob(ctx))
+}
+
+async function runReviewJob(ctx: ReviewJobCtx) {
+  const { db, schema, reviewId } = ctx
+  const now = () => new Date().toISOString()
+
+  const emit = (kind: string, message?: string) => {
+    const ts = now()
+    cockpitBus.emit({ reviewId, ts, kind, message })
+    try {
+      db.insert(schema.events).values({ id: nanoid(), reviewId, ts, kind, message: message ?? null }).run()
+    } catch {
+      /* 事件落库失败不影响主流程 */
+    }
+  }
+  const setStatus = (status: string, extra: Record<string, unknown> = {}) => {
+    db.update(schema.reviews).set({ status, updatedAt: now(), ...extra }).where(eq(schema.reviews.id, reviewId)).run()
+    cockpitBus.emit({ reviewId, ts: now(), kind: 'status', message: status })
+  }
+  // 一致性闸：task 已被删除则丢弃结果，不要回写（防止网络波动期间删了又被 resurrect）
+  const taskGone = () => !db.select().from(schema.reviews).where(eq(schema.reviews.id, reviewId)).get()
+
+  let wt: { path: string; headSha: string; cleanup: () => Promise<void> } | null = null
+  try {
+    setStatus('cloning')
+    emit('stage', '准备代码（worktree）')
+    wt = await prepareWorktree({
+      localPath: ctx.localPath || '',
+      reposDir: ctx.reposDir,
+      reviewId,
+      branch: ctx.branch,
+      defaultBranch: ctx.defaultBranch,
+      onStep: (m) => emit('stage', m),
+    })
+
+    setStatus('reviewing', { headSha: wt.headSha })
+
+    const existing = db.select().from(schema.findings).where(eq(schema.findings.reviewId, reviewId)).all()
+    const review = db.select().from(schema.reviews).where(eq(schema.reviews.id, reviewId)).get()
+    const guided = ctx.guided && existing.length > 0
+
+    let result: any
+    let costUsd = 0
+
+    if (guided) {
+      // ── 带反馈的针对性复审：保留 notes/勾选，AI 逐条回应 ──
+      emit('stage', 'AI 针对你的反馈复审中…')
+      const g = await runGuidedReviewAgent({
+        cwd: wt.path, repo: ctx.repo, prNumber: ctx.prNumber, branch: ctx.branch,
+        defaultBranch: ctx.defaultBranch, methodology: ctx.methodology, model: ctx.model, effort: ctx.effort,
+        instruction: review?.reviewInstruction || '', globalNotes: review?.globalNotes || '',
+        existing: existing.map((f: any) => ({ fid: f.fid, severity: f.severity, title: f.title, location: f.location, problem: f.problem, reviewerNote: f.notes })),
+        onTool: (n, i) => emit('tool', `${n} ${i}`),
+      })
+      result = g.result
+      costUsd = g.costUsd
+      if (taskGone()) { emit('error', '任务已被删除，丢弃复审结果'); return }
+
+      const byFid = new Map(existing.map((f: any) => [f.fid, f]))
+      const round =
+        db.select().from(schema.events).where(eq(schema.events.reviewId, reviewId)).all()
+          .filter((e: any) => e.kind === 'review-round').length + 1
+      let maxN = existing.reduce((m: number, f: any) => Math.max(m, parseInt(String(f.fid).replace(/\D/g, '')) || 0), 0)
+
+      for (const f of result.findings) {
+        const cur = f.fid && byFid.get(f.fid)
+        if (cur) {
+          // 更新内容，保留 notes/checked
+          db.update(schema.findings).set({
+            severity: f.severity, title: f.title, location: f.location || null,
+            problem: f.problem || null, detail: f.detail || null, fix: f.fix || null, introducedByPr: f.introducedByPr,
+          }).where(eq(schema.findings.id, cur.id)).run()
+          if (f.response) {
+            db.insert(schema.findingRechecks).values({
+              id: nanoid(), findingId: cur.id, round, status: f.response.status, text: f.response.text || null, at: now(),
+            }).run()
+          }
+          byFid.delete(f.fid)
+        } else {
+          // 新发现
+          const id = nanoid()
+          db.insert(schema.findings).values({
+            id, reviewId, fid: `F${++maxN}`, severity: f.severity, title: f.title, location: f.location || null,
+            problem: f.problem || null, detail: f.detail || null, fix: f.fix || null, introducedByPr: f.introducedByPr,
+            checked: false, notes: null, sortOrder: maxN, createdAt: now(),
+          }).run()
+          db.insert(schema.findingRechecks).values({
+            id: nanoid(), findingId: id, round, status: 'new', text: f.response?.text || null, at: now(),
+          }).run()
+        }
+      }
+      db.insert(schema.events).values({ id: nanoid(), reviewId, ts: now(), kind: 'review-round', message: `round ${round}` }).run()
+    } else {
+      // ── 全新首审：清空重写 ──
+      emit('stage', 'AI 审核中…')
+      const r = await runReviewAgent({
+        cwd: wt.path, repo: ctx.repo, prNumber: ctx.prNumber, branch: ctx.branch,
+        defaultBranch: ctx.defaultBranch, methodology: ctx.methodology, model: ctx.model, effort: ctx.effort,
+        onTool: (name, info) => emit('tool', `${name} ${info}`),
+      })
+      result = r.result
+      costUsd = r.costUsd
+      if (taskGone()) { emit('error', '任务已被删除，丢弃审核结果'); return }
+      db.delete(schema.findings).where(eq(schema.findings.reviewId, reviewId)).run()
+      result.findings.forEach((f: any, i: number) => {
+        db.insert(schema.findings).values({
+          id: nanoid(), reviewId, fid: `F${i + 1}`, severity: f.severity, title: f.title,
+          location: f.location || null, problem: f.problem || null, detail: f.detail || null, fix: f.fix || null,
+          introducedByPr: f.introducedByPr, checked: false, notes: null, sortOrder: i, createdAt: now(),
+        }).run()
+      })
+    }
+
+    setStatus('draft', {
+      logic: result.logic || null,
+      quality: result.quality || null,
+      risk: result.risk || null,
+      conclusion: result.conclusion || null,
+      requirement: result.requirement || null,
+      testPath: result.testPath || null,
+    })
+    emit('done', `${guided ? '复审' : '审核'}完成 · $${costUsd.toFixed(3)}`)
+  } catch (e) {
+    setStatus('error', { error: (e as Error).message })
+    emit('error', (e as Error).message)
+  } finally {
+    if (wt) await wt.cleanup()
+  }
+}
+
+// 复审：基于作者评论后的新 commit，逐条判断 fixed/partial/unaddressed，追加 finding_rechecks。
+async function runRecheckJob(ctx: ReviewJobCtx) {
+  const { db, schema, reviewId } = ctx
+  const now = () => new Date().toISOString()
+  const emit = (kind: string, message?: string) => {
+    const ts = now()
+    cockpitBus.emit({ reviewId, ts, kind, message })
+    try {
+      db.insert(schema.events).values({ id: nanoid(), reviewId, ts, kind, message: message ?? null }).run()
+    } catch {}
+  }
+  const setStatus = (status: string, extra: Record<string, unknown> = {}) => {
+    db.update(schema.reviews).set({ status, updatedAt: now(), ...extra }).where(eq(schema.reviews.id, reviewId)).run()
+    cockpitBus.emit({ reviewId, ts: now(), kind: 'status', message: status })
+  }
+
+  const review = db.select().from(schema.reviews).where(eq(schema.reviews.id, reviewId)).get()
+  const existing = db.select().from(schema.findings).where(eq(schema.findings.reviewId, reviewId)).all()
+  const round =
+    db.select().from(schema.events).where(eq(schema.events.reviewId, reviewId)).all()
+      .filter((e: any) => e.kind === 'recheck').length + 1
+
+  let wt: { path: string; headSha: string; cleanup: () => Promise<void> } | null = null
+  try {
+    setStatus('rechecking')
+    emit('stage', '复审：准备最新代码')
+    wt = await prepareWorktree({
+      localPath: ctx.localPath || '', reposDir: ctx.reposDir, reviewId,
+      branch: ctx.branch, defaultBranch: ctx.defaultBranch, onStep: (m) => emit('stage', m),
+    })
+
+    emit('stage', '复审中：判断作者改了没')
+    const { result } = await runRecheckAgent({
+      cwd: wt.path, repo: ctx.repo, prNumber: ctx.prNumber, defaultBranch: ctx.defaultBranch,
+      lastPostSha: review?.lastPostSha ?? null,
+      findings: existing.map((f: any) => ({ fid: f.fid, title: f.title, location: f.location, notes: f.notes })),
+      methodology: ctx.methodology, model: ctx.model, effort: ctx.effort, onTool: (n, i) => emit('tool', `${n} ${i}`),
+    })
+
+    if (!db.select().from(schema.reviews).where(eq(schema.reviews.id, reviewId)).get()) {
+      emit('error', '任务已被删除，丢弃复审结果'); return
+    }
+    const fidToId = new Map(existing.map((f: any) => [f.fid, f.id]))
+    let applied = 0
+    for (const r of result.rechecks) {
+      const findingId = fidToId.get(r.fid)
+      if (!findingId) continue // 新发现（NEWx）暂只计数，不建新 finding
+      db.insert(schema.findingRechecks).values({
+        id: nanoid(), findingId, round, status: r.status, text: r.text || null, at: now(),
+      }).run()
+      applied++
+    }
+
+    setStatus('draft', { headSha: wt.headSha })
+    emit('recheck', `复审 round ${round} 完成 · 更新 ${applied} 条`)
+  } catch (e) {
+    setStatus('error', { error: (e as Error).message })
+    emit('error', (e as Error).message)
+  } finally {
+    if (wt) await wt.cleanup()
+  }
+}

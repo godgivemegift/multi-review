@@ -1,0 +1,27 @@
+import { eq } from 'drizzle-orm'
+import { z } from 'zod'
+import { schema } from '~core/db/client'
+
+const Body = z.object({
+  name: z.string().min(1).optional(),
+  repo: z.string().regex(/^[^/\s]+\/[^/\s]+$/).optional(),
+  localPath: z.string().nullable().optional(),
+  defaultBranch: z.string().optional(),
+  model: z.string().nullable().optional(),
+  effort: z.string().nullable().optional(),
+  activeSkillId: z.string().nullable().optional(),
+})
+
+export default defineEventHandler(async (event) => {
+  const id = getRouterParam(event, 'id')!
+  const parsed = Body.safeParse(await readBody(event))
+  if (!parsed.success) {
+    throw createError({ statusCode: 400, statusMessage: parsed.error.issues.map((i) => i.message).join('; ') })
+  }
+  const patch: Record<string, unknown> = {}
+  for (const [k, v] of Object.entries(parsed.data)) if (v !== undefined) patch[k] = v
+  if (Object.keys(patch).length) {
+    db().update(schema.projects).set(patch).where(eq(schema.projects.id, id)).run()
+  }
+  return db().select().from(schema.projects).where(eq(schema.projects.id, id)).get()
+})

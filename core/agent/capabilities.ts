@@ -1,0 +1,42 @@
+import { query } from '@anthropic-ai/claude-agent-sdk'
+import { ISOLATED } from './guard'
+
+export type ModelCap = {
+  value: string
+  displayName: string
+  description: string
+  supportsEffort: boolean
+  effortLevels: string[]
+}
+
+let _cache: { models: ModelCap[]; at: number } | null = null
+const TTL = 5 * 60_000
+
+// 从本地登录的 claude 读真实可用模型（含每个模型支持的 effort 档）。
+export async function getCapabilities(force = false): Promise<{ models: ModelCap[] }> {
+  if (!force && _cache && Date.now() - _cache.at < TTL) return { models: _cache.models }
+
+  const gate = new Promise<void>(() => {}) // 永不 resolve，保持 streaming input 开着
+  async function* input() {
+    await gate
+  }
+  const q = query({ prompt: input(), options: { permissionMode: 'bypassPermissions', ...ISOLATED } })
+  try {
+    const raw = await q.supportedModels()
+    const models: ModelCap[] = raw.map((m: any) => ({
+      value: m.value,
+      displayName: m.displayName || m.value,
+      description: m.description || '',
+      supportsEffort: !!m.supportsEffort,
+      effortLevels: m.supportedEffortLevels || [],
+    }))
+    _cache = { models, at: Date.now() }
+    return { models }
+  } finally {
+    try {
+      await (q as any).return?.()
+    } catch {
+      /* ignore */
+    }
+  }
+}
