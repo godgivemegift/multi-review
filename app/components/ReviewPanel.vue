@@ -76,16 +76,17 @@ async function startReview() {
     if (id) { rid.value = id; emit('created', id) }
   } finally { busy.value = '' }
 }
-const ask = useConfirm()
+// 抽屉里弹模态会被 USlideover 的焦点陷阱挡住、点不动 → 改成就地两步确认，且不关抽屉，能边跑边看日志
+const confirming = ref<'' | 'rerun' | 'recheck'>('')
 async function rerun() {
-  if (!(await ask({ title: '按我反馈复审', message: '按你的 notes + 指令重新复审？会重跑一次 AI（按你的模型/力度，可能要几分钟）。', okText: '开始复审' }))) return
+  confirming.value = ''
   busy.value = 'run'; logLines.value = []; showLog.value = true
   try { await $fetch(`/api/reviews/${rid.value}/run`, { method: 'POST' }); await load() }
   catch (e: any) { live.value = e?.data?.statusMessage || '触发失败' }
   finally { busy.value = '' }
 }
 async function recheck() {
-  if (!(await ask({ title: '复查作者改动', message: '复查作者改动？会重跑一次 AI（读你评论后的新 commit，可能要几分钟）。', okText: '开始复查' }))) return
+  confirming.value = ''
   busy.value = 'recheck'; logLines.value = []; showLog.value = true
   try { await $fetch(`/api/reviews/${rid.value}/recheck`, { method: 'POST' }); await load() }
   catch (e: any) { live.value = e?.data?.statusMessage || '触发失败' }
@@ -175,10 +176,23 @@ const RC: Record<string, string> = {
         <div class="text-sm">
           <span class="text-neutral-400">审核状态</span>
           <span class="ml-2" :class="data.review.status === 'error' ? 'text-neutral-900 font-medium' : 'text-neutral-900'">{{ STATUS[data.review.status] || data.review.status }}</span>
+          <span v-if="data.review.authorUpdated" class="ml-2 text-xs text-neutral-900 font-medium" title="作者在你上次发评论后又 push 了">● 作者已更新</span>
         </div>
         <div class="flex items-center gap-3 text-xs">
-          <button class="text-neutral-500 hover:text-neutral-900 disabled:opacity-40" :disabled="running || !!busy" title="保留你的勾选/notes，参考你每条 note + 下方审核指令做针对性复审，AI 逐条回应" @click="rerun">按我反馈复审</button>
-          <button class="text-neutral-500 hover:text-neutral-900 disabled:opacity-40" :disabled="running || !!busy" title="读你上次发评论之后作者的新 commit，判断每条改了没" @click="recheck">复查作者改动</button>
+          <template v-if="confirming === 'rerun'">
+            <span class="text-neutral-400">按你的 notes + 指令复审？</span>
+            <button class="text-neutral-900 font-medium hover:underline disabled:opacity-40" :disabled="!!busy" @click="rerun">开始复审</button>
+            <button class="text-neutral-400 hover:text-neutral-900" @click="confirming = ''">取消</button>
+          </template>
+          <template v-else-if="confirming === 'recheck'">
+            <span class="text-neutral-400">复查作者评论后的新 commit？</span>
+            <button class="text-neutral-900 font-medium hover:underline disabled:opacity-40" :disabled="!!busy" @click="recheck">开始复查</button>
+            <button class="text-neutral-400 hover:text-neutral-900" @click="confirming = ''">取消</button>
+          </template>
+          <template v-else>
+            <button class="text-neutral-500 hover:text-neutral-900 disabled:opacity-40" :disabled="running || !!busy" title="保留你的勾选/notes，参考你每条 note + 下方审核指令做针对性复审，AI 逐条回应" @click="confirming = 'rerun'">按我反馈复审</button>
+            <button class="hover:text-neutral-900 disabled:opacity-40" :class="data.review.authorUpdated ? 'text-neutral-900 font-medium' : 'text-neutral-500'" :disabled="running || !!busy" title="读你上次发评论之后作者的新 commit，判断每条改了没" @click="confirming = 'recheck'">复查作者改动</button>
+          </template>
         </div>
       </div>
       <div v-if="running || live || logLines.length" class="text-xs text-neutral-400 mb-2">

@@ -197,7 +197,8 @@ async function runRecheckJob(ctx: ReviewJobCtx) {
     const { result } = await runRecheckAgent({
       cwd: wt.path, repo: ctx.repo, prNumber: ctx.prNumber, defaultBranch: ctx.defaultBranch,
       lastPostSha: review?.lastPostSha ?? null,
-      findings: existing.map((f: any) => ({ fid: f.fid, title: f.title, location: f.location, notes: f.notes })),
+      requirement: review?.requirement ?? null,
+      findings: existing.map((f: any) => ({ fid: f.fid, title: f.title, location: f.location, problem: f.problem, fix: f.fix, notes: f.notes })),
       methodology: ctx.methodology, model: ctx.model, effort: ctx.effort, onTool: (n, i) => emit('tool', `${n} ${i}`),
     })
 
@@ -208,15 +209,31 @@ async function runRecheckJob(ctx: ReviewJobCtx) {
     let applied = 0
     for (const r of result.rechecks) {
       const findingId = fidToId.get(r.fid)
-      if (!findingId) continue // 新发现（NEWx）暂只计数，不建新 finding
+      if (!findingId) continue // 找不到对应旧 finding 的判定丢弃（新问题走 newFindings）
       db.insert(schema.findingRechecks).values({
         id: nanoid(), findingId, round, status: r.status, text: r.text || null, at: now(),
       }).run()
       applied++
     }
 
-    setStatus('draft', { headSha: wt.headSha })
-    emit('recheck', `复审 round ${round} 完成 · 更新 ${applied} 条`)
+    // 作者新 commit 引入的新问题：建成新 finding（未勾选）+ 挂一条「新增」复审记录
+    let maxN = existing.reduce((m: number, f: any) => Math.max(m, parseInt(String(f.fid).replace(/\D/g, '')) || 0), 0)
+    let added = 0
+    for (const nf of result.newFindings ?? []) {
+      const id = nanoid()
+      db.insert(schema.findings).values({
+        id, reviewId, fid: `F${++maxN}`, severity: nf.severity, title: nf.title, location: nf.location || null,
+        problem: nf.problem || null, detail: nf.detail || null, fix: nf.fix || null,
+        introducedByPr: true, checked: false, notes: null, sortOrder: maxN, createdAt: now(),
+      }).run()
+      db.insert(schema.findingRechecks).values({
+        id: nanoid(), findingId: id, round, status: 'new', text: nf.text || null, at: now(),
+      }).run()
+      added++
+    }
+
+    setStatus('draft', { headSha: wt.headSha, authorUpdated: false })
+    emit('recheck', `复审 round ${round} 完成 · 更新 ${applied} 条${added ? ` · 新增 ${added} 条` : ''}`)
   } catch (e) {
     setStatus('error', { error: (e as Error).message })
     emit('error', (e as Error).message)

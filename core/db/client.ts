@@ -34,6 +34,8 @@ function ensureColumns(sqlite: Database.Database) {
     ['projects', 'effort', 'TEXT'],
     ['reviews', 'preview_json', 'TEXT'],
     ['reviews', 'preview_sig', 'TEXT'],
+    ['reviews', 'author_updated', 'INTEGER NOT NULL DEFAULT 0'],
+    ['reviews', 'review_decision', 'TEXT'],
   ]
   for (const [table, col, type] of adds) {
     const cols = sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
@@ -88,6 +90,8 @@ function ensureSchema(sqlite: Database.Database) {
       requirement TEXT, test_path TEXT, global_notes TEXT, review_instruction TEXT,
       last_post_sha TEXT,
       last_post_url TEXT,
+      author_updated INTEGER NOT NULL DEFAULT 0,
+      review_decision TEXT,
       preview_json TEXT,
       preview_sig TEXT,
       error TEXT,

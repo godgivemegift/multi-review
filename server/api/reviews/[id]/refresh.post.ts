@@ -17,19 +17,17 @@ export default defineEventHandler(async (event) => {
     .get()
   if (!project) throw createError({ statusCode: 404, statusMessage: '项目不存在' })
 
-  const { state, headSha } = await fetchPrState(project.repo, review.prNumber)
+  const { state, headSha: liveHead, reviewDecision } = await fetchPrState(project.repo, review.prNumber)
+
+  // 「作者已更新」基线 = 你上次审/复审看的那个 sha(review.headSha)，不是上次发评论的 sha——
+  // 否则复审后(headSha 前进、lastPostSha 没动)会被误判成又更新。仅在已发过评论后才提示。
+  // 注意：不再用线上 head 覆盖 review.headSha，否则基线丢失、发评论的行锚点也会错位。
+  const authorUpdated = !!review.lastPostSha && !!liveHead && !!review.headSha && liveHead !== review.headSha
 
   d.update(schema.reviews)
-    .set({ prState: state, headSha, updatedAt: new Date().toISOString() })
+    .set({ prState: state, reviewDecision: reviewDecision || null, authorUpdated, updatedAt: new Date().toISOString() })
     .where(eq(schema.reviews.id, id))
     .run()
 
-  const pushedAfterComment = !!review.lastPostSha && !!headSha && review.lastPostSha !== headSha
-
-  return {
-    prState: state,
-    headSha,
-    lastPostSha: review.lastPostSha,
-    pushedAfterComment, // 作者在你上次评论后又 push 了
-  }
+  return { prState: state, reviewDecision, liveHead, reviewedSha: review.headSha, authorUpdated }
 })

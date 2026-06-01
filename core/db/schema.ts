@@ -75,6 +75,10 @@ export const reviews = sqliteTable('reviews', {
   // 发评论锚点：上次发评论时的 head sha → 刷新时和当前 head 比对，判断作者有没有又 push
   lastPostSha: text('last_post_sha'),
   lastPostUrl: text('last_post_url'),
+  // 刷新时发现作者在你上次发评论后又 push 了 → 持久化，列表/抽屉据此显示「作者已更新」
+  authorUpdated: integer('author_updated', { mode: 'boolean' }).notNull().default(false),
+  // GitHub PR 评审决定 APPROVED / CHANGES_REQUESTED / REVIEW_REQUIRED（刷新时取）→ PR 徽章显示「已批准」等
+  reviewDecision: text('review_decision'),
   // 预览缓存：组装好的英文评论 JSON + 输入签名（签名变了才重新生成）
   previewJson: text('preview_json'),
   previewSig: text('preview_sig'),

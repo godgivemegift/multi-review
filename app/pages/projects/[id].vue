@@ -10,6 +10,7 @@ type Pull = {
   headSha: string
   state: string
   isDraft: boolean
+  reviewDecision: string
   updatedAt: string
   additions: number
   deletions: number
@@ -53,6 +54,7 @@ function pickAuthor(a: string) {
 const PER_PAGE = 20
 const prState = ref<'open' | 'merged' | 'closed' | 'all'>('open')
 const authorFilter = ref<string | null>(null)
+const statusFilter = ref<string | null>(null) // 点状态徽章筛选当前列表，再点取消
 type PullsResp = { pulls: Pull[]; totalCount: number; hasNextPage: boolean; endCursor: string | null }
 const pullsResp = ref<PullsResp | null>(null)
 const pullsPending = ref(false)
@@ -77,6 +79,7 @@ function resetAndLoad() {
   page.value = 0
   cursors.value = [null]
   selected.value = new Set()
+  statusFilter.value = null
   loadPulls()
 }
 watch(prState, resetAndLoad)
@@ -104,8 +107,9 @@ const authors = computed(() => {
 })
 const visiblePulls = computed(() => {
   let list = pullsResp.value?.pulls ?? []
-  if (prState.value === 'open') list = list.filter((p) => !p.isDraft)
+  // 「进行中」也显示草稿 PR（带「草稿」徽章），不再过滤掉
   if (authorFilter.value) list = list.filter((p) => p.author === authorFilter.value)
+  if (statusFilter.value) list = list.filter((p) => pullKey(p) === statusFilter.value)
   return list
 })
 
@@ -164,20 +168,36 @@ onMounted(() => {
     // 在跑的时候每 5s 刷；全空闲时约 10s 刷一次（省点）
     const busyNow = (tasks.value ?? []).some((r) => INFLIGHT.includes(r.status))
     if (busyNow || pollTick % 2 === 0) refreshTasks()
+    // 每约 60s 给当前页「未终结」任务批量刷一次 GitHub 状态（approve/merge/作者更新自动冒出来）
+    if (pollTick % 12 === 0) refreshGithubStates()
     pollTick++
   }, 5000)
 })
+
+// 后台批量刷 GitHub 状态：只刷当前页非已合并/已关闭的任务，刷完再拉本地列表
+let ghRefreshing = false
+async function refreshGithubStates() {
+  if (ghRefreshing) return
+  const ids = (pagedTasks.value ?? []).filter((r) => r.prState !== 'merged' && r.prState !== 'closed').map((r) => r.id)
+  if (!ids.length) return
+  ghRefreshing = true
+  try {
+    await $fetch('/api/reviews/refresh-states', { method: 'POST', body: { ids } })
+    await refreshTasks()
+  } catch {
+    /* 后台刷新失败不打扰 */
+  } finally {
+    ghRefreshing = false
+  }
+}
 onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
 
 const refreshing = ref<string | null>(null)
 async function refreshTask(r: ReviewRow) {
   refreshing.value = r.id
   try {
-    const res = await $fetch<{ pushedAfterComment: boolean }>(`/api/reviews/${r.id}/refresh`, {
-      method: 'POST',
-    })
-    if (res.pushedAfterComment) msg.value = `#${r.prNumber} 作者已更新，可复查`
-    await refreshTasks()
+    await $fetch(`/api/reviews/${r.id}/refresh`, { method: 'POST' })
+    await refreshTasks() // 「作者已更新」会落到该行状态里，不再用右上角一闪而过的提示
   } catch (e: any) {
     msg.value = e?.data?.statusMessage || e?.message || '刷新失败'
   } finally {
@@ -236,6 +256,30 @@ const PR_STATE: Record<string, { label: string; cls: string }> = {
 }
 function prStateBadge(s: string) {
   return PR_STATE[s] ?? { label: '—', cls: 'text-neutral-300 border-neutral-200' }
+}
+// 任务行 PR 徽章：把 GitHub 评审决定叠进生命周期 —— 进行中 → 已批准 / 请改动 → 已合并 / 已关闭
+function prBadge(r: ReviewRow) {
+  if (r.prState === 'open' && r.reviewDecision === 'APPROVED') return { label: '已批准', cls: 'text-neutral-900 border-neutral-400' }
+  if (r.prState === 'open' && r.reviewDecision === 'CHANGES_REQUESTED') return { label: '请改动', cls: 'text-neutral-600 border-neutral-300' }
+  return prStateBadge(r.prState)
+}
+// 全部 PR 列表的徽章：同样叠进评审决定；草稿/已合并/已关闭照旧
+function pullBadge(p: Pull) {
+  if (p.state === 'open' && p.reviewDecision === 'APPROVED') return { label: '已批准', cls: 'text-neutral-900 border-neutral-400' }
+  if (p.state === 'open' && p.reviewDecision === 'CHANGES_REQUESTED') return { label: '请改动', cls: 'text-neutral-600 border-neutral-300' }
+  return prStateBadge(p.isDraft ? 'draft' : p.state)
+}
+// 状态徽章归类键（点击筛选用）
+function pullKey(p: Pull) {
+  if (p.state === 'merged') return 'merged'
+  if (p.state === 'closed') return 'closed'
+  if (p.isDraft || p.state === 'draft') return 'draft'
+  if (p.reviewDecision === 'APPROVED') return 'approved'
+  if (p.reviewDecision === 'CHANGES_REQUESTED') return 'changes'
+  return 'open'
+}
+function toggleStatus(k: string) {
+  statusFilter.value = statusFilter.value === k ? null : k
 }
 function sevCls(n: number, level: 'h' | 'm' | 'l') {
   if (n === 0) return 'text-neutral-300'
@@ -371,7 +415,12 @@ function sevCls(n: number, level: 'h' | 'm' | 'l') {
           </button>
           <button class="text-xs text-neutral-500 hover:text-neutral-900 truncate text-left" @click="pickAuthor(p.author)">{{ p.author }}</button>
           <span class="text-center">
-            <span class="text-[10px] uppercase tracking-wider px-2 py-0.5 border rounded-full" :class="prStateBadge(p.isDraft ? 'draft' : p.state).cls">{{ prStateBadge(p.isDraft ? 'draft' : p.state).label }}</span>
+            <button
+              class="text-[10px] uppercase tracking-wider px-2 py-0.5 border rounded-full cursor-pointer hover:opacity-70 transition"
+              :class="[pullBadge(p).cls, statusFilter === pullKey(p) ? 'ring-1 ring-neutral-900' : '']"
+              :title="statusFilter === pullKey(p) ? '取消筛选' : '按此状态筛选'"
+              @click.stop="toggleStatus(pullKey(p))"
+            >{{ pullBadge(p).label }}</button>
           </span>
         </div>
         <p v-if="!visiblePulls.length" class="py-16 text-center text-xs text-neutral-400">
@@ -410,12 +459,15 @@ function sevCls(n: number, level: 'h' | 'm' | 'l') {
         <button class="font-medium tabular-nums hover:underline underline-offset-4 text-left" @click="openDetail(r.prNumber, r.id)">#{{ r.prNumber }}</button>
         <button class="truncate text-neutral-600 text-left hover:text-neutral-900" :title="r.title || ''" @click="openDetail(r.prNumber, r.id)">{{ r.title || '—' }}</button>
         <span class="text-xs text-neutral-500 truncate">{{ r.author || '—' }}</span>
-        <span class="text-xs" :class="taskStatusCls(r.status)">{{ TASK_STATUS[r.status] ?? r.status }}</span>
+        <span class="text-xs flex flex-col gap-0.5 leading-tight">
+          <span :class="taskStatusCls(r.status)">{{ TASK_STATUS[r.status] ?? r.status }}</span>
+          <span v-if="r.authorUpdated" class="text-[10px] text-neutral-900 font-medium" title="作者在你上次发评论后又 push 了，可复查">● 作者已更新</span>
+        </span>
         <span class="text-center text-xs tabular-nums" title="高 / 中 / 低 严重度问题数">
           <span :class="sevCls(r.counts.High, 'h')">{{ r.counts.High }}</span><span class="text-neutral-200"> · </span><span :class="sevCls(r.counts.Medium, 'm')">{{ r.counts.Medium }}</span><span class="text-neutral-200"> · </span><span :class="sevCls(r.counts.Low, 'l')">{{ r.counts.Low }}</span>
         </span>
         <span class="text-center">
-          <span class="text-[10px] uppercase tracking-wider px-2 py-0.5 border rounded-full" :class="prStateBadge(r.prState).cls">{{ prStateBadge(r.prState).label }}</span>
+          <span class="text-[10px] uppercase tracking-wider px-2 py-0.5 border rounded-full" :class="prBadge(r).cls">{{ prBadge(r).label }}</span>
         </span>
         <div class="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
           <button class="text-neutral-300 hover:text-neutral-900" :class="{ 'opacity-100 animate-spin': refreshing === r.id }" title="刷新 PR 状态" @click="refreshTask(r)">↻</button>

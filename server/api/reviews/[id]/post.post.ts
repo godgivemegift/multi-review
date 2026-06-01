@@ -78,7 +78,7 @@ export default defineEventHandler(async (event) => {
     id: nanoid(), reviewId: id, round, url, sha: headSha, mode: assembled.mode, body: assembled.body, at: now,
   }).run()
   d.update(schema.reviews)
-    .set({ status: 'posted', lastPostSha: headSha, lastPostUrl: url, updatedAt: now })
+    .set({ status: 'posted', lastPostSha: headSha, lastPostUrl: url, authorUpdated: false, updatedAt: now })
     .where(eq(schema.reviews.id, id))
     .run()
   d.insert(schema.events).values({ id: nanoid(), reviewId: id, ts: now, kind: 'posted', message: url }).run()

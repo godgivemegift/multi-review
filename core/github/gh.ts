@@ -85,7 +85,7 @@ export async function fetchPrMeta(repo: string, prNumber: number): Promise<PrMet
 export async function fetchPrState(
   repo: string,
   prNumber: number,
-): Promise<{ state: PrMeta['state']; headSha: string }> {
+): Promise<{ state: PrMeta['state']; headSha: string; reviewDecision: string }> {
   const out = await gh([
     'pr',
     'view',
@@ -93,10 +93,10 @@ export async function fetchPrState(
     '--repo',
     repo,
     '--json',
-    'state,isDraft,headRefOid',
+    'state,isDraft,headRefOid,reviewDecision',
   ])
   const j = JSON.parse(out)
-  return { state: normState(j.state, !!j.isDraft), headSha: j.headRefOid ?? '' }
+  return { state: normState(j.state, !!j.isDraft), headSha: j.headRefOid ?? '', reviewDecision: j.reviewDecision ?? '' }
 }
 
 export type PrDetail = {
@@ -250,6 +250,7 @@ export type PullListItem = {
   headSha: string
   state: PrMeta['state']
   isDraft: boolean
+  reviewDecision: string // APPROVED / CHANGES_REQUESTED / REVIEW_REQUIRED / ''
   updatedAt: string
   additions: number
   deletions: number
@@ -278,7 +279,7 @@ export async function listPulls(
       pullRequests(first:$first${statesArg}, after:$after, orderBy:{field:UPDATED_AT,direction:DESC}){
         totalCount
         pageInfo{ hasNextPage endCursor }
-        nodes{ number title author{login} headRefName headRefOid isDraft state additions deletions updatedAt }
+        nodes{ number title author{login} headRefName headRefOid isDraft state reviewDecision additions deletions updatedAt }
       }
     }
   }`
@@ -295,6 +296,7 @@ export async function listPulls(
       headSha: j.headRefOid ?? '',
       state: normState(j.state, !!j.isDraft),
       isDraft: !!j.isDraft,
+      reviewDecision: j.reviewDecision ?? '',
       updatedAt: j.updatedAt ?? '',
       additions: j.additions ?? 0,
       deletions: j.deletions ?? 0,
