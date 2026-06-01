@@ -1,4 +1,10 @@
 import type { CanUseTool } from '@anthropic-ai/claude-agent-sdk'
+import { resolveClaudeExecutable } from './claude-bin'
+
+// production（nitro 打包后）跑在 .output 里，SDK 自带的平台 binary 没被打进去，
+// 必须显式告诉它 claude 可执行文件在哪。dev 解析到的可能是 undefined（SDK 能自己找），
+// 那就不塞这个字段、保持 SDK 默认行为。详见 claude-bin.ts。
+const CLAUDE_BIN = resolveClaudeExecutable()
 
 // 所有 query() 共用：不加载用户/项目的全局 settings、MCP、hooks。
 // 好处：① 快（不去连 chrome-devtools/sentry 等 MCP）② 安全（用户 hooks 不会注入我们的审核 agent）③ 干净可控
@@ -6,6 +12,7 @@ export const ISOLATED = {
   settingSources: [] as [],
   mcpServers: {},
   strictMcpConfig: true,
+  ...(CLAUDE_BIN ? { pathToClaudeCodeExecutable: CLAUDE_BIN } : {}),
 } as const
 
 // ── 第 2 层：操作契约（最高优先级，拼在任何 skill/方法学之前）──
