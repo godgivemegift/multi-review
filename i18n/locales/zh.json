@@ -116,5 +116,54 @@
       "tasksCreated": "已建 {count} 个审核任务",
       "refreshFailed": "刷新失败"
     }
+  },
+  "prDrawer": {
+    "loadFailed": "加载失败",
+    "diffLoadFailed": "diff 加载失败",
+    "title": "PR 详情",
+    "openInGithub": "在 GitHub 打开 ↗",
+    "tabReview": "AI 审核",
+    "tabTimeline": "时间线",
+    "tabChanges": "改动",
+    "filesCount": "{count} 个文件",
+    "changedFiles": "改动文件 ({count})",
+    "openedPr": "提交了 PR",
+    "noDescription": "（无描述）",
+    "commentLabel": "评论",
+    "loadingDiff": "加载 diff…",
+    "diffTruncated": "diff 过大已截断，完整内容请在 GitHub 查看。",
+    "time": {
+      "justNow": "刚刚",
+      "minutesAgo": "{n} 分钟前",
+      "hoursAgo": "{n} 小时前",
+      "daysAgo": "{n} 天前"
+    },
+    "review": {
+      "approved": "批准了",
+      "changesRequested": "请求修改",
+      "commented": "评论了",
+      "dismissed": "忽略了 review",
+      "generic": "review"
+    },
+    "verb": {
+      "labeled": "加了标签",
+      "unlabeled": "去掉标签",
+      "renamed": "改了标题",
+      "referenced": "引用了",
+      "head_ref_force_pushed": "强推了分支",
+      "head_ref_deleted": "删除了分支",
+      "head_ref_restored": "恢复了分支",
+      "closed": "关闭了",
+      "merged": "合并了",
+      "reopened": "重新打开",
+      "ready_for_review": "标记为可审核",
+      "convert_to_draft": "转为草稿",
+      "review_requested": "请求了审核",
+      "review_request_removed": "撤销审核请求",
+      "assigned": "指派了",
+      "unassigned": "取消指派",
+      "deployed": "部署了",
+      "milestoned": "加入里程碑"
+    }
   }
 }

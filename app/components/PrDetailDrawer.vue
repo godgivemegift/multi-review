@@ -2,6 +2,7 @@
 const props = defineProps<{ projectId: string; prNumber: number | null; reviewId: string | null }>()
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ taskCreated: [] }>()
+const { t, locale } = useI18n()
 
 type Detail = {
   number: number; title: string; body: string; author: string; createdAt: string
@@ -55,7 +56,7 @@ watch(
         n.body ? { ...n, bodyHtml: render(n.body) } : n,
       )
     } catch (e: any) {
-      error.value = e?.data?.statusMessage || e?.message || '加载失败'
+      error.value = e?.data?.statusMessage || e?.message || t('prDrawer.loadFailed')
     } finally {
       pending.value = false
     }
@@ -64,8 +65,8 @@ watch(
 )
 
 // 切到「改动」才拉 diff
-watch(activeTab, async (t) => {
-  if (t !== 'changes' || diff.value !== null || !props.prNumber) return
+watch(activeTab, async (nextTab) => {
+  if (nextTab !== 'changes' || diff.value !== null || !props.prNumber) return
   diffPending.value = true
   try {
     const res = await $fetch<{ diff: string; truncated: boolean }>(
@@ -75,33 +76,40 @@ watch(activeTab, async (t) => {
     diffTruncated.value = res.truncated
   } catch (e: any) {
     diff.value = ''
-    error.value = e?.data?.statusMessage || e?.message || 'diff 加载失败'
+    error.value = e?.data?.statusMessage || e?.message || t('prDrawer.diffLoadFailed')
   } finally {
     diffPending.value = false
   }
 })
 
-// 相对时间
+// 相对时间（按当前语言本地化；超过 7 天回退到本地日期格式）
 function rel(iso: string) {
   if (!iso) return ''
-  const t = new Date(iso).getTime()
-  const s = Math.floor((Date.now() - t) / 1000)
-  if (s < 60) return '刚刚'
-  if (s < 3600) return `${Math.floor(s / 60)} 分钟前`
-  if (s < 86400) return `${Math.floor(s / 3600)} 小时前`
-  if (s < 86400 * 7) return `${Math.floor(s / 86400)} 天前`
-  return new Date(iso).toLocaleDateString('zh-CN')
+  const ts = new Date(iso).getTime()
+  const s = Math.floor((Date.now() - ts) / 1000)
+  if (s < 60) return t('prDrawer.time.justNow')
+  if (s < 3600) return t('prDrawer.time.minutesAgo', { n: Math.floor(s / 60) })
+  if (s < 86400) return t('prDrawer.time.hoursAgo', { n: Math.floor(s / 3600) })
+  if (s < 86400 * 7) return t('prDrawer.time.daysAgo', { n: Math.floor(s / 86400) })
+  return new Date(iso).toLocaleDateString(locale.value)
 }
 
+// review 状态 / 事件动词：存 i18n 键，模板里用 t() 解析（缺失则回退）
 const REVIEW_STATE: Record<string, string> = {
-  approved: '批准了', changes_requested: '请求修改', commented: '评论了', dismissed: '忽略了 review',
+  approved: 'prDrawer.review.approved', changes_requested: 'prDrawer.review.changesRequested',
+  commented: 'prDrawer.review.commented', dismissed: 'prDrawer.review.dismissed',
 }
 const VERB: Record<string, string> = {
-  labeled: '加了标签', unlabeled: '去掉标签', renamed: '改了标题', referenced: '引用了',
-  head_ref_force_pushed: '强推了分支', head_ref_deleted: '删除了分支', head_ref_restored: '恢复了分支',
-  closed: '关闭了', merged: '合并了', reopened: '重新打开', ready_for_review: '标记为可审核',
-  convert_to_draft: '转为草稿', review_requested: '请求了审核', review_request_removed: '撤销审核请求',
-  assigned: '指派了', unassigned: '取消指派', deployed: '部署了', milestoned: '加入里程碑',
+  labeled: 'prDrawer.verb.labeled', unlabeled: 'prDrawer.verb.unlabeled', renamed: 'prDrawer.verb.renamed', referenced: 'prDrawer.verb.referenced',
+  head_ref_force_pushed: 'prDrawer.verb.head_ref_force_pushed', head_ref_deleted: 'prDrawer.verb.head_ref_deleted', head_ref_restored: 'prDrawer.verb.head_ref_restored',
+  closed: 'prDrawer.verb.closed', merged: 'prDrawer.verb.merged', reopened: 'prDrawer.verb.reopened', ready_for_review: 'prDrawer.verb.ready_for_review',
+  convert_to_draft: 'prDrawer.verb.convert_to_draft', review_requested: 'prDrawer.verb.review_requested', review_request_removed: 'prDrawer.verb.review_request_removed',
+  assigned: 'prDrawer.verb.assigned', unassigned: 'prDrawer.verb.unassigned', deployed: 'prDrawer.verb.deployed', milestoned: 'prDrawer.verb.milestoned',
+}
+// 已知动词翻译，未知则回退到原始 verb 串
+function verbLabel(verb?: string) {
+  const k = VERB[verb || '']
+  return k ? t(k) : (verb || '')
 }
 
 // diff 着色
@@ -139,26 +147,26 @@ const lineCls: Record<DiffLine['t'], string> = {
               </div>
               <h2 class="text-lg font-medium mt-1 leading-snug">{{ detail.title }}</h2>
               <div class="text-xs text-dimmed mt-1 tabular-nums">
-                {{ detail.changedFiles }} files ·
+                {{ $t('prDrawer.filesCount', { count: detail.changedFiles }) }} ·
                 <span class="text-success">+{{ detail.additions }}</span>
                 <span class="text-error"> −{{ detail.deletions }}</span>
               </div>
             </div>
             <div class="flex items-center gap-3 shrink-0">
-              <a :href="detail.url" target="_blank" class="text-xs text-muted hover:text-highlighted whitespace-nowrap">在 GitHub 打开 ↗</a>
+              <a :href="detail.url" target="_blank" class="text-xs text-muted hover:text-highlighted whitespace-nowrap">{{ $t('prDrawer.openInGithub') }}</a>
               <button class="text-dimmed hover:text-highlighted text-lg leading-none" @click="open = false">✕</button>
             </div>
           </div>
           <div v-else class="flex items-center justify-between">
-            <span class="text-sm text-dimmed">{{ pending ? '加载中…' : error || 'PR 详情' }}</span>
+            <span class="text-sm text-dimmed">{{ pending ? $t('common.loading') : error || $t('prDrawer.title') }}</span>
             <button class="text-dimmed hover:text-highlighted text-lg leading-none" @click="open = false">✕</button>
           </div>
 
           <!-- 子 tab -->
           <div v-if="detail" class="flex gap-6 mt-4 text-sm">
-            <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'review' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'review'">AI 审核</button>
-            <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'timeline' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'timeline'">时间线</button>
-            <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'changes' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'changes'">改动 <span class="text-dimmed">{{ detail.changedFiles }}</span></button>
+            <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'review' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'review'">{{ $t('prDrawer.tabReview') }}</button>
+            <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'timeline' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'timeline'">{{ $t('prDrawer.tabTimeline') }}</button>
+            <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'changes' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'changes'">{{ $t('prDrawer.tabChanges') }} <span class="text-dimmed">{{ detail.changedFiles }}</span></button>
           </div>
         </div>
 
@@ -179,11 +187,11 @@ const lineCls: Record<DiffLine['t'], string> = {
             <li class="pl-6 relative">
               <span class="absolute -left-[7px] top-1.5 w-3 h-3 rounded-full bg-inverted" />
               <div class="text-xs text-dimmed mb-1">
-                <span class="text-default font-medium">{{ detail.author }}</span> 提交了 PR · {{ rel(detail.createdAt) }}
+                <span class="text-default font-medium">{{ detail.author }}</span> {{ $t('prDrawer.openedPr') }} · {{ rel(detail.createdAt) }}
               </div>
               <div class="border border-default rounded-md p-3">
                 <div v-if="detail.body" class="md-body" v-html="openingHtml" />
-                <span v-else class="text-sm text-dimmed">（无描述）</span>
+                <span v-else class="text-sm text-dimmed">{{ $t('prDrawer.noDescription') }}</span>
               </div>
             </li>
 
@@ -194,8 +202,8 @@ const lineCls: Record<DiffLine['t'], string> = {
                 <div class="text-xs text-dimmed mb-1">
                   <span class="text-default font-medium">{{ n.actor }}</span>
                   <span v-if="n.isBot" class="ml-1 text-[10px] uppercase border border-default rounded px-1 text-dimmed">bot</span>
-                  <span v-if="n.kind === 'review'" class="ml-1">{{ REVIEW_STATE[n.state || ''] || 'review' }}</span>
-                  <span v-else class="ml-1">评论</span>
+                  <span v-if="n.kind === 'review'" class="ml-1">{{ $t(REVIEW_STATE[n.state || ''] || 'prDrawer.review.generic') }}</span>
+                  <span v-else class="ml-1">{{ $t('prDrawer.commentLabel') }}</span>
                   · {{ rel(n.at) }}
                 </div>
                 <div v-if="n.bodyHtml" class="border border-default rounded-md p-3 md-body" v-html="n.bodyHtml" />
@@ -215,7 +223,7 @@ const lineCls: Record<DiffLine['t'], string> = {
                 <span class="absolute -left-[5px] top-2 w-2 h-2 rounded-full bg-accented" />
                 <div class="text-xs text-dimmed">
                   <span class="text-toned">{{ n.actor }}</span>
-                  {{ VERB[n.verb || ''] || n.verb }}
+                  {{ verbLabel(n.verb) }}
                   <span v-if="n.detail" class="text-muted">{{ n.detail }}</span>
                   · {{ rel(n.at) }}
                 </div>
@@ -227,7 +235,7 @@ const lineCls: Record<DiffLine['t'], string> = {
         <!-- ── 改动 ── -->
         <div v-else-if="detail && activeTab === 'changes'" class="flex-1 overflow-y-auto">
           <section v-if="detail.files.length" class="px-6 py-4 border-b border-default">
-            <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-2">改动文件 ({{ detail.files.length }})</div>
+            <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-2">{{ $t('prDrawer.changedFiles', { count: detail.files.length }) }}</div>
             <div v-for="f in detail.files" :key="f.path" class="flex justify-between gap-4 text-sm py-1">
               <span class="font-mono text-xs text-default truncate">{{ f.path }}</span>
               <span class="text-xs tabular-nums shrink-0">
@@ -237,11 +245,11 @@ const lineCls: Record<DiffLine['t'], string> = {
             </div>
           </section>
           <section class="py-2">
-            <p v-if="diffPending" class="px-6 py-6 text-sm text-dimmed">加载 diff…</p>
+            <p v-if="diffPending" class="px-6 py-6 text-sm text-dimmed">{{ $t('prDrawer.loadingDiff') }}</p>
             <div v-else class="font-mono text-xs leading-relaxed overflow-x-auto">
               <div v-for="(l, i) in diffLines" :key="i" :class="lineCls[l.t]" class="whitespace-pre">{{ l.text || ' ' }}</div>
             </div>
-            <p v-if="diffTruncated" class="px-6 py-3 text-xs text-dimmed">diff 过大已截断，完整内容请在 GitHub 查看。</p>
+            <p v-if="diffTruncated" class="px-6 py-3 text-xs text-dimmed">{{ $t('prDrawer.diffTruncated') }}</p>
           </section>
         </div>
       </div>

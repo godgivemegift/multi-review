@@ -116,5 +116,54 @@
       "tasksCreated": "{count} review task(s) created",
       "refreshFailed": "Refresh failed"
     }
+  },
+  "prDrawer": {
+    "loadFailed": "Load failed",
+    "diffLoadFailed": "Diff load failed",
+    "title": "PR details",
+    "openInGithub": "Open in GitHub ↗",
+    "tabReview": "AI review",
+    "tabTimeline": "Timeline",
+    "tabChanges": "Changes",
+    "filesCount": "{count} files",
+    "changedFiles": "Changed files ({count})",
+    "openedPr": "opened the PR",
+    "noDescription": "(no description)",
+    "commentLabel": "commented",
+    "loadingDiff": "Loading diff…",
+    "diffTruncated": "Diff too large, truncated — see the full content on GitHub.",
+    "time": {
+      "justNow": "just now",
+      "minutesAgo": "{n} min ago",
+      "hoursAgo": "{n}h ago",
+      "daysAgo": "{n}d ago"
+    },
+    "review": {
+      "approved": "approved",
+      "changesRequested": "requested changes",
+      "commented": "commented",
+      "dismissed": "dismissed a review",
+      "generic": "reviewed"
+    },
+    "verb": {
+      "labeled": "added a label",
+      "unlabeled": "removed a label",
+      "renamed": "changed the title",
+      "referenced": "referenced",
+      "head_ref_force_pushed": "force-pushed the branch",
+      "head_ref_deleted": "deleted the branch",
+      "head_ref_restored": "restored the branch",
+      "closed": "closed",
+      "merged": "merged",
+      "reopened": "reopened",
+      "ready_for_review": "marked ready for review",
+      "convert_to_draft": "converted to draft",
+      "review_requested": "requested a review",
+      "review_request_removed": "removed a review request",
+      "assigned": "assigned",
+      "unassigned": "unassigned",
+      "deployed": "deployed",
+      "milestoned": "added to a milestone"
+    }
   }
 }

@@ -116,5 +116,54 @@
       "tasksCreated": "{count} tâche(s) de revue créée(s)",
       "refreshFailed": "Échec de l'actualisation"
     }
+  },
+  "prDrawer": {
+    "loadFailed": "Échec du chargement",
+    "diffLoadFailed": "Échec du chargement du diff",
+    "title": "Détail de la PR",
+    "openInGithub": "Ouvrir sur GitHub ↗",
+    "tabReview": "Revue IA",
+    "tabTimeline": "Chronologie",
+    "tabChanges": "Modifications",
+    "filesCount": "{count} fichiers",
+    "changedFiles": "Fichiers modifiés ({count})",
+    "openedPr": "a ouvert la PR",
+    "noDescription": "(aucune description)",
+    "commentLabel": "a commenté",
+    "loadingDiff": "Chargement du diff…",
+    "diffTruncated": "Diff trop volumineux, tronqué — contenu complet sur GitHub.",
+    "time": {
+      "justNow": "à l'instant",
+      "minutesAgo": "il y a {n} min",
+      "hoursAgo": "il y a {n} h",
+      "daysAgo": "il y a {n} j"
+    },
+    "review": {
+      "approved": "a approuvé",
+      "changesRequested": "a demandé des modifs",
+      "commented": "a commenté",
+      "dismissed": "a ignoré une revue",
+      "generic": "a relu"
+    },
+    "verb": {
+      "labeled": "a ajouté un label",
+      "unlabeled": "a retiré un label",
+      "renamed": "a renommé",
+      "referenced": "a référencé",
+      "head_ref_force_pushed": "a forcé le push de la branche",
+      "head_ref_deleted": "a supprimé la branche",
+      "head_ref_restored": "a restauré la branche",
+      "closed": "a fermé",
+      "merged": "a fusionné",
+      "reopened": "a rouvert",
+      "ready_for_review": "a marqué prête pour revue",
+      "convert_to_draft": "a converti en brouillon",
+      "review_requested": "a demandé une revue",
+      "review_request_removed": "a retiré une demande de revue",
+      "assigned": "a assigné",
+      "unassigned": "a désassigné",
+      "deployed": "a déployé",
+      "milestoned": "a ajouté à un jalon"
+    }
   }
 }
