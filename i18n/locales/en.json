@@ -4,6 +4,10 @@
   },
   "common": {
     "cancel": "Cancel",
+    "delete": "Delete",
+    "loading": "Loading…",
+    "failed": "Failed",
+    "all": "All",
     "toggleLight": "Switch to light",
     "toggleDark": "Switch to dark"
   },
@@ -35,5 +39,82 @@
     "projectsCount": "{count}",
     "enterProject": "Open “{name}” →",
     "emptyHint": "Create your first project with + on the left."
+  },
+  "status": {
+    "task": {
+      "queued": "Queued",
+      "cloning": "Preparing code",
+      "reviewing": "Reviewing",
+      "draft": "Draft ready",
+      "ready_to_post": "Ready to post",
+      "posted": "Comment posted",
+      "recheck_requested": "Recheck pending",
+      "rechecking": "Rechecking",
+      "error": "Error"
+    },
+    "pr": {
+      "open": "Open",
+      "merged": "Merged",
+      "closed": "Closed",
+      "draft": "Draft",
+      "approved": "Approved",
+      "changes": "Changes requested",
+      "unknown": "—"
+    }
+  },
+  "project": {
+    "tabs": {
+      "pulls": "All PRs",
+      "tasks": "Review tasks",
+      "config": "Configuration"
+    },
+    "col": {
+      "title": "Title",
+      "author": "Author",
+      "status": "Status",
+      "review": "Review",
+      "severity": "Severity"
+    },
+    "selectAllReviewable": "Select all reviewable",
+    "reviewSelected": "Review selected ({count})",
+    "creatingTasks": "Creating tasks…",
+    "refreshList": "Refresh",
+    "hasTaskTitle": "Review task already created",
+    "hasTaskTag": "task created",
+    "clearFilter": "Clear filter",
+    "filterByStatus": "Filter by this status",
+    "noPulls": "No matching PRs",
+    "noTasks": "No review tasks yet. Go to “All PRs” and check some PRs to start.",
+    "authorUpdated": "Author updated",
+    "authorUpdatedTitle": "The author pushed new commits after your last comment — you can recheck",
+    "severityTitle": "High / medium / low severity issue counts",
+    "refreshPrStatus": "Refresh PR status",
+    "deleteTask": "Delete task",
+    "pagination": {
+      "summary": "{total} total · page {page}",
+      "summaryPages": "{total} total · page {page} / {pages}",
+      "prev": "← Previous",
+      "next": "Next →"
+    },
+    "clean": {
+      "labelMerged": "merged",
+      "labelPosted": "commented",
+      "cleanMerged": "Clean merged",
+      "cleanPosted": "Clean commented",
+      "cleaning": "Cleaning…",
+      "none": "No “{label}” tasks to clean",
+      "confirmTitle": "Clean {label}",
+      "confirmMsg": "Delete {n} “{label}” review task(s)? (local tasks only, GitHub untouched)",
+      "done": "Cleaned {n} “{label}” task(s)"
+    },
+    "confirm": {
+      "deleteTaskTitle": "Delete review task",
+      "deleteTaskMsg": "Delete the review task for #{pr}? (local task only, GitHub comment untouched)"
+    },
+    "msg": {
+      "fetchFailed": "Fetch failed",
+      "tasksCreated": "{count} review task(s) created",
+      "refreshFailed": "Refresh failed"
+    }
   }
 }

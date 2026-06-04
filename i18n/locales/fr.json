@@ -4,6 +4,10 @@
   },
   "common": {
     "cancel": "Annuler",
+    "delete": "Supprimer",
+    "loading": "Chargement…",
+    "failed": "Échec",
+    "all": "Tous",
     "toggleLight": "Passer en clair",
     "toggleDark": "Passer en sombre"
   },
@@ -35,5 +39,82 @@
     "projectsCount": "{count}",
     "enterProject": "Ouvrir « {name} » →",
     "emptyHint": "Créez votre premier projet avec + à gauche."
+  },
+  "status": {
+    "task": {
+      "queued": "En attente",
+      "cloning": "Préparation du code",
+      "reviewing": "Revue en cours",
+      "draft": "Brouillon prêt",
+      "ready_to_post": "Prêt à publier",
+      "posted": "Commentaire publié",
+      "recheck_requested": "Recontrôle en attente",
+      "rechecking": "Recontrôle en cours",
+      "error": "Erreur"
+    },
+    "pr": {
+      "open": "En cours",
+      "merged": "Fusionnée",
+      "closed": "Fermée",
+      "draft": "Brouillon",
+      "approved": "Approuvée",
+      "changes": "Modifs demandées",
+      "unknown": "—"
+    }
+  },
+  "project": {
+    "tabs": {
+      "pulls": "Toutes les PR",
+      "tasks": "Tâches de revue",
+      "config": "Configuration"
+    },
+    "col": {
+      "title": "Titre",
+      "author": "Auteur",
+      "status": "Statut",
+      "review": "Revue",
+      "severity": "Sévérité"
+    },
+    "selectAllReviewable": "Tout sélectionner",
+    "reviewSelected": "Revoir la sélection ({count})",
+    "creatingTasks": "Création des tâches…",
+    "refreshList": "Actualiser",
+    "hasTaskTitle": "Tâche de revue déjà créée",
+    "hasTaskTag": "tâche créée",
+    "clearFilter": "Retirer le filtre",
+    "filterByStatus": "Filtrer par ce statut",
+    "noPulls": "Aucune PR correspondante",
+    "noTasks": "Aucune tâche de revue. Allez dans « Toutes les PR » et cochez des PR pour commencer.",
+    "authorUpdated": "Auteur a mis à jour",
+    "authorUpdatedTitle": "L'auteur a poussé de nouveaux commits depuis votre dernier commentaire — recontrôle possible",
+    "severityTitle": "Nombre de problèmes haute / moyenne / basse sévérité",
+    "refreshPrStatus": "Actualiser le statut PR",
+    "deleteTask": "Supprimer la tâche",
+    "pagination": {
+      "summary": "{total} au total · page {page}",
+      "summaryPages": "{total} au total · page {page} / {pages}",
+      "prev": "← Précédent",
+      "next": "Suivant →"
+    },
+    "clean": {
+      "labelMerged": "fusionnées",
+      "labelPosted": "commentées",
+      "cleanMerged": "Nettoyer les fusionnées",
+      "cleanPosted": "Nettoyer les commentées",
+      "cleaning": "Nettoyage…",
+      "none": "Aucune tâche « {label} » à nettoyer",
+      "confirmTitle": "Nettoyer les {label}",
+      "confirmMsg": "Supprimer {n} tâche(s) de revue « {label} » ? (tâches locales uniquement, GitHub intact)",
+      "done": "{n} tâche(s) « {label} » nettoyée(s)"
+    },
+    "confirm": {
+      "deleteTaskTitle": "Supprimer la tâche de revue",
+      "deleteTaskMsg": "Supprimer la tâche de revue de #{pr} ? (tâche locale uniquement, le commentaire GitHub reste)"
+    },
+    "msg": {
+      "fetchFailed": "Échec du chargement",
+      "tasksCreated": "{count} tâche(s) de revue créée(s)",
+      "refreshFailed": "Échec de l'actualisation"
+    }
   }
 }
