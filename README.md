@@ -51,6 +51,73 @@ Nuxt 4 + @nuxt/ui（Tailwind v4，极简单色风）· better-sqlite3 + drizzle 
 - `gh auth login` 已登录（GitHub 读写全走它）
 - 本地已登录 `claude`（走订阅，基本不额外花 API 钱）或填 `ANTHROPIC_API_KEY`
 
+## 安装
+
+首次运行的分步指南。精简版见下方「起步」。
+
+**1. 检查前置条件**
+
+```bash
+node -v      # ≥ 22
+pnpm -v      # 9.x  （否则：corepack enable && corepack prepare pnpm@9 --activate）
+gh --version
+gh auth status   # 应显示「Logged in」；否则：gh auth login
+```
+
+同时确认本地 `claude` CLI 已登录（走订阅，基本不额外花 API 钱）。若未登录，则在第 3 步填 `ANTHROPIC_API_KEY`。
+
+**2. 获取项目**
+
+```bash
+git clone <仓库地址>
+cd multi-review
+```
+
+**3. 配置环境**
+
+```bash
+cp .env.example .env
+```
+
+所有变量都有合理默认值；实际只需按需调整：
+
+| 变量 | 何时修改 |
+|---|---|
+| `PORT` | `3001` 被占用时 |
+| `INFERENCE_PROVIDER` | `claude`（本地订阅，默认）或 `anthropic-api` |
+| `ANTHROPIC_API_KEY` | **仅**在 `anthropic-api` 模式，或本地 `claude` 未登录时 |
+
+全部变量详见 [配置（.env）](#配置env) 一节。
+
+**4. 安装依赖**
+
+```bash
+pnpm install
+```
+
+`postinstall` 会自动执行 `nuxt prepare`（生成 Nuxt 类型）。
+
+**5. 首次启动**
+
+```bash
+pnpm dev      # http://localhost:3001
+```
+
+首次启动时，**SQLite 数据库（`./data/cockpit.db`）和 worktrees 目录（`./data/worktrees`）会自动创建** —— 无需手动跑 migration。Drizzle schema 在运行时自建（`core/db/client.ts` 中的 `ensureSchema()` / `ensureColumns()`）。
+
+**6. 生产构建（可选）**
+
+```bash
+pnpm build
+pnpm preview
+```
+
+**排错**
+
+- **端口被占用** → 改 `.env` 里的 `PORT`。
+- **`gh` 未认证** → `gh auth login`（GitHub 读写都依赖它）。
+- **查看数据库** → `pnpm db:studio`（打开 Drizzle Studio）。
+
 ## 起步
 
 ```bash

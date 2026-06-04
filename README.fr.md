@@ -51,6 +51,73 @@ Nuxt 4 + @nuxt/ui (Tailwind v4, style minimaliste monochrome) · better-sqlite3 
 - `gh auth login` effectué (toutes les lectures/écritures GitHub passent par là)
 - `claude` connecté localement (utilise l'abonnement, quasiment aucun coût API supplémentaire) ou bien renseigner `ANTHROPIC_API_KEY`
 
+## Installation
+
+Guide pas-à-pas pour une première mise en route. Voir « Démarrage » plus bas pour la version condensée.
+
+**1. Vérifier les prérequis**
+
+```bash
+node -v      # ≥ 22
+pnpm -v      # 9.x  (sinon : corepack enable && corepack prepare pnpm@9 --activate)
+gh --version
+gh auth status   # doit indiquer « Logged in » ; sinon : gh auth login
+```
+
+Vérifier aussi que la CLI `claude` est connectée localement (elle utilise votre abonnement, quasiment aucun coût API). À défaut, vous fournirez une `ANTHROPIC_API_KEY` à l'étape 3.
+
+**2. Récupérer le projet**
+
+```bash
+git clone <url-du-dépôt>
+cd multi-review
+```
+
+**3. Configurer l'environnement**
+
+```bash
+cp .env.example .env
+```
+
+Toutes les variables ont des valeurs par défaut raisonnables ; en pratique vous n'ajustez que :
+
+| Variable | Quand la modifier |
+|---|---|
+| `PORT` | Si `3001` est déjà occupé |
+| `INFERENCE_PROVIDER` | `claude` (abonnement local, par défaut) ou `anthropic-api` |
+| `ANTHROPIC_API_KEY` | **Uniquement** en mode `anthropic-api`, ou si `claude` n'est pas connecté localement |
+
+Le détail de toutes les variables est dans la section [Configuration (.env)](#configuration-env).
+
+**4. Installer les dépendances**
+
+```bash
+pnpm install
+```
+
+Le `postinstall` lance automatiquement `nuxt prepare` (génération des types Nuxt).
+
+**5. Premier lancement**
+
+```bash
+pnpm dev      # http://localhost:3001
+```
+
+Au premier démarrage, **la base SQLite (`./data/cockpit.db`) et le dossier des worktrees (`./data/worktrees`) sont créés automatiquement** — aucune migration manuelle à lancer. Le schéma Drizzle est monté à la volée (`ensureSchema()` / `ensureColumns()` dans `core/db/client.ts`).
+
+**6. Build de production (optionnel)**
+
+```bash
+pnpm build
+pnpm preview
+```
+
+**Dépannage**
+
+- **Port déjà utilisé** → changer `PORT` dans `.env`.
+- **`gh` non authentifié** → `gh auth login` (les lectures/écritures GitHub en dépendent).
+- **Inspecter la base** → `pnpm db:studio` (ouvre Drizzle Studio).
+
 ## Démarrage
 
 ```bash
