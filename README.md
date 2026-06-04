@@ -4,6 +4,12 @@
   <p>本地批量 PR 审核工作台 · 终端 Claude agent 为核心，web 做人工把关与状态管理</p>
 </div>
 
+<div align="center">
+
+**中文** · [Français](README.fr.md) · [English](README.en.md)
+
+</div>
+
 ---
 
 不再逐个在终端审 PR：把一个仓库的 PR 拉进来批量勾选 → AI 在隔离的只读 git worktree 里逐个审 → 你在 web 里把关 findings、写反馈 → 行级+汇总评论发回 GitHub → 作者改后一键复查。每个项目挂自己的审核方法学（skill）和模型/力度。
