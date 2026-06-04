@@ -22,5 +22,14 @@
       "localPath": "Local clone path (worktrees branch from here)",
       "defaultBranch": "Default branch"
     }
+  },
+  "home": {
+    "tagline": "Local batch PR review. Terminal agent at the core, web for gatekeeping and state management.",
+    "ghStatusOk": "Signed in",
+    "ghStatusNotReady": "Not ready — run gh auth login first",
+    "defaultModel": "Default model",
+    "projectsCount": "{count}",
+    "enterProject": "Open “{name}” →",
+    "emptyHint": "Create your first project with + on the left."
   }
 }

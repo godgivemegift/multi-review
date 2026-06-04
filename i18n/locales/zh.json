@@ -22,5 +22,14 @@
       "localPath": "本地 clone 路径（worktree 从这里开）",
       "defaultBranch": "默认分支"
     }
+  },
+  "home": {
+    "tagline": "本地批量 PR 审核。终端 agent 为核心，web 做把关与状态管理。",
+    "ghStatusOk": "已登录",
+    "ghStatusNotReady": "未就绪 — 先 gh auth login",
+    "defaultModel": "默认模型",
+    "projectsCount": "{count} 个",
+    "enterProject": "进入「{name}」 →",
+    "emptyHint": "左侧 + 创建第一个项目开始。"
   }
 }

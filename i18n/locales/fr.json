@@ -22,5 +22,14 @@
       "localPath": "Chemin du clone local (les worktrees démarrent d'ici)",
       "defaultBranch": "Branche par défaut"
     }
+  },
+  "home": {
+    "tagline": "Revue de PR en masse en local. L'agent terminal au cœur, le web pour le contrôle et la gestion des états.",
+    "ghStatusOk": "Connecté",
+    "ghStatusNotReady": "Non prêt — exécutez d'abord gh auth login",
+    "defaultModel": "Modèle par défaut",
+    "projectsCount": "{count}",
+    "enterProject": "Ouvrir « {name} » →",
+    "emptyHint": "Créez votre premier projet avec + à gauche."
   }
 }
