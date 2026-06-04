@@ -34,18 +34,24 @@ async function createProject() {
 
 <template>
   <UApp>
-    <div class="min-h-screen flex bg-default text-default antialiased">
-      <!-- 左侧导航 -->
-      <aside class="w-60 shrink-0 border-r border-default flex flex-col">
-        <NuxtLink to="/" class="px-6 h-16 flex items-center gap-2.5">
+    <div class="h-screen flex flex-col bg-default text-default antialiased">
+      <!-- 顶部 header：左 logo / 右 控件簇（语言切换 + 深浅色） -->
+      <header class="h-16 shrink-0 border-b border-default flex items-center justify-between px-6">
+        <NuxtLink to="/" class="flex items-center gap-2.5">
           <img src="/logo.svg" alt="" class="w-6 h-6 rounded-md" />
           <span class="text-sm font-medium tracking-[0.18em] uppercase">Multi&nbsp;<span class="text-dimmed">Review</span></span>
         </NuxtLink>
+        <div class="flex items-center gap-1">
+          <LanguageSwitcher />
+          <ColorModeToggle />
+        </div>
+      </header>
 
-        <div class="px-6 pt-3 pb-3 flex items-center justify-between">
-          <span class="text-xs font-medium uppercase tracking-[0.15em] text-muted">Projects</span>
-          <div class="flex items-center gap-1">
-            <ColorModeToggle />
+      <div class="flex flex-1 min-h-0">
+        <!-- 左侧导航 -->
+        <aside class="w-60 shrink-0 border-r border-default flex flex-col">
+          <div class="px-6 pt-5 pb-3 flex items-center justify-between">
+            <span class="text-xs font-medium uppercase tracking-[0.15em] text-muted">Projects</span>
             <button
               class="text-dimmed hover:text-highlighted transition-colors text-lg leading-none"
               title="创建项目"
@@ -54,31 +60,31 @@ async function createProject() {
               +
             </button>
           </div>
-        </div>
 
-        <nav class="flex-1 overflow-y-auto px-3 space-y-px">
-          <NuxtLink
-            v-for="p in projects"
-            :key="p.id"
-            :to="`/projects/${p.id}`"
-            class="block px-3 py-2.5 transition-colors border-l-2"
-            :class="route.params.id === p.id
-              ? 'border-inverted text-highlighted'
-              : 'border-transparent text-muted hover:text-highlighted'"
-          >
-            <div class="truncate text-sm font-medium">{{ p.name }}</div>
-            <div class="text-xs text-dimmed truncate mt-0.5">{{ p.repo }}</div>
-          </NuxtLink>
-          <p v-if="!projects?.length" class="px-3 py-8 text-xs text-dimmed leading-relaxed">
-            还没有项目<br />点上方 + 创建
-          </p>
-        </nav>
-      </aside>
+          <nav class="flex-1 overflow-y-auto px-3 space-y-px">
+            <NuxtLink
+              v-for="p in projects"
+              :key="p.id"
+              :to="`/projects/${p.id}`"
+              class="block px-3 py-2.5 transition-colors border-l-2"
+              :class="route.params.id === p.id
+                ? 'border-inverted text-highlighted'
+                : 'border-transparent text-muted hover:text-highlighted'"
+            >
+              <div class="truncate text-sm font-medium">{{ p.name }}</div>
+              <div class="text-xs text-dimmed truncate mt-0.5">{{ p.repo }}</div>
+            </NuxtLink>
+            <p v-if="!projects?.length" class="px-3 py-8 text-xs text-dimmed leading-relaxed">
+              还没有项目<br />点上方 + 创建
+            </p>
+          </nav>
+        </aside>
 
-      <!-- 主区 -->
-      <main class="flex-1 min-w-0 overflow-y-auto bg-default">
-        <NuxtPage />
-      </main>
+        <!-- 主区 -->
+        <main class="flex-1 min-w-0 overflow-y-auto bg-default">
+          <NuxtPage />
+        </main>
+      </div>
     </div>
 
     <!-- 全局确认弹窗（替代 window.confirm）-->
