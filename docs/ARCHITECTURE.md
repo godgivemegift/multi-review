@@ -1,5 +1,7 @@
 # Multi Review — 架构与设计目的
 
+> **中文** · [Français](ARCHITECTURE.fr.md) · [English](ARCHITECTURE.en.md)
+
 > 本地批量 PR 审核工具。终端 Claude agent 做核心审核引擎，web 做人工把关与状态管理。
 > 这份文档既给人看，也是审核 agent「操作契约」的来源（见 `core/agent/guard.ts`）。
 

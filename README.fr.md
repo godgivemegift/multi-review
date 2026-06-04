@@ -87,4 +87,4 @@ docs/      ARCHITECTURE.md — objectifs de design + invariants + mécanismes de
 data/      SQLite + worktrees (ignorés par git)
 ```
 
-Objectifs de design, invariants et défenses de sécurité détaillés dans [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Objectifs de design, invariants et défenses de sécurité détaillés dans [docs/ARCHITECTURE.fr.md](docs/ARCHITECTURE.fr.md).

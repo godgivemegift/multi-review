@@ -87,4 +87,4 @@ docs/      ARCHITECTURE.md — design goals + invariants + safety mechanisms
 data/      SQLite + worktrees (git-ignored)
 ```
 
-Design goals, invariants and safety defenses are detailed in [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Design goals, invariants and safety defenses are detailed in [docs/ARCHITECTURE.en.md](docs/ARCHITECTURE.en.md).
