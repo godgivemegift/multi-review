@@ -165,5 +165,78 @@
       "deployed": "deployed",
       "milestoned": "added to a milestone"
     }
+  },
+  "config": {
+    "projectInfo": "Project info",
+    "localPathShort": "Local clone path",
+    "modelSection": "Review model (actually available on your local claude)",
+    "globalDefault": "Global default",
+    "useEnvDefault": "Use the default model from .env",
+    "inheritEnvDefault": "Inherits .env default",
+    "effortLabel": "Review effort",
+    "effortNone": "(unset, model default)",
+    "noEffortSupport": "This model does not support effort settings",
+    "saving": "Saving…",
+    "saveConfig": "Save configuration",
+    "saved": "Saved",
+    "saveFailed": "Save failed",
+    "skillsSection": "Review skills (enable one)",
+    "addBlank": "+ Blank",
+    "aiGenerate": "AI generate",
+    "aiOptimize": "AI optimize current",
+    "aiGenerating": "AI generating",
+    "readingCode": "Reading project code…",
+    "localPathRequired": "Set the local clone path to use AI generation.",
+    "activeTitle": "Active",
+    "warnCount": "⚠ {count} warning(s)",
+    "preview": "Preview",
+    "enable": "Enable",
+    "noSkills": "No skills yet. Click “AI generate” to have the AI read your project and produce one, or “+ Blank” to write it by hand. With no skill enabled, the built-in default methodology is used.",
+    "vsActive": "· compared to active",
+    "enableThis": "Enable this one",
+    "deleteProject": "Delete project",
+    "handwrittenSkill": "Handwritten skill",
+    "skillActivated": "Skill activated",
+    "candidateGenerated": "New candidate generated — preview/compare, then click “Enable”.",
+    "genInterrupted": "Generation request interrupted — if a new candidate appears above it was generated, otherwise retry.",
+    "connecting": "Connecting…",
+    "src": {
+      "manual": "Manual",
+      "file": "File",
+      "ai": "AI generated",
+      "optimized": "AI optimized"
+    },
+    "confirm": {
+      "deleteProjectMsg": "Delete project “{name}”? Review tasks and skills will be deleted too (no impact on GitHub).",
+      "deleteSkillTitle": "Delete skill",
+      "deleteSkillMsg": "Delete this skill?"
+    },
+    "warnModal": {
+      "title": "Skill health check",
+      "body": "“{name}” contains terms that <b>look like an “operations flow”</b>. A review skill should only describe “what to audit, how to judge”, not git operations / code changes / worktree skipping (handled by the engine). Matched:",
+      "note": "Most are “descriptive mentions” (false positives — e.g. writing “no git push” in the methodology also gets flagged), with no impact.<br />Even when enabled, the engine hard-blocks git writes / file changes at the tool level; a skill cannot run them — so this is just a warning, not an error.",
+      "gotIt": "Got it"
+    },
+    "lintModal": {
+      "title": "This skill may contain operations-flow content",
+      "body": "“{name}” matched the following suspected “operations flow” content (review only audits, never modifies; operations are handled by the engine):",
+      "note": "Note: these may be descriptive mentions (false positives). Even when enabled, the engine hard-blocks git writes / file changes at the tool level, which won't actually run.",
+      "enableAnyway": "Enable anyway"
+    },
+    "genModal": {
+      "titleOptimize": "AI optimize current skill",
+      "titleGenerate": "AI generate review skill",
+      "intro": "The AI uses the project's configured model/effort, <b>reads the full local repo + thinks deeply</b>, then produces output. {mode}The result is saved as a <b>new candidate</b> — it does not overwrite or auto-enable.",
+      "modeOptimize": "Optimizing from the active skill. ",
+      "modeGenerate": "Generating from scratch. ",
+      "instructionLabel": "Instruction for the AI (optional, leave empty for the default approach)",
+      "instructionPlaceholder": "E.g.: emphasize permissions and concurrency; follow the staki-review format; watch tRPC input validation; use a stricter tone…",
+      "start": "Start generating"
+    },
+    "newModal": {
+      "title": "New review skill",
+      "contentLabel": "Content (methodology, can stay empty for later / paste an existing one)",
+      "contentPlaceholder": "# Review methodology\n..."
+    }
   }
 }

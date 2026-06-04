@@ -2,6 +2,7 @@
 import type { Project, Skill } from '~core/db/schema'
 const props = defineProps<{ project: Project }>()
 const emit = defineEmits<{ changed: []; deleted: [] }>()
+const { t } = useI18n()
 
 type ModelCap = { value: string; displayName: string; description: string; supportsEffort: boolean; effortLevels: string[] }
 
@@ -19,7 +20,7 @@ const msg = ref('')
 
 const { data: caps } = useFetch<{ models: ModelCap[] }>('/api/agent/capabilities')
 const modelOptions = computed<ModelCap[]>(() => [
-  { value: '', displayName: '全局默认', description: '用 .env 里的默认模型', supportsEffort: false, effortLevels: [] },
+  { value: '', displayName: t('config.globalDefault'), description: t('config.useEnvDefault'), supportsEffort: false, effortLevels: [] },
   ...(caps.value?.models ?? []),
 ])
 const effortOptions = computed(() => {
@@ -38,13 +39,13 @@ async function saveInfo() {
         defaultBranch: form.defaultBranch, model: form.model || null, effort: form.effort || null,
       },
     })
-    msg.value = '已保存'; emit('changed')
-  } catch (e: any) { msg.value = e?.data?.statusMessage || '保存失败' }
+    msg.value = t('config.saved'); emit('changed')
+  } catch (e: any) { msg.value = e?.data?.statusMessage || t('config.saveFailed') }
   finally { savingInfo.value = false }
 }
 const ask = useConfirm()
 async function deleteProject() {
-  if (!(await ask({ title: '删除项目', message: `删除项目「${props.project.name}」？审核任务和 skills 一并删除（不影响 GitHub）。`, okText: '删除', danger: true }))) return
+  if (!(await ask({ title: t('config.deleteProject'), message: t('config.confirm.deleteProjectMsg', { name: props.project.name }), okText: t('common.delete'), danger: true }))) return
   await $fetch(`/api/projects/${props.project.id}`, { method: 'DELETE' })
   emit('deleted')
 }
@@ -60,7 +61,7 @@ const generating = ref(false)
 
 async function doActivate(id: string) {
   await $fetch(`/api/projects/${props.project.id}`, { method: 'PATCH', body: { activeSkillId: id } })
-  activeId.value = id; emit('changed'); msg.value = '已切换启用 skill'
+  activeId.value = id; emit('changed'); msg.value = t('config.skillActivated')
 }
 // 启用前体检：命中红线先警告确认
 const lintModal = reactive({ open: false, id: '', name: '', warnings: [] as string[] })
@@ -82,7 +83,7 @@ function showWarn(s: SkillRow) {
   Object.assign(warnModal, { open: true, name: s.name, warnings: s.warnings || [] })
 }
 async function delSkill(id: string) {
-  if (!(await ask({ title: '删除 skill', message: '删除这个 skill？', okText: '删除', danger: true }))) return
+  if (!(await ask({ title: t('config.confirm.deleteSkillTitle'), message: t('config.confirm.deleteSkillMsg'), okText: t('common.delete'), danger: true }))) return
   await $fetch(`/api/skills/${id}`, { method: 'DELETE' })
   if (previewId.value === id) previewId.value = null
   if (activeId.value === id) activeId.value = null
@@ -100,7 +101,7 @@ function openGen(baseId: string | null) {
 const genProgress = ref('')
 async function runGen() {
   showGen.value = false
-  generating.value = true; msg.value = ''; genProgress.value = '连接中…'
+  generating.value = true; msg.value = ''; genProgress.value = t('config.connecting')
   // 开 SSE 看实时进度（agent 在读哪个文件 / grep 什么）
   let es: EventSource | null = null
   if (import.meta.client) {
@@ -122,11 +123,11 @@ async function runGen() {
     })
     await refreshSkills()
     previewId.value = row.id // 直接预览新候选，做对比
-    msg.value = '已生成新候选，预览/对比后点「启用」'
+    msg.value = t('config.candidateGenerated')
   } catch (e: any) {
     // HTTP 可能超时但 skill 其实已生成并写库 → 刷新一下看是否多了候选
     await refreshSkills().catch(() => {})
-    msg.value = e?.data?.statusMessage || '生成请求中断——若上方多出候选则已生成，否则重试'
+    msg.value = e?.data?.statusMessage || t('config.genInterrupted')
   }
   finally { generating.value = false; genProgress.value = ''; es?.close() }
 }
@@ -134,7 +135,7 @@ const showNew = ref(false)
 const newForm = reactive({ name: '', content: '' })
 const creatingSkill = ref(false)
 function openNew() {
-  newForm.name = '手写 skill'
+  newForm.name = t('config.handwrittenSkill')
   newForm.content = ''
   showNew.value = true
 }
@@ -175,29 +176,33 @@ const diff = computed(() => {
   if (!activeSkill.value || activeSkill.value.id === previewSkill.value.id) return null
   return lineDiff(activeSkill.value.content, previewSkill.value.content)
 })
-const SRC: Record<string, string> = { manual: '手写', file: '文件', ai: 'AI 生成', optimized: 'AI 优化' }
+const SRC: Record<string, string> = { manual: 'config.src.manual', file: 'config.src.file', ai: 'config.src.ai', optimized: 'config.src.optimized' }
+function srcLabel(source: string) {
+  const k = SRC[source]
+  return k ? t(k) : source
+}
 </script>
 
 <template>
   <div class="py-4">
     <!-- 项目信息 -->
     <section>
-      <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-3">项目信息</div>
+      <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-3">{{ $t('config.projectInfo') }}</div>
       <div class="space-y-3">
-        <label class="block"><span class="text-xs text-dimmed">名称</span>
+        <label class="block"><span class="text-xs text-dimmed">{{ $t('layout.form.name') }}</span>
           <input v-model="form.name" class="w-full text-sm border-b border-default focus:border-inverted outline-none py-1" /></label>
-        <label class="block"><span class="text-xs text-dimmed">仓库 (owner/repo)</span>
+        <label class="block"><span class="text-xs text-dimmed">{{ $t('layout.form.repo') }}</span>
           <input v-model="form.repo" class="w-full text-sm border-b border-default focus:border-inverted outline-none py-1" /></label>
-        <label class="block"><span class="text-xs text-dimmed">本地 clone 路径</span>
+        <label class="block"><span class="text-xs text-dimmed">{{ $t('config.localPathShort') }}</span>
           <input v-model="form.localPath" class="w-full text-sm font-mono border-b border-default focus:border-inverted outline-none py-1" /></label>
-        <label class="block"><span class="text-xs text-dimmed">默认分支</span>
+        <label class="block"><span class="text-xs text-dimmed">{{ $t('layout.form.defaultBranch') }}</span>
           <input v-model="form.defaultBranch" class="w-full text-sm border-b border-default focus:border-inverted outline-none py-1" /></label>
       </div>
     </section>
 
     <!-- 模型 -->
     <section class="mt-8">
-      <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-3">审核模型（你本地 claude 真实可用）</div>
+      <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-3">{{ $t('config.modelSection') }}</div>
       <div class="space-y-1 max-w-2xl">
         <button
           v-for="m in modelOptions"
@@ -210,65 +215,65 @@ const SRC: Record<string, string> = { manual: '手写', file: '文件', ai: 'AI 
           <span class="min-w-0">
             <span class="text-sm font-medium">{{ m.displayName }}</span>
             <span v-if="m.supportsEffort" class="ml-2 text-[10px] text-dimmed">effort: {{ m.effortLevels.join('/') }}</span>
-            <span class="block text-xs text-dimmed mt-0.5">{{ m.description || (m.value ? '' : '继承 .env 默认') }}</span>
+            <span class="block text-xs text-dimmed mt-0.5">{{ m.description || (m.value ? '' : $t('config.inheritEnvDefault')) }}</span>
           </span>
         </button>
       </div>
 
       <div v-if="effortOptions.length" class="mt-4">
-        <span class="text-xs text-dimmed">审核力度 (effort)</span>
+        <span class="text-xs text-dimmed">{{ $t('config.effortLabel') }}</span>
         <select v-model="form.effort" class="block text-sm border-b border-default py-1 bg-transparent outline-none min-w-32">
-          <option value="">（不设，用模型默认）</option>
+          <option value="">{{ $t('config.effortNone') }}</option>
           <option v-for="e in effortOptions" :key="e" :value="e">{{ e }}</option>
         </select>
       </div>
-      <p v-else class="text-xs text-dimmed mt-3">该模型不支持 effort 设置</p>
+      <p v-else class="text-xs text-dimmed mt-3">{{ $t('config.noEffortSupport') }}</p>
     </section>
 
     <div class="mt-6 flex items-center gap-4">
-      <button class="text-sm bg-inverted text-inverted px-5 py-2 hover:bg-inverted/90 disabled:opacity-40" :disabled="savingInfo" @click="saveInfo">{{ savingInfo ? '保存中…' : '保存配置' }}</button>
+      <button class="text-sm bg-inverted text-inverted px-5 py-2 hover:bg-inverted/90 disabled:opacity-40" :disabled="savingInfo" @click="saveInfo">{{ savingInfo ? $t('config.saving') : $t('config.saveConfig') }}</button>
       <span class="text-xs text-dimmed">{{ msg }}</span>
     </div>
 
     <!-- Skills -->
     <section class="mt-12 border-t border-default pt-8">
       <div class="flex items-center justify-between mb-3">
-        <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed">审核 Skills（选一个启用）</div>
+        <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed">{{ $t('config.skillsSection') }}</div>
         <div class="flex gap-3 text-xs">
-          <button class="text-muted hover:text-highlighted" @click="openNew">+ 空白</button>
-          <button class="text-muted hover:text-highlighted disabled:opacity-40" :disabled="generating || !project.localPath" @click="openGen(null)">AI 生成</button>
-          <button class="text-muted hover:text-highlighted disabled:opacity-40" :disabled="generating || !activeId || !project.localPath" @click="openGen(activeId!)">AI 赋能优化当前</button>
+          <button class="text-muted hover:text-highlighted" @click="openNew">{{ $t('config.addBlank') }}</button>
+          <button class="text-muted hover:text-highlighted disabled:opacity-40" :disabled="generating || !project.localPath" @click="openGen(null)">{{ $t('config.aiGenerate') }}</button>
+          <button class="text-muted hover:text-highlighted disabled:opacity-40" :disabled="generating || !activeId || !project.localPath" @click="openGen(activeId!)">{{ $t('config.aiOptimize') }}</button>
         </div>
       </div>
       <p v-if="generating" class="text-xs text-muted mb-3 truncate">
-        <span class="inline-block w-1.5 h-1.5 rounded-full bg-inverted animate-pulse mr-1.5" />AI 生成中 · <span class="font-mono text-dimmed">{{ genProgress || '读项目代码…' }}</span>
+        <span class="inline-block w-1.5 h-1.5 rounded-full bg-inverted animate-pulse mr-1.5" />{{ $t('config.aiGenerating') }} · <span class="font-mono text-dimmed">{{ genProgress || $t('config.readingCode') }}</span>
       </p>
-      <p v-if="!project.localPath" class="text-xs text-dimmed mb-3">配置本地 clone 路径后才能用 AI 生成。</p>
+      <p v-if="!project.localPath" class="text-xs text-dimmed mb-3">{{ $t('config.localPathRequired') }}</p>
 
       <div v-for="s in skills" :key="s.id" class="flex items-center gap-3 py-2 border-b border-default text-sm">
         <span class="w-3 shrink-0">
-          <span v-if="s.id === activeId" class="text-highlighted" title="启用中">●</span>
+          <span v-if="s.id === activeId" class="text-highlighted" :title="$t('config.activeTitle')">●</span>
         </span>
         <span class="flex-1 min-w-0 flex items-center gap-2">
           <span class="truncate" :class="s.id === activeId ? 'text-highlighted font-medium' : 'text-toned'">{{ s.name }}</span>
-          <span class="text-[10px] text-dimmed shrink-0">{{ SRC[s.source] || s.source }}</span>
+          <span class="text-[10px] text-dimmed shrink-0">{{ srcLabel(s.source) }}</span>
           <button
             v-if="s.warnings?.length"
             class="text-[11px] text-warning hover:text-warning shrink-0"
             @click="showWarn(s)"
-          >⚠ {{ s.warnings.length }} 项提示</button>
+          >{{ $t('config.warnCount', { count: s.warnings.length }) }}</button>
         </span>
-        <button class="text-xs text-dimmed hover:text-highlighted" @click="previewId = previewId === s.id ? null : s.id">预览</button>
-        <button v-if="s.id !== activeId" class="text-xs text-muted hover:text-highlighted" @click="activate(s.id)">启用</button>
-        <button class="text-xs text-dimmed hover:text-highlighted" @click="delSkill(s.id)">删除</button>
+        <button class="text-xs text-dimmed hover:text-highlighted" @click="previewId = previewId === s.id ? null : s.id">{{ $t('config.preview') }}</button>
+        <button v-if="s.id !== activeId" class="text-xs text-muted hover:text-highlighted" @click="activate(s.id)">{{ $t('config.enable') }}</button>
+        <button class="text-xs text-dimmed hover:text-highlighted" @click="delSkill(s.id)">{{ $t('common.delete') }}</button>
       </div>
-      <p v-if="!skills?.length" class="text-sm text-dimmed py-3">还没有 skill。点「AI 生成」让 AI 读你项目生成一套，或「+ 空白」手写。没有启用 skill 时用内置默认方法学。</p>
+      <p v-if="!skills?.length" class="text-sm text-dimmed py-3">{{ $t('config.noSkills') }}</p>
 
       <!-- 预览 / diff -->
       <div v-if="previewSkill" class="mt-4 border border-default rounded p-3">
         <div class="flex items-center justify-between mb-2">
-          <span class="text-xs text-muted">{{ previewSkill.name }}<span v-if="diff" class="text-dimmed"> · 对比当前启用</span></span>
-          <button v-if="previewId !== activeId" class="text-xs bg-inverted text-inverted px-3 py-1 hover:bg-inverted/90" @click="activate(previewSkill.id)">启用这个</button>
+          <span class="text-xs text-muted">{{ previewSkill.name }}<span v-if="diff" class="text-dimmed"> {{ $t('config.vsActive') }}</span></span>
+          <button v-if="previewId !== activeId" class="text-xs bg-inverted text-inverted px-3 py-1 hover:bg-inverted/90" @click="activate(previewSkill.id)">{{ $t('config.enableThis') }}</button>
         </div>
         <!-- 有对比则显示 diff，否则纯文本 -->
         <div v-if="diff" class="font-mono text-xs leading-relaxed max-h-96 overflow-auto">
@@ -281,80 +286,72 @@ const SRC: Record<string, string> = { manual: '手写', file: '文件', ai: 'AI 
 
     <!-- 删除项目 -->
     <section class="mt-12 border-t border-default pt-6">
-      <button class="text-xs text-error hover:text-error" @click="deleteProject">删除项目</button>
+      <button class="text-xs text-error hover:text-error" @click="deleteProject">{{ $t('config.deleteProject') }}</button>
     </section>
 
     <!-- 点 ⚠ 查看体检详情 -->
-    <BaseModal v-model:open="warnModal.open" title="Skill 体检提示">
+    <BaseModal v-model:open="warnModal.open" :title="$t('config.warnModal.title')">
       <div class="space-y-3">
-        <p class="text-sm text-toned">
-          「{{ warnModal.name }}」里出现了一些<b>疑似"操作流程"</b>的字眼。审核 skill 应该只写"审什么、怎么判"，不该写 git 操作 / 改代码 / 跳过 worktree 这类指令（那些由引擎控制）。命中：
-        </p>
+        <p class="text-sm text-toned" v-html="$t('config.warnModal.body', { name: warnModal.name })" />
         <ul class="text-sm text-default list-disc pl-5 space-y-1">
           <li v-for="(w, i) in warnModal.warnings" :key="i">{{ w }}</li>
         </ul>
-        <p class="text-xs text-dimmed leading-relaxed">
-          多数是"描述性提及"的误报（比如方法学里写"禁止 git push"也会被扫到），不影响使用。<br />
-          即使启用，引擎也会在工具层硬拦截 git 写 / 改文件等操作，skill 写了也跑不了——所以这只是提示，不是错误。
-        </p>
+        <p class="text-xs text-dimmed leading-relaxed" v-html="$t('config.warnModal.note')" />
       </div>
       <template #footer>
-        <button class="text-sm bg-inverted text-inverted px-4 py-2 hover:bg-inverted/90" @click="warnModal.open = false">知道了</button>
+        <button class="text-sm bg-inverted text-inverted px-4 py-2 hover:bg-inverted/90" @click="warnModal.open = false">{{ $t('config.warnModal.gotIt') }}</button>
       </template>
     </BaseModal>
 
     <!-- 启用前体检警告 -->
-    <BaseModal v-model:open="lintModal.open" title="这个 skill 可能含操作流程内容">
+    <BaseModal v-model:open="lintModal.open" :title="$t('config.lintModal.title')">
       <div class="space-y-3">
-        <p class="text-sm text-toned">「{{ lintModal.name }}」体检命中以下疑似"操作流程"内容（审核应只审不改，操作由引擎控制）：</p>
+        <p class="text-sm text-toned" v-html="$t('config.lintModal.body', { name: lintModal.name })" />
         <ul class="text-sm text-default list-disc pl-5 space-y-1">
           <li v-for="(w, i) in lintModal.warnings" :key="i">{{ w }}</li>
         </ul>
-        <p class="text-xs text-dimmed">注：可能是描述性提及（误报）。即便启用，引擎仍会在工具层硬拦截 git 写 / 改文件等操作，不会真的执行。</p>
+        <p class="text-xs text-dimmed">{{ $t('config.lintModal.note') }}</p>
       </div>
       <template #footer>
-        <button class="text-sm text-muted hover:text-highlighted px-3" @click="lintModal.open = false">取消</button>
-        <button class="text-sm bg-inverted text-inverted px-4 py-2 hover:bg-inverted/90" @click="confirmActivate">仍然启用</button>
+        <button class="text-sm text-muted hover:text-highlighted px-3" @click="lintModal.open = false">{{ $t('common.cancel') }}</button>
+        <button class="text-sm bg-inverted text-inverted px-4 py-2 hover:bg-inverted/90" @click="confirmActivate">{{ $t('config.lintModal.enableAnyway') }}</button>
       </template>
     </BaseModal>
 
     <!-- AI 生成 / 赋能：给自定义指令 -->
-    <BaseModal v-model:open="showGen" :title="genBaseId ? 'AI 赋能优化当前 skill' : 'AI 生成审核 skill'">
+    <BaseModal v-model:open="showGen" :title="genBaseId ? $t('config.genModal.titleOptimize') : $t('config.genModal.titleGenerate')">
       <div class="space-y-3">
-        <p class="text-xs text-muted leading-relaxed">
-          AI 会用项目配置的模型/effort，<b>完整读取本地仓库 + 深度思考</b>后产出。
-          {{ genBaseId ? '基于当前启用的 skill 优化。' : '从零生成。' }}结果存为<b>新候选</b>，不覆盖、不自动启用。
-        </p>
+        <p class="text-xs text-muted leading-relaxed" v-html="$t('config.genModal.intro', { mode: genBaseId ? $t('config.genModal.modeOptimize') : $t('config.genModal.modeGenerate') })" />
         <label class="block">
-          <span class="text-xs text-dimmed">给 AI 的指令（可选，留空则按默认方式做）</span>
+          <span class="text-xs text-dimmed">{{ $t('config.genModal.instructionLabel') }}</span>
           <textarea
             v-model="genInstruction" rows="5"
-            placeholder="例如：重点强调权限和并发；按 staki-review 的格式；多关注 tRPC 输入校验；用更严格的语气…"
+            :placeholder="$t('config.genModal.instructionPlaceholder')"
             class="w-full text-sm bg-muted border border-default rounded px-2 py-1 mt-1 resize-y outline-none focus:border-accented"
           />
         </label>
       </div>
       <template #footer>
-        <button class="text-sm text-muted hover:text-highlighted px-3" @click="showGen = false">取消</button>
-        <button class="text-sm bg-inverted text-inverted px-4 py-2 hover:bg-inverted/90" @click="runGen">开始生成</button>
+        <button class="text-sm text-muted hover:text-highlighted px-3" @click="showGen = false">{{ $t('common.cancel') }}</button>
+        <button class="text-sm bg-inverted text-inverted px-4 py-2 hover:bg-inverted/90" @click="runGen">{{ $t('config.genModal.start') }}</button>
       </template>
     </BaseModal>
 
     <!-- 新建 skill -->
-    <BaseModal v-model:open="showNew" title="新建审核 skill">
+    <BaseModal v-model:open="showNew" :title="$t('config.newModal.title')">
       <div class="space-y-4">
         <label class="block">
-          <span class="text-xs text-dimmed">名称</span>
+          <span class="text-xs text-dimmed">{{ $t('layout.form.name') }}</span>
           <input v-model="newForm.name" class="w-full text-sm border-b border-default focus:border-inverted outline-none py-1" />
         </label>
         <label class="block">
-          <span class="text-xs text-dimmed">内容（方法学，可留空稍后写 / 直接粘贴现成的）</span>
-          <textarea v-model="newForm.content" rows="8" placeholder="# 审核方法学&#10;..." class="w-full text-sm font-mono bg-muted border border-default rounded px-2 py-1 mt-1 resize-y outline-none focus:border-accented" />
+          <span class="text-xs text-dimmed">{{ $t('config.newModal.contentLabel') }}</span>
+          <textarea v-model="newForm.content" rows="8" :placeholder="$t('config.newModal.contentPlaceholder')" class="w-full text-sm font-mono bg-muted border border-default rounded px-2 py-1 mt-1 resize-y outline-none focus:border-accented" />
         </label>
       </div>
       <template #footer>
-        <button class="text-sm text-muted hover:text-highlighted px-3" @click="showNew = false">取消</button>
-        <button class="text-sm bg-inverted text-inverted px-4 py-2 hover:bg-inverted/90 disabled:opacity-40" :disabled="creatingSkill" @click="createSkill">创建</button>
+        <button class="text-sm text-muted hover:text-highlighted px-3" @click="showNew = false">{{ $t('common.cancel') }}</button>
+        <button class="text-sm bg-inverted text-inverted px-4 py-2 hover:bg-inverted/90 disabled:opacity-40" :disabled="creatingSkill" @click="createSkill">{{ $t('layout.create') }}</button>
       </template>
     </BaseModal>
   </div>

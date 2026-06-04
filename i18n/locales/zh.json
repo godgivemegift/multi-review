@@ -165,5 +165,78 @@
       "deployed": "部署了",
       "milestoned": "加入里程碑"
     }
+  },
+  "config": {
+    "projectInfo": "项目信息",
+    "localPathShort": "本地 clone 路径",
+    "modelSection": "审核模型（你本地 claude 真实可用）",
+    "globalDefault": "全局默认",
+    "useEnvDefault": "用 .env 里的默认模型",
+    "inheritEnvDefault": "继承 .env 默认",
+    "effortLabel": "审核力度 (effort)",
+    "effortNone": "（不设，用模型默认）",
+    "noEffortSupport": "该模型不支持 effort 设置",
+    "saving": "保存中…",
+    "saveConfig": "保存配置",
+    "saved": "已保存",
+    "saveFailed": "保存失败",
+    "skillsSection": "审核 Skills（选一个启用）",
+    "addBlank": "+ 空白",
+    "aiGenerate": "AI 生成",
+    "aiOptimize": "AI 赋能优化当前",
+    "aiGenerating": "AI 生成中",
+    "readingCode": "读项目代码…",
+    "localPathRequired": "配置本地 clone 路径后才能用 AI 生成。",
+    "activeTitle": "启用中",
+    "warnCount": "⚠ {count} 项提示",
+    "preview": "预览",
+    "enable": "启用",
+    "noSkills": "还没有 skill。点「AI 生成」让 AI 读你项目生成一套，或「+ 空白」手写。没有启用 skill 时用内置默认方法学。",
+    "vsActive": "· 对比当前启用",
+    "enableThis": "启用这个",
+    "deleteProject": "删除项目",
+    "handwrittenSkill": "手写 skill",
+    "skillActivated": "已切换启用 skill",
+    "candidateGenerated": "已生成新候选，预览/对比后点「启用」",
+    "genInterrupted": "生成请求中断——若上方多出候选则已生成，否则重试",
+    "connecting": "连接中…",
+    "src": {
+      "manual": "手写",
+      "file": "文件",
+      "ai": "AI 生成",
+      "optimized": "AI 优化"
+    },
+    "confirm": {
+      "deleteProjectMsg": "删除项目「{name}」？审核任务和 skills 一并删除（不影响 GitHub）。",
+      "deleteSkillTitle": "删除 skill",
+      "deleteSkillMsg": "删除这个 skill？"
+    },
+    "warnModal": {
+      "title": "Skill 体检提示",
+      "body": "「{name}」里出现了一些<b>疑似“操作流程”</b>的字眼。审核 skill 应该只写“审什么、怎么判”，不该写 git 操作 / 改代码 / 跳过 worktree 这类指令（那些由引擎控制）。命中：",
+      "note": "多数是“描述性提及”的误报（比如方法学里写“禁止 git push”也会被扫到），不影响使用。<br />即使启用，引擎也会在工具层硬拦截 git 写 / 改文件等操作，skill 写了也跑不了——所以这只是提示，不是错误。",
+      "gotIt": "知道了"
+    },
+    "lintModal": {
+      "title": "这个 skill 可能含操作流程内容",
+      "body": "「{name}」体检命中以下疑似“操作流程”内容（审核应只审不改，操作由引擎控制）：",
+      "note": "注：可能是描述性提及（误报）。即便启用，引擎仍会在工具层硬拦截 git 写 / 改文件等操作，不会真的执行。",
+      "enableAnyway": "仍然启用"
+    },
+    "genModal": {
+      "titleOptimize": "AI 赋能优化当前 skill",
+      "titleGenerate": "AI 生成审核 skill",
+      "intro": "AI 会用项目配置的模型/effort，<b>完整读取本地仓库 + 深度思考</b>后产出。{mode}结果存为<b>新候选</b>，不覆盖、不自动启用。",
+      "modeOptimize": "基于当前启用的 skill 优化。",
+      "modeGenerate": "从零生成。",
+      "instructionLabel": "给 AI 的指令（可选，留空则按默认方式做）",
+      "instructionPlaceholder": "例如：重点强调权限和并发；按 staki-review 的格式；多关注 tRPC 输入校验；用更严格的语气…",
+      "start": "开始生成"
+    },
+    "newModal": {
+      "title": "新建审核 skill",
+      "contentLabel": "内容（方法学，可留空稍后写 / 直接粘贴现成的）",
+      "contentPlaceholder": "# 审核方法学\n..."
+    }
   }
 }

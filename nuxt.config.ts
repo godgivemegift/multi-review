@@ -28,6 +28,8 @@ export default defineNuxtConfig({
       fallbackLocale: 'fr',
     },
     bundle: { optimizeTranslationDirective: false },
+    // 部分提示文案含 <b>/<br> 等内联标签（由我们维护的静态文案，模板里用 v-html 渲染）
+    compilation: { strictMessage: false },
   },
   typescript: { strict: true },
   alias: { '~core': coreDir },

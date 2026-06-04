@@ -165,5 +165,78 @@
       "deployed": "a déployé",
       "milestoned": "a ajouté à un jalon"
     }
+  },
+  "config": {
+    "projectInfo": "Informations du projet",
+    "localPathShort": "Chemin du clone local",
+    "modelSection": "Modèle de revue (réellement disponible sur ton claude local)",
+    "globalDefault": "Défaut global",
+    "useEnvDefault": "Utiliser le modèle par défaut du .env",
+    "inheritEnvDefault": "Hérite du défaut .env",
+    "effortLabel": "Intensité de revue (effort)",
+    "effortNone": "(non défini, défaut du modèle)",
+    "noEffortSupport": "Ce modèle ne supporte pas le réglage d'effort",
+    "saving": "Enregistrement…",
+    "saveConfig": "Enregistrer la configuration",
+    "saved": "Enregistré",
+    "saveFailed": "Échec de l'enregistrement",
+    "skillsSection": "Skills de revue (en activer un)",
+    "addBlank": "+ Vierge",
+    "aiGenerate": "Générer par IA",
+    "aiOptimize": "Optimiser l'actuel par IA",
+    "aiGenerating": "Génération IA en cours",
+    "readingCode": "Lecture du code du projet…",
+    "localPathRequired": "Configure le chemin du clone local pour utiliser la génération IA.",
+    "activeTitle": "Activé",
+    "warnCount": "⚠ {count} avertissement(s)",
+    "preview": "Aperçu",
+    "enable": "Activer",
+    "noSkills": "Aucun skill pour l'instant. Cliquez sur « Générer par IA » pour que l'IA lise votre projet et en produise un, ou « + Vierge » pour l'écrire à la main. Sans skill activé, la méthodologie par défaut intégrée est utilisée.",
+    "vsActive": "· comparé à l'actif",
+    "enableThis": "Activer celui-ci",
+    "deleteProject": "Supprimer le projet",
+    "handwrittenSkill": "Skill manuel",
+    "skillActivated": "Skill activé",
+    "candidateGenerated": "Nouveau candidat généré, prévisualisez/comparez puis cliquez « Activer ».",
+    "genInterrupted": "Requête de génération interrompue — si un nouveau candidat apparaît ci-dessus, c'est généré, sinon réessayez.",
+    "connecting": "Connexion…",
+    "src": {
+      "manual": "Manuel",
+      "file": "Fichier",
+      "ai": "Généré par IA",
+      "optimized": "Optimisé par IA"
+    },
+    "confirm": {
+      "deleteProjectMsg": "Supprimer le projet « {name} » ? Les tâches de revue et les skills seront aussi supprimés (sans impact sur GitHub).",
+      "deleteSkillTitle": "Supprimer le skill",
+      "deleteSkillMsg": "Supprimer ce skill ?"
+    },
+    "warnModal": {
+      "title": "Diagnostic du skill",
+      "body": "« {name} » contient des termes <b>évoquant un « flux d'opérations »</b>. Un skill de revue doit seulement décrire « quoi auditer, comment juger », pas des commandes git / modification de code / contournement de worktree (gérés par le moteur). Détecté :",
+      "note": "La plupart sont des « mentions descriptives » (faux positifs — p. ex. écrire « interdit git push » dans la méthodologie est aussi détecté), sans impact.<br />Même activé, le moteur bloque au niveau outil les écritures git / modifs de fichiers ; un skill ne peut pas les exécuter — c'est donc un simple avertissement, pas une erreur.",
+      "gotIt": "Compris"
+    },
+    "lintModal": {
+      "title": "Ce skill contient peut-être un flux d'opérations",
+      "body": "« {name} » a déclenché les contenus suivants évoquant un « flux d'opérations » (la revue ne fait qu'auditer, pas modifier ; les opérations sont gérées par le moteur) :",
+      "note": "Note : il peut s'agir de mentions descriptives (faux positif). Même activé, le moteur bloque au niveau outil les écritures git / modifs de fichiers, qui ne seront pas exécutées.",
+      "enableAnyway": "Activer quand même"
+    },
+    "genModal": {
+      "titleOptimize": "Optimiser le skill actuel par IA",
+      "titleGenerate": "Générer un skill de revue par IA",
+      "intro": "L'IA utilise le modèle/effort configuré, <b>lit l'intégralité du dépôt local + réfléchit en profondeur</b> avant de produire. {mode}Le résultat est enregistré comme <b>nouveau candidat</b>, sans écraser ni activer automatiquement.",
+      "modeOptimize": "Optimisation basée sur le skill actif. ",
+      "modeGenerate": "Génération à partir de zéro. ",
+      "instructionLabel": "Instruction pour l'IA (optionnel, laisser vide pour la méthode par défaut)",
+      "instructionPlaceholder": "Ex. : insister sur les permissions et la concurrence ; suivre le format staki-review ; surveiller la validation des entrées tRPC ; ton plus strict…",
+      "start": "Lancer la génération"
+    },
+    "newModal": {
+      "title": "Nouveau skill de revue",
+      "contentLabel": "Contenu (méthodologie, peut rester vide pour plus tard / coller un existant)",
+      "contentPlaceholder": "# Méthodologie de revue\n..."
+    }
   }
 }
