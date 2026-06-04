@@ -1,5 +1,26 @@
 {
   "switcher": {
     "label": "Language"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "toggleLight": "Switch to light",
+    "toggleDark": "Switch to dark"
+  },
+  "layout": {
+    "metaDescription": "Local batch PR review management",
+    "projectsTitle": "Projects",
+    "createProject": "Create project",
+    "create": "Create",
+    "creating": "Creating…",
+    "createError": "Creation failed",
+    "emptyProjects": "No projects yet",
+    "emptyProjectsHint": "Click + above to create",
+    "form": {
+      "name": "Name",
+      "repo": "Repository (owner/repo)",
+      "localPath": "Local clone path (worktrees branch from here)",
+      "defaultBranch": "Default branch"
+    }
   }
 }

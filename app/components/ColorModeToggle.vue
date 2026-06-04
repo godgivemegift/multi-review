@@ -1,5 +1,6 @@
 <script setup lang="ts">
 // 浅色/深色切换；偏好持久化由 @nuxtjs/color-mode 管理
+const { t } = useI18n()
 const colorMode = useColorMode()
 const isDark = computed({
   get: () => colorMode.value === 'dark',
@@ -12,8 +13,8 @@ const isDark = computed({
   <ClientOnly>
     <button
       class="text-dimmed hover:text-highlighted transition-colors flex items-center justify-center size-6"
-      :title="isDark ? '切换到浅色' : '切换到深色'"
-      :aria-label="isDark ? '切换到浅色' : '切换到深色'"
+      :title="isDark ? t('common.toggleLight') : t('common.toggleDark')"
+      :aria-label="isDark ? t('common.toggleLight') : t('common.toggleDark')"
       @click="isDark = !isDark"
     >
       <UIcon :name="isDark ? 'i-lucide-moon' : 'i-lucide-sun'" class="size-4" />

@@ -1,5 +1,26 @@
 {
   "switcher": {
     "label": "Langue"
+  },
+  "common": {
+    "cancel": "Annuler",
+    "toggleLight": "Passer en clair",
+    "toggleDark": "Passer en sombre"
+  },
+  "layout": {
+    "metaDescription": "Gestion locale des revues de PR en masse",
+    "projectsTitle": "Projets",
+    "createProject": "Créer un projet",
+    "create": "Créer",
+    "creating": "Création…",
+    "createError": "Échec de la création",
+    "emptyProjects": "Aucun projet",
+    "emptyProjectsHint": "Cliquez sur + en haut pour créer",
+    "form": {
+      "name": "Nom",
+      "repo": "Dépôt (owner/repo)",
+      "localPath": "Chemin du clone local (les worktrees démarrent d'ici)",
+      "defaultBranch": "Branche par défaut"
+    }
   }
 }
