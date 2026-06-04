@@ -19,6 +19,7 @@ type Pull = {
   taskStatus: string | null
 }
 
+const { t, te } = useI18n()
 const route = useRoute()
 const projectId = computed(() => route.params.id as string)
 const { data: project, refresh: refreshProject } = await useFetch<Project>(() => `/api/projects/${projectId.value}`)
@@ -70,7 +71,7 @@ async function loadPulls() {
     })
     if (pullsResp.value.hasNextPage) cursors.value[page.value + 1] = pullsResp.value.endCursor
   } catch (e: any) {
-    msg.value = e?.data?.statusMessage || e?.message || '拉取失败'
+    msg.value = e?.data?.statusMessage || e?.message || t('project.msg.fetchFailed')
   } finally {
     pullsPending.value = false
   }
@@ -138,11 +139,11 @@ async function reviewSelected() {
       body: { projectId: projectId.value, pulls: chosen },
     })
     selected.value = new Set()
-    msg.value = `已建 ${res.created.length} 个审核任务`
+    msg.value = t('project.msg.tasksCreated', { count: res.created.length })
     await Promise.all([refreshPulls(), refreshTasks()])
     tab.value = 'tasks'
   } catch (e: any) {
-    msg.value = e?.data?.statusMessage || e?.message || '失败'
+    msg.value = e?.data?.statusMessage || e?.message || t('common.failed')
   } finally {
     starting.value = false
   }
@@ -199,74 +200,67 @@ async function refreshTask(r: ReviewRow) {
     await $fetch(`/api/reviews/${r.id}/refresh`, { method: 'POST' })
     await refreshTasks() // 「作者已更新」会落到该行状态里，不再用右上角一闪而过的提示
   } catch (e: any) {
-    msg.value = e?.data?.statusMessage || e?.message || '刷新失败'
+    msg.value = e?.data?.statusMessage || e?.message || t('project.msg.refreshFailed')
   } finally {
     refreshing.value = null
   }
 }
 const ask = useConfirm()
 async function deleteTask(r: ReviewRow) {
-  if (!(await ask({ title: '删除审核任务', message: `删除 #${r.prNumber} 的审核任务？（只删本地任务，GitHub 评论不动）`, okText: '删除', danger: true }))) return
+  if (!(await ask({ title: t('project.confirm.deleteTaskTitle'), message: t('project.confirm.deleteTaskMsg', { pr: r.prNumber }), okText: t('common.delete'), danger: true }))) return
   await $fetch(`/api/reviews/${r.id}`, { method: 'DELETE' })
   await Promise.all([refreshTasks(), refreshPulls()])
 }
 const cleaning = ref<'merged' | 'posted' | ''>('')
 async function clean(mode: 'merged' | 'posted') {
-  const label = mode === 'merged' ? '已合并' : '已发评论'
+  const label = mode === 'merged' ? t('project.clean.labelMerged') : t('project.clean.labelPosted')
   const n = (tasks.value ?? []).filter((r) => (mode === 'merged' ? r.prState === 'merged' : r.status === 'posted')).length
-  if (!n) { msg.value = `没有「${label}」的任务可清理`; return }
-  if (!(await ask({ title: `清理${label}`, message: `删除 ${n} 个「${label}」的审核任务？（只删本地任务，GitHub 不动）`, okText: '删除', danger: true }))) return
+  if (!n) { msg.value = t('project.clean.none', { label }); return }
+  if (!(await ask({ title: t('project.clean.confirmTitle', { label }), message: t('project.clean.confirmMsg', { n, label }), okText: t('common.delete'), danger: true }))) return
   cleaning.value = mode
   try {
     const res = await $fetch<{ deleted: number }>('/api/reviews/clean', {
       method: 'POST',
       body: { projectId: projectId.value, mode },
     })
-    msg.value = `清理了 ${res.deleted} 个「${label}」任务`
+    msg.value = t('project.clean.done', { n: res.deleted, label })
     await Promise.all([refreshTasks(), refreshPulls()])
   } finally {
     cleaning.value = ''
   }
 }
 
-// 审核任务进度文案（GitHub 看不到的本地工作流态）
-const TASK_STATUS: Record<string, string> = {
-  queued: '未开始',
-  cloning: '准备代码',
-  reviewing: '审核中',
-  draft: '已出稿',
-  ready_to_post: '待发布',
-  posted: '已发评论',
-  recheck_requested: '待复审',
-  rechecking: '复审中',
-  error: '出错',
+// 审核任务进度文案（GitHub 看不到的本地工作流态）；缺失键回退到原始 status 码
+function taskStatusLabel(s: string) {
+  const k = `status.task.${s}`
+  return te(k) ? t(k) : s
 }
 function taskStatusCls(s: string) {
-  if (s === 'error') return 'text-neutral-900 font-medium'
-  if (s === 'reviewing' || s === 'rechecking' || s === 'cloning') return 'text-neutral-600'
-  if (s === 'queued') return 'text-neutral-400'
-  return 'text-neutral-900'
+  if (s === 'error') return 'text-highlighted font-medium'
+  if (s === 'reviewing' || s === 'rechecking' || s === 'cloning') return 'text-toned'
+  if (s === 'queued') return 'text-dimmed'
+  return 'text-highlighted'
 }
-// GitHub 上 PR 的真实状态（派生/权威）
+// GitHub 上 PR 的真实状态（派生/权威）；label 存 i18n 键，模板里用 t() 解析
 const PR_STATE: Record<string, { label: string; cls: string }> = {
-  open: { label: '进行中', cls: 'text-neutral-700 border-neutral-300' },
-  merged: { label: '已合并', cls: 'text-neutral-900 border-neutral-400' },
-  closed: { label: '已关闭', cls: 'text-neutral-400 border-neutral-200' },
-  draft: { label: '草稿', cls: 'text-neutral-400 border-neutral-200' },
+  open: { label: 'status.pr.open', cls: 'text-default border-accented' },
+  merged: { label: 'status.pr.merged', cls: 'text-highlighted border-accented' },
+  closed: { label: 'status.pr.closed', cls: 'text-dimmed border-default' },
+  draft: { label: 'status.pr.draft', cls: 'text-dimmed border-default' },
 }
 function prStateBadge(s: string) {
-  return PR_STATE[s] ?? { label: '—', cls: 'text-neutral-300 border-neutral-200' }
+  return PR_STATE[s] ?? { label: 'status.pr.unknown', cls: 'text-dimmed border-default' }
 }
 // 任务行 PR 徽章：把 GitHub 评审决定叠进生命周期 —— 进行中 → 已批准 / 请改动 → 已合并 / 已关闭
 function prBadge(r: ReviewRow) {
-  if (r.prState === 'open' && r.reviewDecision === 'APPROVED') return { label: '已批准', cls: 'text-neutral-900 border-neutral-400' }
-  if (r.prState === 'open' && r.reviewDecision === 'CHANGES_REQUESTED') return { label: '请改动', cls: 'text-neutral-600 border-neutral-300' }
+  if (r.prState === 'open' && r.reviewDecision === 'APPROVED') return { label: 'status.pr.approved', cls: 'text-highlighted border-accented' }
+  if (r.prState === 'open' && r.reviewDecision === 'CHANGES_REQUESTED') return { label: 'status.pr.changes', cls: 'text-toned border-accented' }
   return prStateBadge(r.prState)
 }
 // 全部 PR 列表的徽章：同样叠进评审决定；草稿/已合并/已关闭照旧
 function pullBadge(p: Pull) {
-  if (p.state === 'open' && p.reviewDecision === 'APPROVED') return { label: '已批准', cls: 'text-neutral-900 border-neutral-400' }
-  if (p.state === 'open' && p.reviewDecision === 'CHANGES_REQUESTED') return { label: '请改动', cls: 'text-neutral-600 border-neutral-300' }
+  if (p.state === 'open' && p.reviewDecision === 'APPROVED') return { label: 'status.pr.approved', cls: 'text-highlighted border-accented' }
+  if (p.state === 'open' && p.reviewDecision === 'CHANGES_REQUESTED') return { label: 'status.pr.changes', cls: 'text-toned border-accented' }
   return prStateBadge(p.isDraft ? 'draft' : p.state)
 }
 // 状态徽章归类键（点击筛选用）
@@ -282,8 +276,8 @@ function toggleStatus(k: string) {
   statusFilter.value = statusFilter.value === k ? null : k
 }
 function sevCls(n: number, level: 'h' | 'm' | 'l') {
-  if (n === 0) return 'text-neutral-300'
-  return level === 'h' ? 'text-neutral-900 font-medium' : level === 'm' ? 'text-neutral-600' : 'text-neutral-400'
+  if (n === 0) return 'text-dimmed'
+  return level === 'h' ? 'text-highlighted font-medium' : level === 'm' ? 'text-toned' : 'text-dimmed'
 }
 </script>
 
@@ -293,35 +287,35 @@ function sevCls(n: number, level: 'h' | 'm' | 'l') {
     <div v-if="project" class="flex items-end justify-between">
       <div>
         <h1 class="text-3xl font-light tracking-tight">{{ project.name }}</h1>
-        <p class="text-xs uppercase tracking-[0.15em] text-neutral-400 mt-2">
+        <p class="text-xs uppercase tracking-[0.15em] text-dimmed mt-2">
           {{ project.repo }} · {{ project.defaultBranch }}
         </p>
       </div>
-      <span class="text-xs text-neutral-400">{{ msg }}</span>
+      <span class="text-xs text-dimmed">{{ msg }}</span>
     </div>
 
     <!-- Tabs -->
-    <div class="mt-10 flex gap-8 border-b border-neutral-200 text-sm">
+    <div class="mt-10 flex gap-8 border-b border-default text-sm">
       <button
         class="pb-3 -mb-px border-b-2 transition-colors"
-        :class="tab === 'pulls' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-700'"
+        :class="tab === 'pulls' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'"
         @click="tab = 'pulls'"
       >
-        全部 PR
+        {{ $t('project.tabs.pulls') }}
       </button>
       <button
         class="pb-3 -mb-px border-b-2 transition-colors"
-        :class="tab === 'tasks' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-700'"
+        :class="tab === 'tasks' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'"
         @click="tab = 'tasks'"
       >
-        审核任务 <span class="text-neutral-400">{{ tasks?.length || 0 }}</span>
+        {{ $t('project.tabs.tasks') }} <span class="text-dimmed">{{ tasks?.length || 0 }}</span>
       </button>
       <button
         class="pb-3 -mb-px border-b-2 transition-colors"
-        :class="tab === 'config' ? 'border-neutral-900 text-neutral-900' : 'border-transparent text-neutral-400 hover:text-neutral-700'"
+        :class="tab === 'config' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'"
         @click="tab = 'config'"
       >
-        项目配置
+        {{ $t('project.tabs.config') }}
       </button>
     </div>
 
@@ -341,25 +335,25 @@ function sevCls(n: number, level: 'h' | 'm' | 'l') {
             v-for="s in (['open','merged','closed','all'] as const)"
             :key="s"
             class="transition-colors"
-            :class="prState === s ? 'text-neutral-900 underline underline-offset-4' : 'text-neutral-400 hover:text-neutral-700'"
+            :class="prState === s ? 'text-highlighted underline underline-offset-4' : 'text-dimmed hover:text-default'"
             @click="prState = s; selected = new Set()"
           >
-            {{ { open: '进行中', merged: '已合并', closed: '已关闭', all: '全部' }[s] }}
+            {{ s === 'all' ? $t('common.all') : $t('status.pr.' + s) }}
           </button>
         </div>
         <div class="flex flex-wrap gap-x-4 gap-y-2 items-baseline">
           <button
             class="text-sm transition-colors"
-            :class="!authorFilter ? 'text-neutral-900 font-medium' : 'text-neutral-400 hover:text-neutral-700'"
+            :class="!authorFilter ? 'text-highlighted font-medium' : 'text-dimmed hover:text-default'"
             @click="authorFilter = null"
           >
-            全部
+            {{ $t('common.all') }}
           </button>
           <button
             v-for="a in authors"
             :key="a"
             class="text-sm transition-colors"
-            :class="authorFilter === a ? 'text-neutral-900 font-medium underline underline-offset-4' : 'text-neutral-500 hover:text-neutral-900'"
+            :class="authorFilter === a ? 'text-highlighted font-medium underline underline-offset-4' : 'text-muted hover:text-highlighted'"
             @click="authorFilter = authorFilter === a ? null : a"
           >
             {{ a }}
@@ -369,70 +363,70 @@ function sevCls(n: number, level: 'h' | 'm' | 'l') {
 
       <!-- 批量操作条 -->
       <div class="mt-6 flex items-center gap-4 h-9">
-        <label class="flex items-center gap-2 text-xs text-neutral-500 cursor-pointer select-none">
+        <label class="flex items-center gap-2 text-xs text-muted cursor-pointer select-none">
           <input
             type="checkbox"
-            class="accent-neutral-900"
+            class="accent-neutral-900 dark:accent-neutral-100"
             :checked="selectableCount > 0 && selected.size === selectableCount"
             :disabled="selectableCount === 0"
             @change="toggleAll"
           />
-          全选可审
+          {{ $t('project.selectAllReviewable') }}
         </label>
         <button
           v-if="selected.size"
-          class="text-sm bg-neutral-900 text-white px-4 py-1.5 hover:bg-neutral-700 transition-colors disabled:opacity-40"
+          class="text-sm bg-inverted text-inverted px-4 py-1.5 hover:bg-inverted/90 transition-colors disabled:opacity-40"
           :disabled="starting"
           @click="reviewSelected"
         >
-          {{ starting ? '建任务中…' : `审核选中 (${selected.size})` }}
+          {{ starting ? $t('project.creatingTasks') : $t('project.reviewSelected', { count: selected.size }) }}
         </button>
-        <UButton variant="ghost" size="xs" :loading="pullsPending" icon="i-lucide-refresh-cw" @click="refreshPulls()">刷新列表</UButton>
+        <UButton variant="ghost" size="xs" :loading="pullsPending" icon="i-lucide-refresh-cw" @click="refreshPulls()">{{ $t('project.refreshList') }}</UButton>
       </div>
 
       <!-- PR 列表 -->
       <div class="mt-4">
-        <div class="grid grid-cols-[1.5rem_3.5rem_1fr_8rem_5rem] gap-x-4 px-1 pb-3 text-[10px] uppercase tracking-[0.15em] text-neutral-400 border-b border-neutral-900">
-          <span></span><span>PR</span><span>标题</span><span>作者</span><span class="text-center">状态</span>
+        <div class="grid grid-cols-[1.5rem_3.5rem_1fr_8rem_5rem] gap-x-4 px-1 pb-3 text-[10px] uppercase tracking-[0.15em] text-dimmed border-b border-inverted">
+          <span></span><span>PR</span><span>{{ $t('project.col.title') }}</span><span>{{ $t('project.col.author') }}</span><span class="text-center">{{ $t('project.col.status') }}</span>
         </div>
         <div
           v-for="p in visiblePulls"
           :key="p.number"
-          class="grid grid-cols-[1.5rem_3.5rem_1fr_8rem_5rem] gap-x-4 items-center px-1 py-3 border-b border-neutral-100 text-sm"
+          class="grid grid-cols-[1.5rem_3.5rem_1fr_8rem_5rem] gap-x-4 items-center px-1 py-3 border-b border-default text-sm"
         >
           <input
             type="checkbox"
-            class="accent-neutral-900 disabled:opacity-30"
+            class="accent-neutral-900 dark:accent-neutral-100 disabled:opacity-30"
             :checked="selected.has(p.number)"
             :disabled="p.hasTask"
-            :title="p.hasTask ? '已建审核任务' : ''"
+            :title="p.hasTask ? $t('project.hasTaskTitle') : ''"
             @change="toggle(p.number)"
           />
           <button class="font-medium tabular-nums hover:underline underline-offset-4 text-left" @click="openDetail(p.number, p.taskId)">#{{ p.number }}</button>
-          <button class="truncate text-neutral-700 text-left hover:text-neutral-900" :title="p.title" @click="openDetail(p.number, p.taskId)">
+          <button class="truncate text-default text-left hover:text-highlighted" :title="p.title" @click="openDetail(p.number, p.taskId)">
             {{ p.title }}
-            <span v-if="p.hasTask" class="ml-2 text-[10px] text-neutral-400">· 已建任务</span>
+            <span v-if="p.hasTask" class="ml-2 text-[10px] text-dimmed">· {{ $t('project.hasTaskTag') }}</span>
           </button>
-          <button class="text-xs text-neutral-500 hover:text-neutral-900 truncate text-left" @click="pickAuthor(p.author)">{{ p.author }}</button>
+          <button class="text-xs text-muted hover:text-highlighted truncate text-left" @click="pickAuthor(p.author)">{{ p.author }}</button>
           <span class="text-center">
             <button
               class="text-[10px] uppercase tracking-wider px-2 py-0.5 border rounded-full cursor-pointer hover:opacity-70 transition"
-              :class="[pullBadge(p).cls, statusFilter === pullKey(p) ? 'ring-1 ring-neutral-900' : '']"
-              :title="statusFilter === pullKey(p) ? '取消筛选' : '按此状态筛选'"
+              :class="[pullBadge(p).cls, statusFilter === pullKey(p) ? 'ring-1 ring-inverted' : '']"
+              :title="statusFilter === pullKey(p) ? $t('project.clearFilter') : $t('project.filterByStatus')"
               @click.stop="toggleStatus(pullKey(p))"
-            >{{ pullBadge(p).label }}</button>
+            >{{ $t(pullBadge(p).label) }}</button>
           </span>
         </div>
-        <p v-if="!visiblePulls.length" class="py-16 text-center text-xs text-neutral-400">
-          {{ pullsPending ? '加载中…' : '没有符合条件的 PR' }}
+        <p v-if="!visiblePulls.length" class="py-16 text-center text-xs text-dimmed">
+          {{ pullsPending ? $t('common.loading') : $t('project.noPulls') }}
         </p>
 
         <!-- 分页 -->
-        <div v-if="pullsResp && (pullsResp.totalCount > PER_PAGE)" class="flex items-center justify-between mt-5 text-xs text-neutral-400">
-          <span>共 {{ pullsResp.totalCount }} 个 · 第 {{ page + 1 }} 页</span>
+        <div v-if="pullsResp && (pullsResp.totalCount > PER_PAGE)" class="flex items-center justify-between mt-5 text-xs text-dimmed">
+          <span>{{ $t('project.pagination.summary', { total: pullsResp.totalCount, page: page + 1 }) }}</span>
           <div class="flex gap-4">
-            <button class="hover:text-neutral-900 disabled:opacity-30" :disabled="page === 0 || pullsPending" @click="prevPage">← 上一页</button>
-            <button class="hover:text-neutral-900 disabled:opacity-30" :disabled="!pullsResp.hasNextPage || pullsPending" @click="nextPage">下一页 →</button>
+            <button class="hover:text-highlighted disabled:opacity-30" :disabled="page === 0 || pullsPending" @click="prevPage">{{ $t('project.pagination.prev') }}</button>
+            <button class="hover:text-highlighted disabled:opacity-30" :disabled="!pullsResp.hasNextPage || pullsPending" @click="nextPage">{{ $t('project.pagination.next') }}</button>
           </div>
         </div>
       </div>
@@ -441,49 +435,49 @@ function sevCls(n: number, level: 'h' | 'm' | 'l') {
     <!-- ── 审核任务 ── -->
     <div v-show="tab === 'tasks'" class="mt-8">
       <div class="flex justify-end gap-4 mb-4">
-        <button class="text-xs text-neutral-400 hover:text-neutral-900 transition-colors disabled:opacity-40" :disabled="!!cleaning" @click="clean('merged')">
-          {{ cleaning === 'merged' ? '清理中…' : '清理已合并' }}
+        <button class="text-xs text-dimmed hover:text-highlighted transition-colors disabled:opacity-40" :disabled="!!cleaning" @click="clean('merged')">
+          {{ cleaning === 'merged' ? $t('project.clean.cleaning') : $t('project.clean.cleanMerged') }}
         </button>
-        <button class="text-xs text-neutral-400 hover:text-neutral-900 transition-colors disabled:opacity-40" :disabled="!!cleaning" @click="clean('posted')">
-          {{ cleaning === 'posted' ? '清理中…' : '清理已发评论' }}
+        <button class="text-xs text-dimmed hover:text-highlighted transition-colors disabled:opacity-40" :disabled="!!cleaning" @click="clean('posted')">
+          {{ cleaning === 'posted' ? $t('project.clean.cleaning') : $t('project.clean.cleanPosted') }}
         </button>
       </div>
-      <div class="grid grid-cols-[3.5rem_1fr_6rem_5rem_5rem_4.5rem_2rem] gap-x-4 px-1 pb-3 text-[10px] uppercase tracking-[0.15em] text-neutral-400 border-b border-neutral-900">
-        <span>PR</span><span>标题</span><span>作者</span><span>审核</span><span class="text-center">严重度</span><span class="text-center">PR</span><span></span>
+      <div class="grid grid-cols-[3.5rem_1fr_6rem_5rem_5rem_4.5rem_2rem] gap-x-4 px-1 pb-3 text-[10px] uppercase tracking-[0.15em] text-dimmed border-b border-inverted">
+        <span>PR</span><span>{{ $t('project.col.title') }}</span><span>{{ $t('project.col.author') }}</span><span>{{ $t('project.col.review') }}</span><span class="text-center">{{ $t('project.col.severity') }}</span><span class="text-center">PR</span><span></span>
       </div>
       <div
         v-for="r in pagedTasks"
         :key="r.id"
-        class="grid grid-cols-[3.5rem_1fr_6rem_5rem_5rem_4.5rem_2rem] gap-x-4 items-center px-1 py-4 border-b border-neutral-100 text-sm group"
+        class="grid grid-cols-[3.5rem_1fr_6rem_5rem_5rem_4.5rem_2rem] gap-x-4 items-center px-1 py-4 border-b border-default text-sm group"
       >
         <button class="font-medium tabular-nums hover:underline underline-offset-4 text-left" @click="openDetail(r.prNumber, r.id)">#{{ r.prNumber }}</button>
-        <button class="truncate text-neutral-600 text-left hover:text-neutral-900" :title="r.title || ''" @click="openDetail(r.prNumber, r.id)">{{ r.title || '—' }}</button>
-        <span class="text-xs text-neutral-500 truncate">{{ r.author || '—' }}</span>
+        <button class="truncate text-toned text-left hover:text-highlighted" :title="r.title || ''" @click="openDetail(r.prNumber, r.id)">{{ r.title || '—' }}</button>
+        <span class="text-xs text-muted truncate">{{ r.author || '—' }}</span>
         <span class="text-xs flex flex-col gap-0.5 leading-tight">
-          <span :class="taskStatusCls(r.status)">{{ TASK_STATUS[r.status] ?? r.status }}</span>
-          <span v-if="r.authorUpdated" class="text-[10px] text-neutral-900 font-medium" title="作者在你上次发评论后又 push 了，可复查">● 作者已更新</span>
+          <span :class="taskStatusCls(r.status)">{{ taskStatusLabel(r.status) }}</span>
+          <span v-if="r.authorUpdated" class="text-[10px] text-highlighted font-medium" :title="$t('project.authorUpdatedTitle')">● {{ $t('project.authorUpdated') }}</span>
         </span>
-        <span class="text-center text-xs tabular-nums" title="高 / 中 / 低 严重度问题数">
-          <span :class="sevCls(r.counts.High, 'h')">{{ r.counts.High }}</span><span class="text-neutral-200"> · </span><span :class="sevCls(r.counts.Medium, 'm')">{{ r.counts.Medium }}</span><span class="text-neutral-200"> · </span><span :class="sevCls(r.counts.Low, 'l')">{{ r.counts.Low }}</span>
+        <span class="text-center text-xs tabular-nums" :title="$t('project.severityTitle')">
+          <span :class="sevCls(r.counts.High, 'h')">{{ r.counts.High }}</span><span class="text-dimmed"> · </span><span :class="sevCls(r.counts.Medium, 'm')">{{ r.counts.Medium }}</span><span class="text-dimmed"> · </span><span :class="sevCls(r.counts.Low, 'l')">{{ r.counts.Low }}</span>
         </span>
         <span class="text-center">
-          <span class="text-[10px] uppercase tracking-wider px-2 py-0.5 border rounded-full" :class="prBadge(r).cls">{{ prBadge(r).label }}</span>
+          <span class="text-[10px] uppercase tracking-wider px-2 py-0.5 border rounded-full" :class="prBadge(r).cls">{{ $t(prBadge(r).label) }}</span>
         </span>
         <div class="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
-          <button class="text-neutral-300 hover:text-neutral-900" :class="{ 'opacity-100 animate-spin': refreshing === r.id }" title="刷新 PR 状态" @click="refreshTask(r)">↻</button>
-          <button class="text-neutral-300 hover:text-neutral-900" title="删除任务" @click="deleteTask(r)">✕</button>
+          <button class="text-dimmed hover:text-highlighted" :class="{ 'opacity-100 animate-spin': refreshing === r.id }" :title="$t('project.refreshPrStatus')" @click="refreshTask(r)">↻</button>
+          <button class="text-dimmed hover:text-highlighted" :title="$t('project.deleteTask')" @click="deleteTask(r)">✕</button>
         </div>
       </div>
-      <p v-if="!tasks?.length" class="py-16 text-center text-xs text-neutral-400">
-        还没有审核任务。去「全部 PR」勾选 PR 开始。
+      <p v-if="!tasks?.length" class="py-16 text-center text-xs text-dimmed">
+        {{ $t('project.noTasks') }}
       </p>
 
       <!-- 分页 -->
-      <div v-if="taskPages > 1" class="flex items-center justify-between mt-5 text-xs text-neutral-400">
-        <span>共 {{ tasks?.length }} 个 · 第 {{ taskPage + 1 }} / {{ taskPages }} 页</span>
+      <div v-if="taskPages > 1" class="flex items-center justify-between mt-5 text-xs text-dimmed">
+        <span>{{ $t('project.pagination.summaryPages', { total: tasks?.length, page: taskPage + 1, pages: taskPages }) }}</span>
         <div class="flex gap-4">
-          <button class="hover:text-neutral-900 disabled:opacity-30" :disabled="taskPage === 0" @click="taskPage--">← 上一页</button>
-          <button class="hover:text-neutral-900 disabled:opacity-30" :disabled="taskPage >= taskPages - 1" @click="taskPage++">下一页 →</button>
+          <button class="hover:text-highlighted disabled:opacity-30" :disabled="taskPage === 0" @click="taskPage--">{{ $t('project.pagination.prev') }}</button>
+          <button class="hover:text-highlighted disabled:opacity-30" :disabled="taskPage >= taskPages - 1" @click="taskPage++">{{ $t('project.pagination.next') }}</button>
         </div>
       </div>
     </div>

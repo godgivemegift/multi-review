@@ -1,0 +1,311 @@
+{
+  "switcher": {
+    "label": "语言"
+  },
+  "common": {
+    "cancel": "取消",
+    "delete": "删除",
+    "loading": "加载中…",
+    "failed": "失败",
+    "all": "全部",
+    "toggleLight": "切换到浅色",
+    "toggleDark": "切换到深色"
+  },
+  "confirm": {
+    "title": "确认",
+    "ok": "确定"
+  },
+  "layout": {
+    "metaDescription": "本地批量 PR 审核管理",
+    "projectsTitle": "项目",
+    "createProject": "创建项目",
+    "create": "创建",
+    "creating": "创建中…",
+    "createError": "创建失败",
+    "emptyProjects": "还没有项目",
+    "emptyProjectsHint": "点上方 + 创建",
+    "form": {
+      "name": "名称",
+      "repo": "仓库 (owner/repo)",
+      "localPath": "本地 clone 路径（worktree 从这里开）",
+      "defaultBranch": "默认分支"
+    }
+  },
+  "home": {
+    "tagline": "本地批量 PR 审核。终端 agent 为核心，web 做把关与状态管理。",
+    "ghStatusOk": "已登录",
+    "ghStatusNotReady": "未就绪 — 先 gh auth login",
+    "defaultModel": "默认模型",
+    "projectsCount": "{count} 个",
+    "enterProject": "进入「{name}」 →",
+    "emptyHint": "左侧 + 创建第一个项目开始。"
+  },
+  "status": {
+    "task": {
+      "queued": "未开始",
+      "cloning": "准备代码",
+      "reviewing": "审核中",
+      "draft": "已出稿",
+      "ready_to_post": "待发布",
+      "posted": "已发评论",
+      "recheck_requested": "待复审",
+      "rechecking": "复审中",
+      "error": "出错"
+    },
+    "pr": {
+      "open": "进行中",
+      "merged": "已合并",
+      "closed": "已关闭",
+      "draft": "草稿",
+      "approved": "已批准",
+      "changes": "请改动",
+      "unknown": "—"
+    }
+  },
+  "project": {
+    "tabs": {
+      "pulls": "全部 PR",
+      "tasks": "审核任务",
+      "config": "项目配置"
+    },
+    "col": {
+      "title": "标题",
+      "author": "作者",
+      "status": "状态",
+      "review": "审核",
+      "severity": "严重度"
+    },
+    "selectAllReviewable": "全选可审",
+    "reviewSelected": "审核选中 ({count})",
+    "creatingTasks": "建任务中…",
+    "refreshList": "刷新列表",
+    "hasTaskTitle": "已建审核任务",
+    "hasTaskTag": "已建任务",
+    "clearFilter": "取消筛选",
+    "filterByStatus": "按此状态筛选",
+    "noPulls": "没有符合条件的 PR",
+    "noTasks": "还没有审核任务。去「全部 PR」勾选 PR 开始。",
+    "authorUpdated": "作者已更新",
+    "authorUpdatedTitle": "作者在你上次发评论后又 push 了，可复查",
+    "severityTitle": "高 / 中 / 低 严重度问题数",
+    "refreshPrStatus": "刷新 PR 状态",
+    "deleteTask": "删除任务",
+    "pagination": {
+      "summary": "共 {total} 个 · 第 {page} 页",
+      "summaryPages": "共 {total} 个 · 第 {page} / {pages} 页",
+      "prev": "← 上一页",
+      "next": "下一页 →"
+    },
+    "clean": {
+      "labelMerged": "已合并",
+      "labelPosted": "已发评论",
+      "cleanMerged": "清理已合并",
+      "cleanPosted": "清理已发评论",
+      "cleaning": "清理中…",
+      "none": "没有「{label}」的任务可清理",
+      "confirmTitle": "清理{label}",
+      "confirmMsg": "删除 {n} 个「{label}」的审核任务？（只删本地任务，GitHub 不动）",
+      "done": "清理了 {n} 个「{label}」任务"
+    },
+    "confirm": {
+      "deleteTaskTitle": "删除审核任务",
+      "deleteTaskMsg": "删除 #{pr} 的审核任务？（只删本地任务，GitHub 评论不动）"
+    },
+    "msg": {
+      "fetchFailed": "拉取失败",
+      "tasksCreated": "已建 {count} 个审核任务",
+      "refreshFailed": "刷新失败"
+    }
+  },
+  "prDrawer": {
+    "loadFailed": "加载失败",
+    "diffLoadFailed": "diff 加载失败",
+    "title": "PR 详情",
+    "openInGithub": "在 GitHub 打开 ↗",
+    "tabReview": "AI 审核",
+    "tabTimeline": "时间线",
+    "tabChanges": "改动",
+    "filesCount": "{count} 个文件",
+    "changedFiles": "改动文件 ({count})",
+    "openedPr": "提交了 PR",
+    "noDescription": "（无描述）",
+    "commentLabel": "评论",
+    "loadingDiff": "加载 diff…",
+    "diffTruncated": "diff 过大已截断，完整内容请在 GitHub 查看。",
+    "time": {
+      "justNow": "刚刚",
+      "minutesAgo": "{n} 分钟前",
+      "hoursAgo": "{n} 小时前",
+      "daysAgo": "{n} 天前"
+    },
+    "review": {
+      "approved": "批准了",
+      "changesRequested": "请求修改",
+      "commented": "评论了",
+      "dismissed": "忽略了 review",
+      "generic": "review"
+    },
+    "verb": {
+      "labeled": "加了标签",
+      "unlabeled": "去掉标签",
+      "renamed": "改了标题",
+      "referenced": "引用了",
+      "head_ref_force_pushed": "强推了分支",
+      "head_ref_deleted": "删除了分支",
+      "head_ref_restored": "恢复了分支",
+      "closed": "关闭了",
+      "merged": "合并了",
+      "reopened": "重新打开",
+      "ready_for_review": "标记为可审核",
+      "convert_to_draft": "转为草稿",
+      "review_requested": "请求了审核",
+      "review_request_removed": "撤销审核请求",
+      "assigned": "指派了",
+      "unassigned": "取消指派",
+      "deployed": "部署了",
+      "milestoned": "加入里程碑"
+    }
+  },
+  "config": {
+    "projectInfo": "项目信息",
+    "localPathShort": "本地 clone 路径",
+    "modelSection": "审核模型（你本地 claude 真实可用）",
+    "globalDefault": "全局默认",
+    "useEnvDefault": "用 .env 里的默认模型",
+    "inheritEnvDefault": "继承 .env 默认",
+    "effortLabel": "审核力度 (effort)",
+    "effortNone": "（不设，用模型默认）",
+    "noEffortSupport": "该模型不支持 effort 设置",
+    "saving": "保存中…",
+    "saveConfig": "保存配置",
+    "saved": "已保存",
+    "saveFailed": "保存失败",
+    "skillsSection": "审核 Skills（选一个启用）",
+    "addBlank": "+ 空白",
+    "aiGenerate": "AI 生成",
+    "aiOptimize": "AI 赋能优化当前",
+    "aiGenerating": "AI 生成中",
+    "readingCode": "读项目代码…",
+    "localPathRequired": "配置本地 clone 路径后才能用 AI 生成。",
+    "activeTitle": "启用中",
+    "warnCount": "⚠ {count} 项提示",
+    "preview": "预览",
+    "enable": "启用",
+    "noSkills": "还没有 skill。点「AI 生成」让 AI 读你项目生成一套，或「+ 空白」手写。没有启用 skill 时用内置默认方法学。",
+    "vsActive": "· 对比当前启用",
+    "enableThis": "启用这个",
+    "deleteProject": "删除项目",
+    "handwrittenSkill": "手写 skill",
+    "skillActivated": "已切换启用 skill",
+    "candidateGenerated": "已生成新候选，预览/对比后点「启用」",
+    "genInterrupted": "生成请求中断——若上方多出候选则已生成，否则重试",
+    "connecting": "连接中…",
+    "src": {
+      "manual": "手写",
+      "file": "文件",
+      "ai": "AI 生成",
+      "optimized": "AI 优化"
+    },
+    "confirm": {
+      "deleteProjectMsg": "删除项目「{name}」？审核任务和 skills 一并删除（不影响 GitHub）。",
+      "deleteSkillTitle": "删除 skill",
+      "deleteSkillMsg": "删除这个 skill？"
+    },
+    "warnModal": {
+      "title": "Skill 体检提示",
+      "body": "「{name}」里出现了一些<b>疑似“操作流程”</b>的字眼。审核 skill 应该只写“审什么、怎么判”，不该写 git 操作 / 改代码 / 跳过 worktree 这类指令（那些由引擎控制）。命中：",
+      "note": "多数是“描述性提及”的误报（比如方法学里写“禁止 git push”也会被扫到），不影响使用。<br />即使启用，引擎也会在工具层硬拦截 git 写 / 改文件等操作，skill 写了也跑不了——所以这只是提示，不是错误。",
+      "gotIt": "知道了"
+    },
+    "lintModal": {
+      "title": "这个 skill 可能含操作流程内容",
+      "body": "「{name}」体检命中以下疑似“操作流程”内容（审核应只审不改，操作由引擎控制）：",
+      "note": "注：可能是描述性提及（误报）。即便启用，引擎仍会在工具层硬拦截 git 写 / 改文件等操作，不会真的执行。",
+      "enableAnyway": "仍然启用"
+    },
+    "genModal": {
+      "titleOptimize": "AI 赋能优化当前 skill",
+      "titleGenerate": "AI 生成审核 skill",
+      "intro": "AI 会用项目配置的模型/effort，<b>完整读取本地仓库 + 深度思考</b>后产出。{mode}结果存为<b>新候选</b>，不覆盖、不自动启用。",
+      "modeOptimize": "基于当前启用的 skill 优化。",
+      "modeGenerate": "从零生成。",
+      "instructionLabel": "给 AI 的指令（可选，留空则按默认方式做）",
+      "instructionPlaceholder": "例如：重点强调权限和并发；按 staki-review 的格式；多关注 tRPC 输入校验；用更严格的语气…",
+      "start": "开始生成"
+    },
+    "newModal": {
+      "title": "新建审核 skill",
+      "contentLabel": "内容（方法学，可留空稍后写 / 直接粘贴现成的）",
+      "contentPlaceholder": "# 审核方法学\n..."
+    }
+  },
+  "review": {
+    "noTask": "该 PR 还没有审核任务",
+    "startReview": "开始审核",
+    "creatingTask": "建任务中…",
+    "statusLabel": "审核状态",
+    "authorUpdatedTitle": "作者在你上次发评论后又 push 了",
+    "rerunConfirm": "按你的 notes + 指令复审？",
+    "startRerun": "开始复审",
+    "recheckConfirm": "复查作者评论后的新 commit？",
+    "startRecheck": "开始复查",
+    "rerunBtn": "按我反馈复审",
+    "rerunTitle": "保留你的勾选/notes，参考你每条 note + 下方审核指令做针对性复审，AI 逐条回应",
+    "recheckBtn": "复查作者改动",
+    "recheckTitle": "读你上次发评论之后作者的新 commit，判断每条改了没",
+    "processing": "处理中…",
+    "runLog": "运行日志（{count} 行）",
+    "expandLog": "展开日志 ({count})",
+    "collapseLog": "收起日志",
+    "aiSummary": "AI 总评",
+    "instructionLabel": "给 AI 的审核指令",
+    "instructionPlaceholder": "想让 AI 重点看什么 / 你不同意哪里 / 让它重查某处。点「按我反馈复审」时 AI 会针对这里 + 每条 note 复审。",
+    "requirement": "需求",
+    "testPath": "手动测试路径",
+    "findings": "Findings ({count})",
+    "preExisting": "· 历史遗留",
+    "detailFix": "详情 / 修复",
+    "recheckRound": "复审 R{round}",
+    "notePlaceholder": "回复 / 反馈（写给 AI：不成立？补充？让它重查？「按我反馈复审」时 AI 会回应。勾选发布时翻英文进评论）",
+    "noFindings": "暂无 findings。",
+    "globalNotesLabel": "整体注释（发评论前言）",
+    "globalNotesPlaceholder": "中文，发评论时翻成英文放最前",
+    "generatingPreview": "生成预览中…（翻成英文）",
+    "previewComment": "预览评论（{count}）",
+    "postedTimes": "已发 {count} 次 ·",
+    "latest": "最近",
+    "previewMeta": "预览 · 行级 {count} 条 · 模式 {mode}",
+    "regenTitle": "忽略缓存，按当前 finding/notes 重新生成一版",
+    "regenerating": "重新生成中…",
+    "regenerate": "重新生成",
+    "close": "关闭",
+    "publishing": "发布中…",
+    "confirmPublish": "确认发布到 GitHub",
+    "published": "已发布：{url}",
+    "triggerFailed": "触发失败",
+    "previewFailed": "预览失败",
+    "publishFailed": "发布失败",
+    "status": {
+      "queued": "排队中",
+      "cloning": "准备代码",
+      "reviewing": "审核中",
+      "draft": "已出稿",
+      "ready_to_post": "待发布",
+      "posted": "已发评论",
+      "recheck_requested": "待复审",
+      "rechecking": "复审中",
+      "error": "出错"
+    },
+    "rc": {
+      "fixed": "✓ 已修复",
+      "partial": "部分修复",
+      "unaddressed": "未处理",
+      "replied": "仅回复",
+      "new": "新增",
+      "kept": "维持原判",
+      "retracted": "↩ 已撤回",
+      "adjusted": "已调整",
+      "discuss": "想和你讨论"
+    }
+  }
+}

@@ -1,11 +1,12 @@
 <script setup lang="ts">
 import type { Project } from '~core/db/schema'
 
+const { t } = useI18n()
+
 useHead({
   title: 'Multi Review',
-  meta: [{ name: 'description', content: '本地批量 PR 审核管理' }],
+  meta: [{ name: 'description', content: () => t('layout.metaDescription') }],
   link: [{ rel: 'icon', type: 'image/svg+xml', href: '/favicon.svg' }],
-  htmlAttrs: { class: 'light' },
 })
 
 const { data: projects, refresh } = await useFetch<Project[]>('/api/projects')
@@ -26,7 +27,7 @@ async function createProject() {
     await refresh()
     await navigateTo(`/projects/${created.id}`)
   } catch (e: any) {
-    error.value = e?.data?.statusMessage || e?.message || '创建失败'
+    error.value = e?.data?.statusMessage || e?.message || t('layout.createError')
   } finally {
     creating.value = false
   }
@@ -35,77 +36,86 @@ async function createProject() {
 
 <template>
   <UApp>
-    <div class="min-h-screen flex bg-white text-neutral-900 antialiased">
-      <!-- 左侧导航 -->
-      <aside class="w-60 shrink-0 border-r border-neutral-100 flex flex-col">
-        <NuxtLink to="/" class="px-6 h-16 flex items-center gap-2.5">
+    <div class="h-screen flex flex-col bg-default text-default antialiased">
+      <!-- 顶部 header：左 logo / 右 控件簇（语言切换 + 深浅色） -->
+      <header class="h-16 shrink-0 border-b border-default flex items-center justify-between px-6">
+        <NuxtLink to="/" class="flex items-center gap-2.5">
           <img src="/logo.svg" alt="" class="w-6 h-6 rounded-md" />
-          <span class="text-sm font-medium tracking-[0.18em] uppercase">Multi&nbsp;<span class="text-neutral-300">Review</span></span>
+          <span class="text-sm font-medium tracking-[0.18em] uppercase">Multi&nbsp;<span class="text-dimmed">Review</span></span>
         </NuxtLink>
-
-        <div class="px-6 pt-3 pb-3 flex items-center justify-between">
-          <span class="text-xs font-medium uppercase tracking-[0.15em] text-neutral-500">Projects</span>
-          <button
-            class="text-neutral-400 hover:text-neutral-900 transition-colors text-lg leading-none"
-            title="创建项目"
-            @click="showCreate = true"
-          >
-            +
-          </button>
+        <div class="flex items-center gap-1">
+          <LanguageSwitcher />
+          <ColorModeToggle />
         </div>
+      </header>
 
-        <nav class="flex-1 overflow-y-auto px-3 space-y-px">
-          <NuxtLink
-            v-for="p in projects"
-            :key="p.id"
-            :to="`/projects/${p.id}`"
-            class="block px-3 py-2.5 transition-colors border-l-2"
-            :class="route.params.id === p.id
-              ? 'border-neutral-900 text-neutral-900'
-              : 'border-transparent text-neutral-500 hover:text-neutral-900'"
-          >
-            <div class="truncate text-sm font-medium">{{ p.name }}</div>
-            <div class="text-xs text-neutral-400 truncate mt-0.5">{{ p.repo }}</div>
-          </NuxtLink>
-          <p v-if="!projects?.length" class="px-3 py-8 text-xs text-neutral-400 leading-relaxed">
-            还没有项目<br />点上方 + 创建
-          </p>
-        </nav>
-      </aside>
+      <div class="flex flex-1 min-h-0">
+        <!-- 左侧导航 -->
+        <aside class="w-60 shrink-0 border-r border-default flex flex-col">
+          <div class="px-6 pt-5 pb-3 flex items-center justify-between">
+            <span class="text-xs font-medium uppercase tracking-[0.15em] text-muted">{{ $t('layout.projectsTitle') }}</span>
+            <button
+              class="text-dimmed hover:text-highlighted transition-colors text-lg leading-none"
+              :title="$t('layout.createProject')"
+              @click="showCreate = true"
+            >
+              +
+            </button>
+          </div>
 
-      <!-- 主区 -->
-      <main class="flex-1 min-w-0 overflow-y-auto bg-white">
-        <NuxtPage />
-      </main>
+          <nav class="flex-1 overflow-y-auto px-3 space-y-px">
+            <NuxtLink
+              v-for="p in projects"
+              :key="p.id"
+              :to="`/projects/${p.id}`"
+              class="block px-3 py-2.5 transition-colors border-l-2"
+              :class="route.params.id === p.id
+                ? 'border-inverted text-highlighted'
+                : 'border-transparent text-muted hover:text-highlighted'"
+            >
+              <div class="truncate text-sm font-medium">{{ p.name }}</div>
+              <div class="text-xs text-dimmed truncate mt-0.5">{{ p.repo }}</div>
+            </NuxtLink>
+            <p v-if="!projects?.length" class="px-3 py-8 text-xs text-dimmed leading-relaxed">
+              {{ $t('layout.emptyProjects') }}<br />{{ $t('layout.emptyProjectsHint') }}
+            </p>
+          </nav>
+        </aside>
+
+        <!-- 主区 -->
+        <main class="flex-1 min-w-0 overflow-y-auto bg-default">
+          <NuxtPage />
+        </main>
+      </div>
     </div>
 
     <!-- 全局确认弹窗（替代 window.confirm）-->
     <AppConfirm />
 
     <!-- 创建项目 -->
-    <BaseModal v-model:open="showCreate" title="创建项目">
+    <BaseModal v-model:open="showCreate" :title="$t('layout.createProject')">
       <div class="space-y-4">
         <label class="block">
-          <span class="text-xs text-neutral-400">名称</span>
-          <input v-model="form.name" placeholder="Stakimo" class="w-full text-sm border-b border-neutral-200 focus:border-neutral-900 outline-none py-1 placeholder:text-neutral-300" />
+          <span class="text-xs text-dimmed">{{ $t('layout.form.name') }}</span>
+          <input v-model="form.name" placeholder="Stakimo" class="w-full text-sm border-b border-default focus:border-inverted outline-none py-1 placeholder:text-dimmed" />
         </label>
         <label class="block">
-          <span class="text-xs text-neutral-400">仓库 (owner/repo)</span>
-          <input v-model="form.repo" placeholder="Stakimo/stakimo-app" class="w-full text-sm border-b border-neutral-200 focus:border-neutral-900 outline-none py-1 placeholder:text-neutral-300" />
+          <span class="text-xs text-dimmed">{{ $t('layout.form.repo') }}</span>
+          <input v-model="form.repo" placeholder="Stakimo/stakimo-app" class="w-full text-sm border-b border-default focus:border-inverted outline-none py-1 placeholder:text-dimmed" />
         </label>
         <label class="block">
-          <span class="text-xs text-neutral-400">本地 clone 路径（worktree 从这里开）</span>
-          <input v-model="form.localPath" placeholder="/Users/you/work/stakimo-appli" class="w-full text-sm font-mono border-b border-neutral-200 focus:border-neutral-900 outline-none py-1 placeholder:text-neutral-300" />
+          <span class="text-xs text-dimmed">{{ $t('layout.form.localPath') }}</span>
+          <input v-model="form.localPath" placeholder="/Users/you/work/stakimo-appli" class="w-full text-sm font-mono border-b border-default focus:border-inverted outline-none py-1 placeholder:text-dimmed" />
         </label>
         <label class="block">
-          <span class="text-xs text-neutral-400">默认分支</span>
-          <input v-model="form.defaultBranch" placeholder="dev" class="w-full text-sm border-b border-neutral-200 focus:border-neutral-900 outline-none py-1 placeholder:text-neutral-300" />
+          <span class="text-xs text-dimmed">{{ $t('layout.form.defaultBranch') }}</span>
+          <input v-model="form.defaultBranch" placeholder="dev" class="w-full text-sm border-b border-default focus:border-inverted outline-none py-1 placeholder:text-dimmed" />
         </label>
-        <p v-if="error" class="text-sm text-red-500">{{ error }}</p>
+        <p v-if="error" class="text-sm text-error">{{ error }}</p>
       </div>
       <template #footer>
-        <button class="text-sm text-neutral-500 hover:text-neutral-900 px-3" @click="showCreate = false">取消</button>
-        <button class="text-sm bg-neutral-900 text-white px-4 py-2 hover:bg-neutral-700 disabled:opacity-40" :disabled="creating" @click="createProject">{{ creating ? '创建中…' : '创建' }}</button>
+        <button class="text-sm text-muted hover:text-highlighted px-3" @click="showCreate = false">{{ $t('common.cancel') }}</button>
+        <button class="text-sm bg-inverted text-inverted px-4 py-2 hover:bg-inverted/90 disabled:opacity-40" :disabled="creating" @click="createProject">{{ creating ? $t('layout.creating') : $t('layout.create') }}</button>
       </template>
     </BaseModal>
   </UApp>

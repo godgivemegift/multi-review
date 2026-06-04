@@ -1,0 +1,311 @@
+{
+  "switcher": {
+    "label": "Langue"
+  },
+  "common": {
+    "cancel": "Annuler",
+    "delete": "Supprimer",
+    "loading": "Chargement…",
+    "failed": "Échec",
+    "all": "Tous",
+    "toggleLight": "Passer en clair",
+    "toggleDark": "Passer en sombre"
+  },
+  "confirm": {
+    "title": "Confirmation",
+    "ok": "Confirmer"
+  },
+  "layout": {
+    "metaDescription": "Gestion locale des revues de PR en masse",
+    "projectsTitle": "Projets",
+    "createProject": "Créer un projet",
+    "create": "Créer",
+    "creating": "Création…",
+    "createError": "Échec de la création",
+    "emptyProjects": "Aucun projet",
+    "emptyProjectsHint": "Cliquez sur + en haut pour créer",
+    "form": {
+      "name": "Nom",
+      "repo": "Dépôt (owner/repo)",
+      "localPath": "Chemin du clone local (les worktrees démarrent d'ici)",
+      "defaultBranch": "Branche par défaut"
+    }
+  },
+  "home": {
+    "tagline": "Revue de PR en masse en local. L'agent terminal au cœur, le web pour le contrôle et la gestion des états.",
+    "ghStatusOk": "Connecté",
+    "ghStatusNotReady": "Non prêt — exécutez d'abord gh auth login",
+    "defaultModel": "Modèle par défaut",
+    "projectsCount": "{count}",
+    "enterProject": "Ouvrir « {name} » →",
+    "emptyHint": "Créez votre premier projet avec + à gauche."
+  },
+  "status": {
+    "task": {
+      "queued": "En attente",
+      "cloning": "Préparation du code",
+      "reviewing": "Revue en cours",
+      "draft": "Brouillon prêt",
+      "ready_to_post": "Prêt à publier",
+      "posted": "Commentaire publié",
+      "recheck_requested": "Recontrôle en attente",
+      "rechecking": "Recontrôle en cours",
+      "error": "Erreur"
+    },
+    "pr": {
+      "open": "En cours",
+      "merged": "Fusionnée",
+      "closed": "Fermée",
+      "draft": "Brouillon",
+      "approved": "Approuvée",
+      "changes": "Modifs demandées",
+      "unknown": "—"
+    }
+  },
+  "project": {
+    "tabs": {
+      "pulls": "Toutes les PR",
+      "tasks": "Tâches de revue",
+      "config": "Configuration"
+    },
+    "col": {
+      "title": "Titre",
+      "author": "Auteur",
+      "status": "Statut",
+      "review": "Revue",
+      "severity": "Sévérité"
+    },
+    "selectAllReviewable": "Tout sélectionner",
+    "reviewSelected": "Revoir la sélection ({count})",
+    "creatingTasks": "Création des tâches…",
+    "refreshList": "Actualiser",
+    "hasTaskTitle": "Tâche de revue déjà créée",
+    "hasTaskTag": "tâche créée",
+    "clearFilter": "Retirer le filtre",
+    "filterByStatus": "Filtrer par ce statut",
+    "noPulls": "Aucune PR correspondante",
+    "noTasks": "Aucune tâche de revue. Allez dans « Toutes les PR » et cochez des PR pour commencer.",
+    "authorUpdated": "Auteur a mis à jour",
+    "authorUpdatedTitle": "L'auteur a poussé de nouveaux commits depuis votre dernier commentaire — recontrôle possible",
+    "severityTitle": "Nombre de problèmes haute / moyenne / basse sévérité",
+    "refreshPrStatus": "Actualiser le statut PR",
+    "deleteTask": "Supprimer la tâche",
+    "pagination": {
+      "summary": "{total} au total · page {page}",
+      "summaryPages": "{total} au total · page {page} / {pages}",
+      "prev": "← Précédent",
+      "next": "Suivant →"
+    },
+    "clean": {
+      "labelMerged": "fusionnées",
+      "labelPosted": "commentées",
+      "cleanMerged": "Nettoyer les fusionnées",
+      "cleanPosted": "Nettoyer les commentées",
+      "cleaning": "Nettoyage…",
+      "none": "Aucune tâche « {label} » à nettoyer",
+      "confirmTitle": "Nettoyer les {label}",
+      "confirmMsg": "Supprimer {n} tâche(s) de revue « {label} » ? (tâches locales uniquement, GitHub intact)",
+      "done": "{n} tâche(s) « {label} » nettoyée(s)"
+    },
+    "confirm": {
+      "deleteTaskTitle": "Supprimer la tâche de revue",
+      "deleteTaskMsg": "Supprimer la tâche de revue de #{pr} ? (tâche locale uniquement, le commentaire GitHub reste)"
+    },
+    "msg": {
+      "fetchFailed": "Échec du chargement",
+      "tasksCreated": "{count} tâche(s) de revue créée(s)",
+      "refreshFailed": "Échec de l'actualisation"
+    }
+  },
+  "prDrawer": {
+    "loadFailed": "Échec du chargement",
+    "diffLoadFailed": "Échec du chargement du diff",
+    "title": "Détail de la PR",
+    "openInGithub": "Ouvrir sur GitHub ↗",
+    "tabReview": "Revue IA",
+    "tabTimeline": "Chronologie",
+    "tabChanges": "Modifications",
+    "filesCount": "{count} fichiers",
+    "changedFiles": "Fichiers modifiés ({count})",
+    "openedPr": "a ouvert la PR",
+    "noDescription": "(aucune description)",
+    "commentLabel": "a commenté",
+    "loadingDiff": "Chargement du diff…",
+    "diffTruncated": "Diff trop volumineux, tronqué — contenu complet sur GitHub.",
+    "time": {
+      "justNow": "à l'instant",
+      "minutesAgo": "il y a {n} min",
+      "hoursAgo": "il y a {n} h",
+      "daysAgo": "il y a {n} j"
+    },
+    "review": {
+      "approved": "a approuvé",
+      "changesRequested": "a demandé des modifs",
+      "commented": "a commenté",
+      "dismissed": "a ignoré une revue",
+      "generic": "a relu"
+    },
+    "verb": {
+      "labeled": "a ajouté un label",
+      "unlabeled": "a retiré un label",
+      "renamed": "a renommé",
+      "referenced": "a référencé",
+      "head_ref_force_pushed": "a forcé le push de la branche",
+      "head_ref_deleted": "a supprimé la branche",
+      "head_ref_restored": "a restauré la branche",
+      "closed": "a fermé",
+      "merged": "a fusionné",
+      "reopened": "a rouvert",
+      "ready_for_review": "a marqué prête pour revue",
+      "convert_to_draft": "a converti en brouillon",
+      "review_requested": "a demandé une revue",
+      "review_request_removed": "a retiré une demande de revue",
+      "assigned": "a assigné",
+      "unassigned": "a désassigné",
+      "deployed": "a déployé",
+      "milestoned": "a ajouté à un jalon"
+    }
+  },
+  "config": {
+    "projectInfo": "Informations du projet",
+    "localPathShort": "Chemin du clone local",
+    "modelSection": "Modèle de revue (réellement disponible sur ton claude local)",
+    "globalDefault": "Défaut global",
+    "useEnvDefault": "Utiliser le modèle par défaut du .env",
+    "inheritEnvDefault": "Hérite du défaut .env",
+    "effortLabel": "Intensité de revue (effort)",
+    "effortNone": "(non défini, défaut du modèle)",
+    "noEffortSupport": "Ce modèle ne supporte pas le réglage d'effort",
+    "saving": "Enregistrement…",
+    "saveConfig": "Enregistrer la configuration",
+    "saved": "Enregistré",
+    "saveFailed": "Échec de l'enregistrement",
+    "skillsSection": "Skills de revue (en activer un)",
+    "addBlank": "+ Vierge",
+    "aiGenerate": "Générer par IA",
+    "aiOptimize": "Optimiser l'actuel par IA",
+    "aiGenerating": "Génération IA en cours",
+    "readingCode": "Lecture du code du projet…",
+    "localPathRequired": "Configure le chemin du clone local pour utiliser la génération IA.",
+    "activeTitle": "Activé",
+    "warnCount": "⚠ {count} avertissement(s)",
+    "preview": "Aperçu",
+    "enable": "Activer",
+    "noSkills": "Aucun skill pour l'instant. Cliquez sur « Générer par IA » pour que l'IA lise votre projet et en produise un, ou « + Vierge » pour l'écrire à la main. Sans skill activé, la méthodologie par défaut intégrée est utilisée.",
+    "vsActive": "· comparé à l'actif",
+    "enableThis": "Activer celui-ci",
+    "deleteProject": "Supprimer le projet",
+    "handwrittenSkill": "Skill manuel",
+    "skillActivated": "Skill activé",
+    "candidateGenerated": "Nouveau candidat généré, prévisualisez/comparez puis cliquez « Activer ».",
+    "genInterrupted": "Requête de génération interrompue — si un nouveau candidat apparaît ci-dessus, c'est généré, sinon réessayez.",
+    "connecting": "Connexion…",
+    "src": {
+      "manual": "Manuel",
+      "file": "Fichier",
+      "ai": "Généré par IA",
+      "optimized": "Optimisé par IA"
+    },
+    "confirm": {
+      "deleteProjectMsg": "Supprimer le projet « {name} » ? Les tâches de revue et les skills seront aussi supprimés (sans impact sur GitHub).",
+      "deleteSkillTitle": "Supprimer le skill",
+      "deleteSkillMsg": "Supprimer ce skill ?"
+    },
+    "warnModal": {
+      "title": "Diagnostic du skill",
+      "body": "« {name} » contient des termes <b>évoquant un « flux d'opérations »</b>. Un skill de revue doit seulement décrire « quoi auditer, comment juger », pas des commandes git / modification de code / contournement de worktree (gérés par le moteur). Détecté :",
+      "note": "La plupart sont des « mentions descriptives » (faux positifs — p. ex. écrire « interdit git push » dans la méthodologie est aussi détecté), sans impact.<br />Même activé, le moteur bloque au niveau outil les écritures git / modifs de fichiers ; un skill ne peut pas les exécuter — c'est donc un simple avertissement, pas une erreur.",
+      "gotIt": "Compris"
+    },
+    "lintModal": {
+      "title": "Ce skill contient peut-être un flux d'opérations",
+      "body": "« {name} » a déclenché les contenus suivants évoquant un « flux d'opérations » (la revue ne fait qu'auditer, pas modifier ; les opérations sont gérées par le moteur) :",
+      "note": "Note : il peut s'agir de mentions descriptives (faux positif). Même activé, le moteur bloque au niveau outil les écritures git / modifs de fichiers, qui ne seront pas exécutées.",
+      "enableAnyway": "Activer quand même"
+    },
+    "genModal": {
+      "titleOptimize": "Optimiser le skill actuel par IA",
+      "titleGenerate": "Générer un skill de revue par IA",
+      "intro": "L'IA utilise le modèle/effort configuré, <b>lit l'intégralité du dépôt local + réfléchit en profondeur</b> avant de produire. {mode}Le résultat est enregistré comme <b>nouveau candidat</b>, sans écraser ni activer automatiquement.",
+      "modeOptimize": "Optimisation basée sur le skill actif. ",
+      "modeGenerate": "Génération à partir de zéro. ",
+      "instructionLabel": "Instruction pour l'IA (optionnel, laisser vide pour la méthode par défaut)",
+      "instructionPlaceholder": "Ex. : insister sur les permissions et la concurrence ; suivre le format staki-review ; surveiller la validation des entrées tRPC ; ton plus strict…",
+      "start": "Lancer la génération"
+    },
+    "newModal": {
+      "title": "Nouveau skill de revue",
+      "contentLabel": "Contenu (méthodologie, peut rester vide pour plus tard / coller un existant)",
+      "contentPlaceholder": "# Méthodologie de revue\n..."
+    }
+  },
+  "review": {
+    "noTask": "Cette PR n'a pas encore de tâche de revue",
+    "startReview": "Lancer la revue",
+    "creatingTask": "Création…",
+    "statusLabel": "Statut de la revue",
+    "authorUpdatedTitle": "L'auteur a poussé de nouveaux commits depuis votre dernier commentaire",
+    "rerunConfirm": "Recontrôler selon vos notes + instructions ?",
+    "startRerun": "Lancer le recontrôle",
+    "recheckConfirm": "Vérifier les nouveaux commits après les commentaires de l'auteur ?",
+    "startRecheck": "Lancer la vérification",
+    "rerunBtn": "Recontrôler selon mes retours",
+    "rerunTitle": "Conserve vos cases/notes ; recontrôle ciblé selon chaque note + l'instruction ci-dessous, l'IA répond point par point",
+    "recheckBtn": "Vérifier les changements de l'auteur",
+    "recheckTitle": "Lit les nouveaux commits de l'auteur depuis votre dernier commentaire et juge si chaque point a été corrigé",
+    "processing": "Traitement…",
+    "runLog": "Journal d'exécution ({count} lignes)",
+    "expandLog": "Déplier le journal ({count})",
+    "collapseLog": "Replier le journal",
+    "aiSummary": "Évaluation globale IA",
+    "instructionLabel": "Instruction de revue pour l'IA",
+    "instructionPlaceholder": "Sur quoi l'IA doit se concentrer / ce avec quoi vous n'êtes pas d'accord / lui faire revérifier un point. « Recontrôler selon mes retours » fait revoir ceci + chaque note.",
+    "requirement": "Besoin",
+    "testPath": "Parcours de test manuel",
+    "findings": "Findings ({count})",
+    "preExisting": "· préexistant",
+    "detailFix": "Détails / Correctif",
+    "recheckRound": "Recontrôle R{round}",
+    "notePlaceholder": "Réponse / retour (pour l'IA : pas valable ? complément ? revérifier ? Avec « Recontrôler selon mes retours », l'IA répond. Coché à la publication, traduit en anglais dans le commentaire)",
+    "noFindings": "Aucun constat.",
+    "globalNotesLabel": "Note globale (préambule du commentaire)",
+    "globalNotesPlaceholder": "Mis en tête du commentaire, traduit en anglais à la publication",
+    "generatingPreview": "Génération de l'aperçu… (traduction en anglais)",
+    "previewComment": "Aperçu du commentaire ({count})",
+    "postedTimes": "Publié {count} fois ·",
+    "latest": "dernier",
+    "previewMeta": "Aperçu · {count} commentaire(s) en ligne · mode {mode}",
+    "regenTitle": "Ignorer le cache, régénérer selon les findings/notes actuels",
+    "regenerating": "Régénération…",
+    "regenerate": "Régénérer",
+    "close": "Fermer",
+    "publishing": "Publication…",
+    "confirmPublish": "Publier sur GitHub",
+    "published": "Publié : {url}",
+    "triggerFailed": "Échec du déclenchement",
+    "previewFailed": "Échec de l'aperçu",
+    "publishFailed": "Échec de la publication",
+    "status": {
+      "queued": "En file d'attente",
+      "cloning": "Préparation du code",
+      "reviewing": "Revue en cours",
+      "draft": "Brouillon prêt",
+      "ready_to_post": "Prêt à publier",
+      "posted": "Commentaire publié",
+      "recheck_requested": "Recontrôle en attente",
+      "rechecking": "Recontrôle en cours",
+      "error": "Erreur"
+    },
+    "rc": {
+      "fixed": "✓ Corrigé",
+      "partial": "Partiellement corrigé",
+      "unaddressed": "Non traité",
+      "replied": "Réponse seule",
+      "new": "Nouveau",
+      "kept": "Jugement maintenu",
+      "retracted": "↩ Retiré",
+      "adjusted": "Ajusté",
+      "discuss": "À discuter"
+    }
+  }
+}
