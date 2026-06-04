@@ -1,8 +1,16 @@
 <script setup lang="ts">
+import type { Ref } from 'vue'
 import type { DropdownMenuItem } from '@nuxt/ui'
 
+// @nuxtjs/i18n 给 vue-i18n 的 Composer 加了 locales/setLocale，但 typecheck 不总加载该增强 → 显式补类型
+type LocaleItem = { code: string; name?: string }
+type I18nWithLocales = ReturnType<typeof useI18n> & {
+  locales: Ref<LocaleItem[]>
+  setLocale: (code: string) => Promise<void>
+}
+
 // 三语切换；偏好持久化由 @nuxtjs/i18n 的 cookie（mr-locale）管理
-const { locale, locales, setLocale, t } = useI18n()
+const { locale, locales, setLocale, t } = useI18n() as I18nWithLocales
 
 // 从配置的 locales 生成下拉项，当前语言打勾
 const items = computed<DropdownMenuItem[]>(() =>

@@ -7,6 +7,10 @@
     "toggleLight": "Passer en clair",
     "toggleDark": "Passer en sombre"
   },
+  "confirm": {
+    "title": "Confirmation",
+    "ok": "Confirmer"
+  },
   "layout": {
     "metaDescription": "Gestion locale des revues de PR en masse",
     "projectsTitle": "Projets",

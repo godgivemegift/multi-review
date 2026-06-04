@@ -7,6 +7,10 @@
     "toggleLight": "Switch to light",
     "toggleDark": "Switch to dark"
   },
+  "confirm": {
+    "title": "Confirm",
+    "ok": "Confirm"
+  },
   "layout": {
     "metaDescription": "Local batch PR review management",
     "projectsTitle": "Projects",

@@ -7,6 +7,10 @@
     "toggleLight": "切换到浅色",
     "toggleDark": "切换到深色"
   },
+  "confirm": {
+    "title": "确认",
+    "ok": "确定"
+  },
   "layout": {
     "metaDescription": "本地批量 PR 审核管理",
     "projectsTitle": "项目",
