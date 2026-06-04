@@ -8,8 +8,8 @@ export default defineNuxtConfig({
   modules: ['@nuxt/ui'],
   css: ['~~/assets/css/main.css'],
   ssr: true,
-  // 强制浅色，极简单色风
-  colorMode: { preference: 'light', fallback: 'light' },
+  // 跟随系统偏好，支持手动切换（持久化）；极简单色风
+  colorMode: { preference: 'system', fallback: 'light', storageKey: 'mr-color-mode' },
   typescript: { strict: true },
   alias: { '~core': coreDir },
   runtimeConfig: {
