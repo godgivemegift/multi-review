@@ -114,8 +114,13 @@
     "msg": {
       "fetchFailed": "Échec du chargement",
       "tasksCreated": "{count} tâche(s) de revue créée(s)",
-      "refreshFailed": "Échec de l'actualisation"
-    }
+      "refreshFailed": "Échec de l'actualisation",
+      "refreshedStates": "État GitHub de {count} tâche(s) rafraîchi",
+      "noStatesToRefresh": "Aucune tâche à rafraîchir"
+    },
+    "refreshAll": "Tout rafraîchir",
+    "refreshAllTitle": "Rafraîchir l'état GitHub de toutes les tâches (approuvé / fusionné / mis à jour par l'auteur)",
+    "refreshingAll": "Rafraîchissement…"
   },
   "prDrawer": {
     "loadFailed": "Échec du chargement",

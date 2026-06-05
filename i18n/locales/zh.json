@@ -114,8 +114,13 @@
     "msg": {
       "fetchFailed": "拉取失败",
       "tasksCreated": "已建 {count} 个审核任务",
-      "refreshFailed": "刷新失败"
-    }
+      "refreshFailed": "刷新失败",
+      "refreshedStates": "已刷新 {count} 个任务的 GitHub 状态",
+      "noStatesToRefresh": "没有需要刷新的任务"
+    },
+    "refreshAll": "刷新全部状态",
+    "refreshAllTitle": "刷新所有任务的 GitHub 状态（已批准 / 合并 / 作者更新）",
+    "refreshingAll": "刷新中…"
   },
   "prDrawer": {
     "loadFailed": "加载失败",

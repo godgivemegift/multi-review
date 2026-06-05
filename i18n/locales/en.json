@@ -114,8 +114,13 @@
     "msg": {
       "fetchFailed": "Fetch failed",
       "tasksCreated": "{count} review task(s) created",
-      "refreshFailed": "Refresh failed"
-    }
+      "refreshFailed": "Refresh failed",
+      "refreshedStates": "Refreshed GitHub state of {count} task(s)",
+      "noStatesToRefresh": "No tasks to refresh"
+    },
+    "refreshAll": "Refresh all",
+    "refreshAllTitle": "Refresh GitHub state of all tasks (approved / merged / author updated)",
+    "refreshingAll": "Refreshing…"
   },
   "prDrawer": {
     "loadFailed": "Load failed",

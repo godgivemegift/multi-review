@@ -193,6 +193,27 @@ async function refreshGithubStates() {
 }
 onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
 
+// 手动「刷新全部」：刷所有任务（跨页）里未终结的 GitHub 状态。endpoint 单次上限 50 → 分批。
+const refreshingAll = ref(false)
+async function refreshAllStates() {
+  if (refreshingAll.value) return
+  const ids = (tasks.value ?? []).filter((r) => r.prState !== 'merged' && r.prState !== 'closed').map((r) => r.id)
+  if (!ids.length) { msg.value = t('project.msg.noStatesToRefresh'); return }
+  refreshingAll.value = true
+  msg.value = ''
+  try {
+    for (let i = 0; i < ids.length; i += 50) {
+      await $fetch('/api/reviews/refresh-states', { method: 'POST', body: { ids: ids.slice(i, i + 50) } })
+    }
+    await refreshTasks()
+    msg.value = t('project.msg.refreshedStates', { count: ids.length })
+  } catch (e: any) {
+    msg.value = e?.data?.statusMessage || e?.message || t('project.msg.refreshFailed')
+  } finally {
+    refreshingAll.value = false
+  }
+}
+
 const refreshing = ref<string | null>(null)
 async function refreshTask(r: ReviewRow) {
   refreshing.value = r.id
@@ -435,6 +456,9 @@ function sevCls(n: number, level: 'h' | 'm' | 'l') {
     <!-- ── 审核任务 ── -->
     <div v-show="tab === 'tasks'" class="mt-8">
       <div class="flex justify-end gap-4 mb-4">
+        <button class="text-xs text-dimmed hover:text-highlighted transition-colors disabled:opacity-40 mr-auto" :disabled="refreshingAll" :title="$t('project.refreshAllTitle')" @click="refreshAllStates">
+          <span :class="{ 'inline-block animate-spin': refreshingAll }">↻</span> {{ refreshingAll ? $t('project.refreshingAll') : $t('project.refreshAll') }}
+        </button>
         <button class="text-xs text-dimmed hover:text-highlighted transition-colors disabled:opacity-40" :disabled="!!cleaning" @click="clean('merged')">
           {{ cleaning === 'merged' ? $t('project.clean.cleaning') : $t('project.clean.cleanMerged') }}
         </button>
