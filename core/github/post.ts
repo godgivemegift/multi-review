@@ -17,6 +17,30 @@ export type PostFinding = {
   fix: string | null
   notes: string | null
   introducedByPr: boolean
+  // 最新一轮复审结论（没复审过就是 null）→ 决定这条评论怎么发
+  recheck: { status: string; text: string | null } | null
+}
+
+// 一条 finding 经过复审后，发评论时按最新一轮复审状态决定怎么处理：
+//   fixed     → 不重发原文，进 summary 的「已确认修复」一行
+//   partial   → 发评论，但只说「还差什么」
+//   replied   → 作者回过、代码没改：有你的新 note 才发（针对作者回应的再回应），没 note 就跳过
+//   retracted → AI 已撤回这条，别发
+//   其它/无复审 → 正常发原 finding（finding 内容即当前结论）
+type Plan =
+  | { action: 'comment'; kind: 'normal' | 'partial' | 'reply' }
+  | { action: 'fixed' }
+  | { action: 'skip'; reason: 'replied-no-note' | 'retracted' }
+
+function planFinding(f: PostFinding): Plan {
+  const st = f.recheck?.status
+  const hasNote = !!(f.notes && f.notes.trim())
+  if (st === 'fixed') return { action: 'fixed' }
+  if (st === 'retracted') return { action: 'skip', reason: 'retracted' }
+  if (st === 'partial') return { action: 'comment', kind: 'partial' }
+  if (st === 'replied' || st === 'discuss')
+    return hasNote ? { action: 'comment', kind: 'reply' } : { action: 'skip', reason: 'replied-no-note' }
+  return { action: 'comment', kind: 'normal' }
 }
 
 // diff 中新文件侧（RIGHT）可评论的行号集合，按文件
@@ -77,7 +101,12 @@ async function translate(
     )
   }
 
+  const strip = (t: string) => t.replace(/^```(?:markdown|md)?\s*/i, '').replace(/```\s*$/i, '').trim()
+
   for (const f of findings) {
+    const plan = planFinding(f)
+    if (plan.action === 'skip') continue // 跳过的不发、不用翻译
+
     const one = {
       severity: f.severity, title: f.title, problem: f.problem, detail: f.detail,
       fix: f.fix, preexisting: !f.introducedByPr,
@@ -87,12 +116,38 @@ async function translate(
     const noteClause = hasNote
       ? `\n\nThe reviewer left a NOTE on this finding. Treat it as an INSTRUCTION for how to write/adjust THIS comment — e.g. soften or sharpen tone, add or drop detail, add context, downgrade/reframe, merge wording. Follow it and weave its intent into the comment. **Do NOT output the note text verbatim, and do NOT add a separate "Reviewer note" line** — it is guidance for you, not text for the PR author.\nReviewer note (Chinese): ${f.notes}`
       : ''
-    const prompt = `Write ONE finding of a GitHub PR review as professional English markdown. Output ONLY the markdown body — no preamble, no outer code fences.
+    const verdict = f.recheck?.text || '' // 最新一轮复审结论（作者改了没 / 回应了啥）
+
+    let prompt: string
+    if (plan.action === 'fixed') {
+      // 已确认修复：一句话进 summary 的「Confirmed fixed」清单（纯文本，无标题/无围栏）
+      prompt = `The author CONFIRMED-FIXED this PR-review finding. Write ONE short professional English sentence acknowledging it's resolved, naming the topic so the author knows which finding. Plain text only — no markdown heading, no bullet, no code fence.
+FINDING TITLE (Chinese): ${f.title}
+RE-REVIEW NOTE (Chinese): ${verdict}`
+    } else if (plan.kind === 'partial') {
+      // 部分修复 / 改得不对：只说还差什么
+      prompt = `Write ONE finding of a GitHub PR review as professional English markdown. This finding was RE-REVIEWED: the author's latest changes only PARTIALLY addressed it (or addressed it incorrectly). Focus the comment on WHAT IS STILL MISSING OR WRONG — briefly acknowledge what was done, then state precisely what remains. Do NOT restate the whole original finding.
+Output ONLY the markdown body — a bold line "**[<severity>] <title>**", then the remaining problem, then a fix section. Keep file paths, line numbers, identifiers and any code fences UNCHANGED.${noteClause}
+
+RE-REVIEW VERDICT (Chinese): ${verdict}
+ORIGINAL FINDING (Chinese): ${JSON.stringify(one)}`
+    } else if (plan.kind === 'reply') {
+      // 作者回过、代码没改：发针对作者回应的再回应（note 是审核员要回的话，不是"怎么写评论"的指令）
+      prompt = `Write ONE GitHub PR-review comment as professional English markdown. Context: you previously raised the finding below; the author REPLIED in the PR but did NOT change the code. Respond to the author's reply and move the discussion forward — concede, push back with reasoning, or ask for clarification — per the reviewer's response. Do NOT just restate the original finding.
+Output ONLY the markdown body (you may open with a bold "**[<severity>] <title>**" line). Keep file paths, line numbers, identifiers and any code fences UNCHANGED.
+
+AUTHOR'S REPLY / RE-REVIEW VERDICT (Chinese): ${verdict}
+REVIEWER'S RESPONSE TO THE AUTHOR (Chinese — weave its intent into the comment, do NOT quote verbatim): ${f.notes}
+ORIGINAL FINDING for context (Chinese): ${JSON.stringify(one)}`
+    } else {
+      // normal：翻译原 finding（原逻辑）
+      prompt = `Write ONE finding of a GitHub PR review as professional English markdown. Output ONLY the markdown body — no preamble, no outer code fences.
 Format: a bold line "**[<severity>] <title>**", then the problem, then detail (keep any lists), then a fix section. If "preexisting" is true, note "(pre-existing, not introduced by this PR)". Keep file paths, line numbers, identifiers and any code fences UNCHANGED. Translate the Chinese content to English.${noteClause}
 
 FINDING (Chinese):
 ${JSON.stringify(one)}`
-    tasks.push(claudePrint(model, prompt).then((t) => { bodies[f.fid] = t.replace(/^```(?:markdown|md)?\s*/i, '').replace(/```\s*$/i, '').trim() }))
+    }
+    tasks.push(claudePrint(model, prompt).then((t) => { bodies[f.fid] = strip(t) }))
   }
 
   // 单条翻译失败不毁掉整次发布：失败的 finding 在 assemble 时回退到原标题
@@ -104,6 +159,8 @@ export type AssembledReview = {
   body: string
   comments: { path: string; line: number; side: 'RIGHT'; body: string }[]
   mode: 'review' | 'comment' | 'mixed'
+  // 按复审状态没发的勾选项（replied 无 note / 已撤回）→ 预览里告知用户，免得以为漏发
+  skipped: { fid: string; title: string; reason: 'replied-no-note' | 'retracted' }[]
 }
 
 export async function assembleReview(opts: {
@@ -118,7 +175,12 @@ export async function assembleReview(opts: {
 
   const comments: AssembledReview['comments'] = []
   const summaryFindings: PostFinding[] = []
+  const confirmedFixed: string[] = [] // 已确认修复 → summary 一行
+  const skipped: AssembledReview['skipped'] = []
   for (const f of opts.findings) {
+    const plan = planFinding(f)
+    if (plan.action === 'skip') { skipped.push({ fid: f.fid, title: f.title, reason: plan.reason }); continue }
+    if (plan.action === 'fixed') { confirmedFixed.push(bodies[f.fid] || f.title); continue }
     const loc = parseLoc(f.location)
     if (loc && right.get(loc.path)?.has(loc.line)) {
       comments.push({ path: loc.path, line: loc.line, side: 'RIGHT', body: bodies[f.fid] || f.title })
@@ -137,11 +199,16 @@ export async function assembleReview(opts: {
       body += `---\n\n`
     }
   }
-  if (!body.trim()) body = 'See inline comments.'
+  if (confirmedFixed.length) {
+    body += `### Confirmed fixed\n\n`
+    for (const line of confirmedFixed) body += `- ${line}\n`
+    body += `\n`
+  }
+  if (!body.trim()) body = comments.length ? 'See inline comments.' : ''
 
   const mode: AssembledReview['mode'] =
-    comments.length && summaryFindings.length ? 'mixed' : comments.length ? 'review' : 'comment'
-  return { body, comments, mode }
+    comments.length && (summaryFindings.length || confirmedFixed.length) ? 'mixed' : comments.length ? 'review' : 'comment'
+  return { body, comments, mode, skipped }
 }
 
 // 真正提交一个 PR review（行级 + 汇总）。422（行不在 diff）则全部并进 body 重发一次。

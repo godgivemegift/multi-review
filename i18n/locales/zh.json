@@ -306,6 +306,12 @@
       "retracted": "↩ 已撤回",
       "adjusted": "已调整",
       "discuss": "想和你讨论"
+    },
+    "previewSkipped": "跳过 {count} 条",
+    "skippedTitle": "按复审状态未发（{count}）",
+    "skipReason": {
+      "repliedNoNote": "仅回复·未写回应 note",
+      "retracted": "已撤回"
     }
   }
 }

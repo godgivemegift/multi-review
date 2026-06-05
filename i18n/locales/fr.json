@@ -306,6 +306,12 @@
       "retracted": "↩ Retiré",
       "adjusted": "Ajusté",
       "discuss": "À discuter"
+    },
+    "previewSkipped": "{count} ignoré(s)",
+    "skippedTitle": "Non publié selon le statut de re-revue ({count})",
+    "skipReason": {
+      "repliedNoNote": "réponse seule · pas de note",
+      "retracted": "retiré"
     }
   }
 }

@@ -162,6 +162,12 @@ const RC: Record<string, string> = {
   kept: 'review.rc.kept', retracted: 'review.rc.retracted', adjusted: 'review.rc.adjusted', discuss: 'review.rc.discuss',
 }
 function rcLabel(s: string) { const k = RC[s]; return k ? t(k) : s }
+// 发评论时按复审状态被跳过的原因（预览里告知）
+const SKIP_REASON: Record<string, string> = {
+  'replied-no-note': 'review.skipReason.repliedNoNote',
+  retracted: 'review.skipReason.retracted',
+}
+function skipReasonLabel(s: string) { const k = SKIP_REASON[s]; return k ? t(k) : s }
 </script>
 
 <template>
@@ -293,7 +299,7 @@ function rcLabel(s: string) { const k = RC[s]; return k ? t(k) : s }
         <!-- dry-run 预览 -->
         <div v-if="preview" class="mt-3 border border-default rounded p-3">
           <div class="flex items-center justify-between mb-2">
-            <span class="text-xs text-dimmed">{{ $t('review.previewMeta', { count: preview.comments.length, mode: preview.mode }) }}</span>
+            <span class="text-xs text-dimmed">{{ $t('review.previewMeta', { count: preview.comments.length, mode: preview.mode }) }}<span v-if="preview.skipped?.length"> · {{ $t('review.previewSkipped', { count: preview.skipped.length }) }}</span></span>
             <div class="flex gap-3 items-center">
               <button class="text-xs text-dimmed hover:text-highlighted disabled:opacity-40" :disabled="!!busy" :title="$t('review.regenTitle')" @click="doPreview(true)">
                 {{ busy === 'preview' ? $t('review.regenerating') : $t('review.regenerate') }}
@@ -303,6 +309,10 @@ function rcLabel(s: string) { const k = RC[s]; return k ? t(k) : s }
                 {{ busy === 'post' ? $t('review.publishing') : $t('review.confirmPublish') }}
               </button>
             </div>
+          </div>
+          <div v-if="preview.skipped?.length" class="text-xs mb-2 border border-default rounded p-2 bg-muted">
+            <div class="text-dimmed mb-1">{{ $t('review.skippedTitle', { count: preview.skipped.length }) }}</div>
+            <div v-for="s in preview.skipped" :key="s.fid" class="text-toned">· {{ s.fid }} {{ s.title }} <span class="text-dimmed">— {{ skipReasonLabel(s.reason) }}</span></div>
           </div>
           <pre class="text-xs text-toned whitespace-pre-wrap font-sans max-h-60 overflow-y-auto">{{ preview.body }}</pre>
           <div v-for="(c, i) in preview.comments" :key="i" class="text-xs mt-2 border-t border-default pt-2">

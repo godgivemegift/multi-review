@@ -306,6 +306,12 @@
       "retracted": "↩ Retracted",
       "adjusted": "Adjusted",
       "discuss": "Wants to discuss"
+    },
+    "previewSkipped": "{count} skipped",
+    "skippedTitle": "Not posted per re-review status ({count})",
+    "skipReason": {
+      "repliedNoNote": "reply only · no response note",
+      "retracted": "retracted"
     }
   }
 }

@@ -1,6 +1,6 @@
 import { nanoid } from 'nanoid'
 import { createHash } from 'node:crypto'
-import { and, asc, eq } from 'drizzle-orm'
+import { and, asc, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import { schema } from '~core/db/client'
 import { assembleReview, postReview, type PostFinding } from '~core/github/post'
@@ -34,17 +34,30 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 400, statusMessage: '没有勾选任何 finding，不发空评论' })
   }
 
-  const findings: PostFinding[] = checked.map((f) => ({
-    fid: f.fid, severity: f.severity as any, title: f.title, location: f.location,
-    problem: f.problem, detail: f.detail, fix: f.fix, notes: f.notes, introducedByPr: f.introducedByPr,
-  }))
+  // 每条勾选 finding 的最新一轮复审结论（决定怎么发：已修复→summary一行 / 部分→只说还差什么 / 仅回复→按 note 再回应或跳过）
+  const checkedIds = checked.map((f) => f.id)
+  const rcs = d.select().from(schema.findingRechecks).where(inArray(schema.findingRechecks.findingId, checkedIds)).all()
+  const latestRc = new Map<string, { status: string; text: string | null; round: number }>()
+  for (const rc of rcs) {
+    const cur = latestRc.get(rc.findingId)
+    if (!cur || rc.round > cur.round) latestRc.set(rc.findingId, { status: rc.status, text: rc.text, round: rc.round })
+  }
 
-  // 输入签名：勾选的 finding 内容 + 整体注释 + headSha（影响行级映射）。变了才重新生成。
+  const findings: PostFinding[] = checked.map((f) => {
+    const rc = latestRc.get(f.id)
+    return {
+      fid: f.fid, severity: f.severity as any, title: f.title, location: f.location,
+      problem: f.problem, detail: f.detail, fix: f.fix, notes: f.notes, introducedByPr: f.introducedByPr,
+      recheck: rc ? { status: rc.status, text: rc.text } : null,
+    }
+  })
+
+  // 输入签名：勾选的 finding 内容 + 复审结论 + 整体注释 + headSha（影响行级映射）。变了才重新生成。
   const sig = createHash('sha256')
     .update(JSON.stringify({
       gn: review.globalNotes || '',
       sha: review.headSha || '',
-      f: findings.map((f) => [f.fid, f.severity, f.title, f.problem, f.detail, f.fix, f.notes, f.location, f.introducedByPr]),
+      f: findings.map((f) => [f.fid, f.severity, f.title, f.problem, f.detail, f.fix, f.notes, f.location, f.introducedByPr, f.recheck?.status || '', f.recheck?.text || '']),
     }))
     .digest('hex')
 
@@ -68,6 +81,11 @@ export default defineEventHandler(async (event) => {
   }
 
   if (dryRun) return { dryRun: true, assembled, cached: usedCache }
+
+  // 勾选项全被复审状态过滤掉（仅回复无回应 / 已撤回）→ 没内容可发，别发空 review
+  if (!assembled.comments.length && !String(assembled.body || '').trim()) {
+    throw createError({ statusCode: 400, statusMessage: '勾选的 finding 都按复审状态跳过了（仅回复未写回应 note / 已撤回），没有可发内容' })
+  }
 
   const headSha = review.headSha || ''
   const { url } = await postReview({ repo: project.repo, prNumber: review.prNumber, headSha, assembled })
