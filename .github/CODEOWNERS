@@ -1,0 +1,4 @@
+# Every change requires review from the repo owner.
+# Combined with branch protection (require_code_owner_reviews), this means
+# any PR touching any file must be approved by @taovc before it can merge.
+* @taovc
