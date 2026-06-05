@@ -232,7 +232,9 @@ async function runRecheckJob(ctx: ReviewJobCtx) {
       added++
     }
 
-    setStatus('draft', { headSha: wt.headSha, authorUpdated: false })
+    // 复审后的整体结论覆盖 AI 总评；AI 没给（空）就保留原总评，不清空
+    const newConclusion = result.conclusion?.trim()
+    setStatus('draft', { headSha: wt.headSha, authorUpdated: false, ...(newConclusion ? { conclusion: newConclusion } : {}) })
     emit('recheck', `复审 round ${round} 完成 · 更新 ${applied} 条${added ? ` · 新增 ${added} 条` : ''}`)
   } catch (e) {
     setStatus('error', { error: (e as Error).message })

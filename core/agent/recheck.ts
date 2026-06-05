@@ -27,6 +27,8 @@ export const RecheckSchema = z.object({
       }),
     )
     .default([]),
+  // 复审后的整体结论（还剩哪些 blocking、现在能不能合）→ 覆盖首审的 AI 总评
+  conclusion: z.string().default(''),
 })
 export type RecheckResult = z.infer<typeof RecheckSchema>
 
@@ -71,13 +73,16 @@ ${JSON.stringify(opts.findings.map((f) => ({ fid: f.fid, title: f.title, locatio
 
 另外**重点**：审作者这批新改动**本身有没有引入新问题/回归**——改 A 弄坏 B、漏改调用点、新逻辑有 bug、破坏既有行为等。发现的放进 newFindings（带完整字段 severity/title/location/problem/fix），**不要**塞进 rechecks；没有就给空数组。
 
+最后给一个**复审后的整体结论** conclusion：综合这轮判断（哪些已修复、哪些还没、有没有新引入的问题），说清现在还剩哪些 blocking、现在能不能合了。这会替换页面上的「AI 总评」，按现状写，别照抄首审结论。
+
 纪律：只读（git diff/log/show、grep、gh pr view）。❌ 禁止任何 git 写操作。
 
 最后**只输出 JSON**（无代码围栏）：
 {
   "rechecks": [ { "fid": "F1", "status": "fixed", "text": "中文说明，引用具体 commit/行" } ],
   "newFindings": [ { "severity": "High|Medium|Low", "title": "一句话标题", "location": "path:line",
-    "problem": "为什么是问题", "detail": "详情", "fix": "修复方向", "text": "在哪个 commit/行引入" } ]
+    "problem": "为什么是问题", "detail": "详情", "fix": "修复方向", "text": "在哪个 commit/行引入" } ],
+  "conclusion": "复审后的整体结论：还剩哪些 blocking、现在能不能合"
 }
 
 ⚠️ 严格合法 JSON：text/problem 等字段里**绝不要未转义的英文双引号 \`"\`**，引用一律用中文「」或反引号 \`。`
