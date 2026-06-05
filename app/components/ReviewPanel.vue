@@ -127,7 +127,7 @@ function saveInstruction() {
 const preview = ref<any>(null)
 async function doPreview(force = false) {
   busy.value = 'preview'
-  try { preview.value = (await $fetch(`/api/reviews/${rid.value}/post`, { method: 'POST', body: { dryRun: true, force } })).assembled }
+  try { preview.value = (await $fetch<{ assembled: any }>(`/api/reviews/${rid.value}/post`, { method: 'POST', body: { dryRun: true, force } })).assembled }
   catch (e: any) { live.value = e?.data?.statusMessage || t('review.previewFailed') }
   finally { busy.value = '' }
 }
@@ -292,7 +292,7 @@ function skipReasonLabel(s: string) { const k = SKIP_REASON[s]; return k ? t(k) 
             <span v-else>{{ $t('review.previewComment', { count: checkedCount }) }}</span>
           </button>
           <div v-if="data.posts.length" class="text-xs text-dimmed">
-            {{ $t('review.postedTimes', { count: data.posts.length }) }} <a :href="data.posts[data.posts.length - 1].url" target="_blank" class="hover:text-highlighted underline">{{ $t('review.latest') }}</a>
+            {{ $t('review.postedTimes', { count: data.posts.length }) }} <a :href="data.posts[data.posts.length - 1]?.url" target="_blank" class="hover:text-highlighted underline">{{ $t('review.latest') }}</a>
           </div>
         </div>
 

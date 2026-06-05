@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import type { Project } from '~core/db/schema'
-const { data: health } = await useFetch('/api/health')
+const { data: health } = await useFetch<{ gh: { ok: boolean }; inferenceProvider: string; model: string }>('/api/health')
 const { data: projects } = await useFetch<Project[]>('/api/projects')
 </script>
 

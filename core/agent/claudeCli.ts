@@ -21,11 +21,11 @@ export function runClaude(
       fn()
     }
     const timer = setTimeout(() => finish(() => { cp.kill('SIGKILL'); reject(new Error('claude 调用超时')) }), timeout)
-    cp.stdout.on('data', (d) => {
+    cp.stdout!.on('data', (d) => {
       out += d
       if (out.length > maxBuffer) finish(() => { cp.kill('SIGKILL'); reject(new Error('claude 输出超限')) })
     })
-    cp.stderr.on('data', (d) => { err += d })
+    cp.stderr!.on('data', (d) => { err += d })
     cp.on('error', (e) => finish(() => reject(e)))
     cp.on('close', (code) =>
       finish(() => (code === 0 ? resolve(out) : reject(new Error(`claude 退出码 ${code}: ${err.slice(0, 300)}`)))),

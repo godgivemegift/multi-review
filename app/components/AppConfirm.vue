@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { confirmState, resolveConfirm } from '~/composables/useConfirm'
+// confirmState / resolveConfirm 由 Nuxt 从 app/composables/useConfirm 自动导入
 const { t } = useI18n()
 // 取消 = false；关闭(点遮罩/✕) 也算取消
 const open = computed({
