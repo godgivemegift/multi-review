@@ -51,6 +51,73 @@ Nuxt 4 + @nuxt/ui (Tailwind v4, minimalist single-color style) · better-sqlite3
 - `gh auth login` completed (all GitHub reads/writes go through it)
 - `claude` logged in locally (uses your subscription, essentially no extra API cost) or set `ANTHROPIC_API_KEY`
 
+## Installation
+
+Step-by-step guide for a first run. See "Getting started" below for the condensed version.
+
+**1. Check the prerequisites**
+
+```bash
+node -v      # ≥ 22
+pnpm -v      # 9.x  (otherwise: corepack enable && corepack prepare pnpm@9 --activate)
+gh --version
+gh auth status   # must show "Logged in"; otherwise: gh auth login
+```
+
+Also confirm the `claude` CLI is logged in locally (it uses your subscription, essentially no API cost). If not, you'll provide an `ANTHROPIC_API_KEY` in step 3.
+
+**2. Get the project**
+
+```bash
+git clone <repo-url>
+cd multi-review
+```
+
+**3. Configure the environment**
+
+```bash
+cp .env.example .env
+```
+
+Every variable has a sensible default; in practice you only adjust:
+
+| Variable | When to change it |
+|---|---|
+| `PORT` | If `3001` is already taken |
+| `INFERENCE_PROVIDER` | `claude` (local subscription, default) or `anthropic-api` |
+| `ANTHROPIC_API_KEY` | **Only** in `anthropic-api` mode, or if `claude` isn't logged in locally |
+
+The full list of variables is in the [Configuration (.env)](#configuration-env) section.
+
+**4. Install dependencies**
+
+```bash
+pnpm install
+```
+
+The `postinstall` step automatically runs `nuxt prepare` (Nuxt type generation).
+
+**5. First run**
+
+```bash
+pnpm dev      # http://localhost:3001
+```
+
+On first start, **the SQLite database (`./data/cockpit.db`) and the worktrees folder (`./data/worktrees`) are created automatically** — no manual migration to run. The Drizzle schema is set up on the fly (`ensureSchema()` / `ensureColumns()` in `core/db/client.ts`).
+
+**6. Production build (optional)**
+
+```bash
+pnpm build
+pnpm preview
+```
+
+**Troubleshooting**
+
+- **Port already in use** → change `PORT` in `.env`.
+- **`gh` not authenticated** → `gh auth login` (GitHub reads/writes depend on it).
+- **Inspect the database** → `pnpm db:studio` (opens Drizzle Studio).
+
 ## Getting started
 
 ```bash
