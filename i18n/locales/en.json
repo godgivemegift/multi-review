@@ -1,0 +1,311 @@
+{
+  "switcher": {
+    "label": "Language"
+  },
+  "common": {
+    "cancel": "Cancel",
+    "delete": "Delete",
+    "loading": "Loading…",
+    "failed": "Failed",
+    "all": "All",
+    "toggleLight": "Switch to light",
+    "toggleDark": "Switch to dark"
+  },
+  "confirm": {
+    "title": "Confirm",
+    "ok": "Confirm"
+  },
+  "layout": {
+    "metaDescription": "Local batch PR review management",
+    "projectsTitle": "Projects",
+    "createProject": "Create project",
+    "create": "Create",
+    "creating": "Creating…",
+    "createError": "Creation failed",
+    "emptyProjects": "No projects yet",
+    "emptyProjectsHint": "Click + above to create",
+    "form": {
+      "name": "Name",
+      "repo": "Repository (owner/repo)",
+      "localPath": "Local clone path (worktrees branch from here)",
+      "defaultBranch": "Default branch"
+    }
+  },
+  "home": {
+    "tagline": "Local batch PR review. Terminal agent at the core, web for gatekeeping and state management.",
+    "ghStatusOk": "Signed in",
+    "ghStatusNotReady": "Not ready — run gh auth login first",
+    "defaultModel": "Default model",
+    "projectsCount": "{count}",
+    "enterProject": "Open “{name}” →",
+    "emptyHint": "Create your first project with + on the left."
+  },
+  "status": {
+    "task": {
+      "queued": "Queued",
+      "cloning": "Preparing code",
+      "reviewing": "Reviewing",
+      "draft": "Draft ready",
+      "ready_to_post": "Ready to post",
+      "posted": "Comment posted",
+      "recheck_requested": "Recheck pending",
+      "rechecking": "Rechecking",
+      "error": "Error"
+    },
+    "pr": {
+      "open": "Open",
+      "merged": "Merged",
+      "closed": "Closed",
+      "draft": "Draft",
+      "approved": "Approved",
+      "changes": "Changes requested",
+      "unknown": "—"
+    }
+  },
+  "project": {
+    "tabs": {
+      "pulls": "All PRs",
+      "tasks": "Review tasks",
+      "config": "Configuration"
+    },
+    "col": {
+      "title": "Title",
+      "author": "Author",
+      "status": "Status",
+      "review": "Review",
+      "severity": "Severity"
+    },
+    "selectAllReviewable": "Select all reviewable",
+    "reviewSelected": "Review selected ({count})",
+    "creatingTasks": "Creating tasks…",
+    "refreshList": "Refresh",
+    "hasTaskTitle": "Review task already created",
+    "hasTaskTag": "task created",
+    "clearFilter": "Clear filter",
+    "filterByStatus": "Filter by this status",
+    "noPulls": "No matching PRs",
+    "noTasks": "No review tasks yet. Go to “All PRs” and check some PRs to start.",
+    "authorUpdated": "Author updated",
+    "authorUpdatedTitle": "The author pushed new commits after your last comment — you can recheck",
+    "severityTitle": "High / medium / low severity issue counts",
+    "refreshPrStatus": "Refresh PR status",
+    "deleteTask": "Delete task",
+    "pagination": {
+      "summary": "{total} total · page {page}",
+      "summaryPages": "{total} total · page {page} / {pages}",
+      "prev": "← Previous",
+      "next": "Next →"
+    },
+    "clean": {
+      "labelMerged": "merged",
+      "labelPosted": "commented",
+      "cleanMerged": "Clean merged",
+      "cleanPosted": "Clean commented",
+      "cleaning": "Cleaning…",
+      "none": "No “{label}” tasks to clean",
+      "confirmTitle": "Clean {label}",
+      "confirmMsg": "Delete {n} “{label}” review task(s)? (local tasks only, GitHub untouched)",
+      "done": "Cleaned {n} “{label}” task(s)"
+    },
+    "confirm": {
+      "deleteTaskTitle": "Delete review task",
+      "deleteTaskMsg": "Delete the review task for #{pr}? (local task only, GitHub comment untouched)"
+    },
+    "msg": {
+      "fetchFailed": "Fetch failed",
+      "tasksCreated": "{count} review task(s) created",
+      "refreshFailed": "Refresh failed"
+    }
+  },
+  "prDrawer": {
+    "loadFailed": "Load failed",
+    "diffLoadFailed": "Diff load failed",
+    "title": "PR details",
+    "openInGithub": "Open in GitHub ↗",
+    "tabReview": "AI review",
+    "tabTimeline": "Timeline",
+    "tabChanges": "Changes",
+    "filesCount": "{count} files",
+    "changedFiles": "Changed files ({count})",
+    "openedPr": "opened the PR",
+    "noDescription": "(no description)",
+    "commentLabel": "commented",
+    "loadingDiff": "Loading diff…",
+    "diffTruncated": "Diff too large, truncated — see the full content on GitHub.",
+    "time": {
+      "justNow": "just now",
+      "minutesAgo": "{n} min ago",
+      "hoursAgo": "{n}h ago",
+      "daysAgo": "{n}d ago"
+    },
+    "review": {
+      "approved": "approved",
+      "changesRequested": "requested changes",
+      "commented": "commented",
+      "dismissed": "dismissed a review",
+      "generic": "reviewed"
+    },
+    "verb": {
+      "labeled": "added a label",
+      "unlabeled": "removed a label",
+      "renamed": "changed the title",
+      "referenced": "referenced",
+      "head_ref_force_pushed": "force-pushed the branch",
+      "head_ref_deleted": "deleted the branch",
+      "head_ref_restored": "restored the branch",
+      "closed": "closed",
+      "merged": "merged",
+      "reopened": "reopened",
+      "ready_for_review": "marked ready for review",
+      "convert_to_draft": "converted to draft",
+      "review_requested": "requested a review",
+      "review_request_removed": "removed a review request",
+      "assigned": "assigned",
+      "unassigned": "unassigned",
+      "deployed": "deployed",
+      "milestoned": "added to a milestone"
+    }
+  },
+  "config": {
+    "projectInfo": "Project info",
+    "localPathShort": "Local clone path",
+    "modelSection": "Review model (actually available on your local claude)",
+    "globalDefault": "Global default",
+    "useEnvDefault": "Use the default model from .env",
+    "inheritEnvDefault": "Inherits .env default",
+    "effortLabel": "Review effort",
+    "effortNone": "(unset, model default)",
+    "noEffortSupport": "This model does not support effort settings",
+    "saving": "Saving…",
+    "saveConfig": "Save configuration",
+    "saved": "Saved",
+    "saveFailed": "Save failed",
+    "skillsSection": "Review skills (enable one)",
+    "addBlank": "+ Blank",
+    "aiGenerate": "AI generate",
+    "aiOptimize": "AI optimize current",
+    "aiGenerating": "AI generating",
+    "readingCode": "Reading project code…",
+    "localPathRequired": "Set the local clone path to use AI generation.",
+    "activeTitle": "Active",
+    "warnCount": "⚠ {count} warning(s)",
+    "preview": "Preview",
+    "enable": "Enable",
+    "noSkills": "No skills yet. Click “AI generate” to have the AI read your project and produce one, or “+ Blank” to write it by hand. With no skill enabled, the built-in default methodology is used.",
+    "vsActive": "· compared to active",
+    "enableThis": "Enable this one",
+    "deleteProject": "Delete project",
+    "handwrittenSkill": "Handwritten skill",
+    "skillActivated": "Skill activated",
+    "candidateGenerated": "New candidate generated — preview/compare, then click “Enable”.",
+    "genInterrupted": "Generation request interrupted — if a new candidate appears above it was generated, otherwise retry.",
+    "connecting": "Connecting…",
+    "src": {
+      "manual": "Manual",
+      "file": "File",
+      "ai": "AI generated",
+      "optimized": "AI optimized"
+    },
+    "confirm": {
+      "deleteProjectMsg": "Delete project “{name}”? Review tasks and skills will be deleted too (no impact on GitHub).",
+      "deleteSkillTitle": "Delete skill",
+      "deleteSkillMsg": "Delete this skill?"
+    },
+    "warnModal": {
+      "title": "Skill health check",
+      "body": "“{name}” contains terms that <b>look like an “operations flow”</b>. A review skill should only describe “what to audit, how to judge”, not git operations / code changes / worktree skipping (handled by the engine). Matched:",
+      "note": "Most are “descriptive mentions” (false positives — e.g. writing “no git push” in the methodology also gets flagged), with no impact.<br />Even when enabled, the engine hard-blocks git writes / file changes at the tool level; a skill cannot run them — so this is just a warning, not an error.",
+      "gotIt": "Got it"
+    },
+    "lintModal": {
+      "title": "This skill may contain operations-flow content",
+      "body": "“{name}” matched the following suspected “operations flow” content (review only audits, never modifies; operations are handled by the engine):",
+      "note": "Note: these may be descriptive mentions (false positives). Even when enabled, the engine hard-blocks git writes / file changes at the tool level, which won't actually run.",
+      "enableAnyway": "Enable anyway"
+    },
+    "genModal": {
+      "titleOptimize": "AI optimize current skill",
+      "titleGenerate": "AI generate review skill",
+      "intro": "The AI uses the project's configured model/effort, <b>reads the full local repo + thinks deeply</b>, then produces output. {mode}The result is saved as a <b>new candidate</b> — it does not overwrite or auto-enable.",
+      "modeOptimize": "Optimizing from the active skill. ",
+      "modeGenerate": "Generating from scratch. ",
+      "instructionLabel": "Instruction for the AI (optional, leave empty for the default approach)",
+      "instructionPlaceholder": "E.g.: emphasize permissions and concurrency; follow the staki-review format; watch tRPC input validation; use a stricter tone…",
+      "start": "Start generating"
+    },
+    "newModal": {
+      "title": "New review skill",
+      "contentLabel": "Content (methodology, can stay empty for later / paste an existing one)",
+      "contentPlaceholder": "# Review methodology\n..."
+    }
+  },
+  "review": {
+    "noTask": "This PR has no review task yet",
+    "startReview": "Start review",
+    "creatingTask": "Creating…",
+    "statusLabel": "Review status",
+    "authorUpdatedTitle": "The author pushed new commits after your last comment",
+    "rerunConfirm": "Recheck per your notes + instructions?",
+    "startRerun": "Start recheck",
+    "recheckConfirm": "Check the new commits after the author's comments?",
+    "startRecheck": "Start checking",
+    "rerunBtn": "Recheck per my feedback",
+    "rerunTitle": "Keeps your checks/notes; targeted recheck using each note + the instruction below, the AI replies point by point",
+    "recheckBtn": "Check author's changes",
+    "recheckTitle": "Reads the author's new commits since your last comment and judges whether each item was addressed",
+    "processing": "Processing…",
+    "runLog": "Run log ({count} lines)",
+    "expandLog": "Expand log ({count})",
+    "collapseLog": "Collapse log",
+    "aiSummary": "AI overall review",
+    "instructionLabel": "Review instruction for the AI",
+    "instructionPlaceholder": "What the AI should focus on / where you disagree / have it recheck something. “Recheck per my feedback” reviews this + each note.",
+    "requirement": "Requirement",
+    "testPath": "Manual test path",
+    "findings": "Findings ({count})",
+    "preExisting": "· pre-existing",
+    "detailFix": "Details / Fix",
+    "recheckRound": "Recheck R{round}",
+    "notePlaceholder": "Reply / feedback (to the AI: invalid? add context? have it recheck? With “Recheck per my feedback”, the AI responds. When checked, translated to English in the posted comment)",
+    "noFindings": "No findings yet.",
+    "globalNotesLabel": "Global note (comment preamble)",
+    "globalNotesPlaceholder": "Placed at the top of the comment, translated to English when posting",
+    "generatingPreview": "Generating preview… (translating to English)",
+    "previewComment": "Preview comment ({count})",
+    "postedTimes": "Posted {count} times ·",
+    "latest": "latest",
+    "previewMeta": "Preview · {count} inline · mode {mode}",
+    "regenTitle": "Ignore the cache, regenerate from the current findings/notes",
+    "regenerating": "Regenerating…",
+    "regenerate": "Regenerate",
+    "close": "Close",
+    "publishing": "Publishing…",
+    "confirmPublish": "Confirm publish to GitHub",
+    "published": "Published: {url}",
+    "triggerFailed": "Trigger failed",
+    "previewFailed": "Preview failed",
+    "publishFailed": "Publish failed",
+    "status": {
+      "queued": "Queued",
+      "cloning": "Preparing code",
+      "reviewing": "Reviewing",
+      "draft": "Draft ready",
+      "ready_to_post": "Ready to post",
+      "posted": "Comment posted",
+      "recheck_requested": "Recheck pending",
+      "rechecking": "Rechecking",
+      "error": "Error"
+    },
+    "rc": {
+      "fixed": "✓ Fixed",
+      "partial": "Partially fixed",
+      "unaddressed": "Unaddressed",
+      "replied": "Reply only",
+      "new": "New",
+      "kept": "Stands",
+      "retracted": "↩ Retracted",
+      "adjusted": "Adjusted",
+      "discuss": "Wants to discuss"
+    }
+  }
+}

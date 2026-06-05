@@ -5,11 +5,32 @@ const coreDir = fileURLToPath(new URL('./core', import.meta.url))
 export default defineNuxtConfig({
   compatibilityDate: '2025-01-01',
   devtools: { enabled: true },
-  modules: ['@nuxt/ui'],
+  modules: ['@nuxt/ui', '@nuxtjs/i18n'],
   css: ['~~/assets/css/main.css'],
   ssr: true,
-  // 强制浅色，极简单色风
-  colorMode: { preference: 'light', fallback: 'light' },
+  // 跟随系统偏好，支持手动切换（持久化）；极简单色风
+  colorMode: { preference: 'system', fallback: 'light', storageKey: 'mr-color-mode' },
+  // 三语：中文（原始） + 法语 + 英语。无 URL 前缀（内部工具），按浏览器语言自动选择并持久化
+  i18n: {
+    strategy: 'no_prefix',
+    defaultLocale: 'fr',
+    langDir: 'locales',
+    lazy: true,
+    locales: [
+      { code: 'fr', name: 'Français', language: 'fr-FR', file: 'fr.json' },
+      { code: 'en', name: 'English', language: 'en-US', file: 'en.json' },
+      { code: 'zh', name: '中文', language: 'zh-CN', file: 'zh.json' },
+    ],
+    detectBrowserLanguage: {
+      useCookie: true,
+      cookieKey: 'mr-locale',
+      redirectOn: 'root',
+      fallbackLocale: 'fr',
+    },
+    bundle: { optimizeTranslationDirective: false },
+    // 部分提示文案含 <b>/<br> 等内联标签（由我们维护的静态文案，模板里用 v-html 渲染）
+    compilation: { strictMessage: false },
+  },
   typescript: { strict: true },
   alias: { '~core': coreDir },
   runtimeConfig: {
