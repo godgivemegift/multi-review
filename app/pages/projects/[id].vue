@@ -11,12 +11,21 @@ type Pull = {
   state: string
   isDraft: boolean
   reviewDecision: string
+  reviewsCount: number
   updatedAt: string
   additions: number
   deletions: number
   hasTask: boolean
   taskId: string | null
   taskStatus: string | null
+  fixId: string | null
+  fixStatus: string | null
+}
+type FixRow = {
+  id: string; prNumber: number; title: string | null; prAuthor: string | null; status: string
+  stage: string | null; filesChanged: number | null; additions: number | null; deletions: number | null
+  error: string | null; updatedAt: string
+  counts: { total: number; suggested: number; checked: number; fixed: number }
 }
 
 const { t, te } = useI18n()
@@ -24,7 +33,7 @@ const route = useRoute()
 const projectId = computed(() => route.params.id as string)
 const { data: project, refresh: refreshProject } = await useFetch<Project>(() => `/api/projects/${projectId.value}`)
 
-const tab = ref<'pulls' | 'tasks' | 'config'>('pulls')
+const tab = ref<'pulls' | 'tasks' | 'fixes' | 'config'>('pulls')
 const msg = ref('')
 
 async function onProjectChanged() {
@@ -114,22 +123,25 @@ const visiblePulls = computed(() => {
   return list
 })
 
+// checkbox 重设计（#16）：行不再因已建任务灰掉；操作条按所选给「审核选中」「修复选中」两个动作
 const selected = ref<Set<number>>(new Set())
 function toggle(n: number) {
   const s = new Set(selected.value)
   s.has(n) ? s.delete(n) : s.add(n)
   selected.value = s
 }
-const selectableCount = computed(() => visiblePulls.value.filter((p) => !p.hasTask).length)
 function toggleAll() {
-  const selectable = visiblePulls.value.filter((p) => !p.hasTask).map((p) => p.number)
-  selected.value =
-    selected.value.size === selectable.length ? new Set() : new Set(selectable)
+  const all = visiblePulls.value.map((p) => p.number)
+  selected.value = selected.value.size === all.length ? new Set() : new Set(all)
 }
+// 各动作的可执行子集：审核 = 还没审核任务的；修复 = 还没未终结修复任务的
+const reviewableSelected = computed(() => (pullsResp.value?.pulls ?? []).filter((p) => selected.value.has(p.number) && !p.hasTask))
+const FIX_ACTIVE = ['queued', 'validating', 'awaiting', 'fixing', 'ready', 'pushing']
+const fixableSelected = computed(() => (pullsResp.value?.pulls ?? []).filter((p) => selected.value.has(p.number) && !(p.fixStatus && FIX_ACTIVE.includes(p.fixStatus))))
 
 const starting = ref(false)
 async function reviewSelected() {
-  const chosen = (pullsResp.value?.pulls ?? []).filter((p) => selected.value.has(p.number) && !p.hasTask)
+  const chosen = reviewableSelected.value
   if (!chosen.length) return
   starting.value = true
   msg.value = ''
@@ -149,6 +161,39 @@ async function reviewSelected() {
   }
 }
 
+// 「修复选中」：弹 prompt 框（默认系统指令，可补针对性指示）→ 每个 PR 建一个修复任务（先验证）
+const fixModalOpen = ref(false)
+const fixInstruction = ref('')
+const fixStarting = ref(false)
+async function fixSelected() {
+  const chosen = fixableSelected.value
+  if (!chosen.length) return
+  fixStarting.value = true
+  msg.value = ''
+  let created = 0
+  try {
+    for (const p of chosen) {
+      try {
+        await $fetch(`/api/projects/${projectId.value}/pulls/${p.number}/fix`, {
+          method: 'POST',
+          body: { instruction: fixInstruction.value.trim() || undefined },
+        })
+        created++
+      } catch (e: any) {
+        msg.value = e?.data?.statusMessage || e?.message || t('common.failed')
+      }
+    }
+    fixModalOpen.value = false
+    fixInstruction.value = ''
+    selected.value = new Set()
+    if (created) msg.value = t('project.msg.fixesCreated', { count: created })
+    await Promise.all([refreshPulls(), refreshFixes()])
+    tab.value = 'fixes'
+  } finally {
+    fixStarting.value = false
+  }
+}
+
 // ── 审核任务 ──────────────────────────────────────────────
 const { data: tasks, refresh: refreshTasks } = await useFetch<ReviewRow[]>('/api/reviews', {
   query: { projectId },
@@ -158,7 +203,29 @@ const taskPage = ref(0)
 const pagedTasks = computed(() => (tasks.value ?? []).slice(taskPage.value * PER_PAGE, taskPage.value * PER_PAGE + PER_PAGE))
 const taskPages = computed(() => Math.ceil((tasks.value?.length ?? 0) / PER_PAGE))
 
-// 自动刷新任务列表：页面可见时每 5s 拉一次（reviews 是本地 SQLite 查询，极轻）。
+// ── 修复任务（修复 PR tab）────────────────────────────────
+const { data: fixes, refresh: refreshFixes } = await useFetch<FixRow[]>('/api/fixes', {
+  query: { projectId },
+})
+const FIX_INFLIGHT = ['queued', 'validating', 'fixing', 'pushing']
+const fixPage = ref(0)
+const pagedFixes = computed(() => (fixes.value ?? []).slice(fixPage.value * PER_PAGE, fixPage.value * PER_PAGE + PER_PAGE))
+const fixPages = computed(() => Math.ceil((fixes.value?.length ?? 0) / PER_PAGE))
+
+// 修复任务 drawer
+const fixDrawerOpen = ref(false)
+const fixDrawerId = ref<string | null>(null)
+function openFix(id: string) {
+  fixDrawerId.value = id
+  fixDrawerOpen.value = true
+}
+async function discardFix(f: FixRow) {
+  if (!(await ask({ title: t('fix.discardTitle'), message: t('fix.discardConfirm'), okText: t('common.delete'), danger: true }))) return
+  await $fetch(`/api/fixes/${f.id}/discard`, { method: 'POST' })
+  await Promise.all([refreshFixes(), refreshPulls()])
+}
+
+// 自动刷新任务列表：页面可见时每 5s 拉一次（reviews/fixes 是本地 SQLite 查询，极轻）。
 // 这样任何来源的状态变化（审核中→出稿、外部触发、复审完成…）都会自动反映，不用手动点刷新。
 const INFLIGHT = ['queued', 'cloning', 'reviewing', 'recheck_requested', 'rechecking']
 let pollTimer: ReturnType<typeof setInterval> | null = null
@@ -169,6 +236,8 @@ onMounted(() => {
     // 在跑的时候每 5s 刷；全空闲时约 10s 刷一次（省点）
     const busyNow = (tasks.value ?? []).some((r) => INFLIGHT.includes(r.status))
     if (busyNow || pollTick % 2 === 0) refreshTasks()
+    const fixBusy = (fixes.value ?? []).some((f) => FIX_INFLIGHT.includes(f.status))
+    if (fixBusy || pollTick % 2 === 0) refreshFixes()
     // 每约 60s 给当前页「未终结」任务批量刷一次 GitHub 状态（approve/merge/作者更新自动冒出来）
     if (pollTick % 12 === 0) refreshGithubStates()
     pollTick++
@@ -296,6 +365,28 @@ function pullKey(p: Pull) {
 function toggleStatus(k: string) {
   statusFilter.value = statusFilter.value === k ? null : k
 }
+// 系统 tags（#16）：multi-review 自己的工作流状态，派生不存储，可多个并存。
+// 审核中 / 已审核(本地已发 or GitHub 上已有任何 review) / 修复中 / 待上传
+function prTags(p: Pull): { key: string; label: string }[] {
+  const tags: { key: string; label: string }[] = []
+  if (p.taskStatus && INFLIGHT.includes(p.taskStatus)) tags.push({ key: 'reviewing', label: 'project.tag.reviewing' })
+  else if (p.taskStatus === 'posted' || p.reviewsCount > 0) tags.push({ key: 'reviewed', label: 'project.tag.reviewed' })
+  if (p.fixStatus && ['queued', 'validating', 'fixing', 'pushing'].includes(p.fixStatus)) tags.push({ key: 'fixing', label: 'project.tag.fixing' })
+  else if (p.fixStatus === 'awaiting') tags.push({ key: 'fix-awaiting', label: 'project.tag.fixAwaiting' })
+  else if (p.fixStatus === 'ready') tags.push({ key: 'fix-ready', label: 'project.tag.fixReady' })
+  return tags
+}
+// 修复任务状态文案；缺失键回退原始码
+function fixStatusLabel(s: string) {
+  const k = `status.fix.${s}`
+  return te(k) ? t(k) : s
+}
+function fixStatusCls(s: string) {
+  if (s === 'error') return 'text-highlighted font-medium'
+  if (FIX_INFLIGHT.includes(s)) return 'text-toned'
+  if (s === 'awaiting' || s === 'ready') return 'text-highlighted'
+  return 'text-dimmed'
+}
 function sevCls(n: number, level: 'h' | 'm' | 'l') {
   if (n === 0) return 'text-dimmed'
   return level === 'h' ? 'text-highlighted font-medium' : level === 'm' ? 'text-toned' : 'text-dimmed'
@@ -330,6 +421,13 @@ function sevCls(n: number, level: 'h' | 'm' | 'l') {
         @click="tab = 'tasks'"
       >
         {{ $t('project.tabs.tasks') }} <span class="text-dimmed">{{ tasks?.length || 0 }}</span>
+      </button>
+      <button
+        class="pb-3 -mb-px border-b-2 transition-colors"
+        :class="tab === 'fixes' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'"
+        @click="tab = 'fixes'"
+      >
+        {{ $t('project.tabs.fixes') }} <span class="text-dimmed">{{ fixes?.length || 0 }}</span>
       </button>
       <button
         class="pb-3 -mb-px border-b-2 transition-colors"
@@ -382,25 +480,35 @@ function sevCls(n: number, level: 'h' | 'm' | 'l') {
         </div>
       </div>
 
-      <!-- 批量操作条 -->
+      <!-- 批量操作条：勾选后按 tags 状态给可执行动作（审核 / 修复），不再灰掉已建任务的行 -->
       <div class="mt-6 flex items-center gap-4 h-9">
         <label class="flex items-center gap-2 text-xs text-muted cursor-pointer select-none">
           <input
             type="checkbox"
             class="accent-neutral-900 dark:accent-neutral-100"
-            :checked="selectableCount > 0 && selected.size === selectableCount"
-            :disabled="selectableCount === 0"
+            :checked="visiblePulls.length > 0 && selected.size === visiblePulls.length"
+            :disabled="visiblePulls.length === 0"
             @change="toggleAll"
           />
-          {{ $t('project.selectAllReviewable') }}
+          {{ $t('project.selectAll') }}
         </label>
         <button
           v-if="selected.size"
           class="text-sm bg-inverted text-inverted px-4 py-1.5 hover:bg-inverted/90 transition-colors disabled:opacity-40"
-          :disabled="starting"
+          :disabled="starting || !reviewableSelected.length"
+          :title="!reviewableSelected.length ? $t('project.noneReviewable') : ''"
           @click="reviewSelected"
         >
-          {{ starting ? $t('project.creatingTasks') : $t('project.reviewSelected', { count: selected.size }) }}
+          {{ starting ? $t('project.creatingTasks') : $t('project.reviewSelected', { count: reviewableSelected.length }) }}
+        </button>
+        <button
+          v-if="selected.size"
+          class="text-sm border border-accented px-4 py-1.5 hover:bg-muted transition-colors disabled:opacity-40"
+          :disabled="fixStarting || !fixableSelected.length"
+          :title="!fixableSelected.length ? $t('project.noneFixable') : ''"
+          @click="fixModalOpen = true"
+        >
+          {{ $t('project.fixSelected', { count: fixableSelected.length }) }}
         </button>
         <UButton variant="ghost" size="xs" :loading="pullsPending" icon="i-lucide-refresh-cw" @click="refreshPulls()">{{ $t('project.refreshList') }}</UButton>
       </div>
@@ -417,16 +525,14 @@ function sevCls(n: number, level: 'h' | 'm' | 'l') {
         >
           <input
             type="checkbox"
-            class="accent-neutral-900 dark:accent-neutral-100 disabled:opacity-30"
+            class="accent-neutral-900 dark:accent-neutral-100"
             :checked="selected.has(p.number)"
-            :disabled="p.hasTask"
-            :title="p.hasTask ? $t('project.hasTaskTitle') : ''"
             @change="toggle(p.number)"
           />
           <button class="font-medium tabular-nums hover:underline underline-offset-4 text-left" @click="openDetail(p.number, p.taskId)">#{{ p.number }}</button>
           <button class="truncate text-default text-left hover:text-highlighted" :title="p.title" @click="openDetail(p.number, p.taskId)">
             {{ p.title }}
-            <span v-if="p.hasTask" class="ml-2 text-[10px] text-dimmed">· {{ $t('project.hasTaskTag') }}</span>
+            <span v-for="tg in prTags(p)" :key="tg.key" class="ml-2 text-[10px] px-1.5 py-px border border-default rounded text-dimmed whitespace-nowrap">{{ $t(tg.label) }}</span>
           </button>
           <button class="text-xs text-muted hover:text-highlighted truncate text-left" @click="pickAuthor(p.author)">{{ p.author }}</button>
           <span class="text-center">
@@ -506,6 +612,62 @@ function sevCls(n: number, level: 'h' | 'm' | 'l') {
       </div>
     </div>
 
+    <!-- ── 修复 PR ── -->
+    <div v-show="tab === 'fixes'" class="mt-8">
+      <div class="grid grid-cols-[3.5rem_1fr_6rem_7rem_5rem_2rem] gap-x-4 px-1 pb-3 text-[10px] uppercase tracking-[0.15em] text-dimmed border-b border-inverted">
+        <span>PR</span><span>{{ $t('project.col.title') }}</span><span>{{ $t('project.col.author') }}</span><span>{{ $t('project.col.fix') }}</span><span class="text-center">{{ $t('project.col.findings') }}</span><span></span>
+      </div>
+      <div
+        v-for="f in pagedFixes"
+        :key="f.id"
+        class="grid grid-cols-[3.5rem_1fr_6rem_7rem_5rem_2rem] gap-x-4 items-center px-1 py-4 border-b border-default text-sm group"
+      >
+        <button class="font-medium tabular-nums hover:underline underline-offset-4 text-left" @click="openFix(f.id)">#{{ f.prNumber }}</button>
+        <button class="truncate text-toned text-left hover:text-highlighted" :title="f.title || ''" @click="openFix(f.id)">{{ f.title || '—' }}</button>
+        <span class="text-xs text-muted truncate">{{ f.prAuthor || '—' }}</span>
+        <span class="text-xs flex flex-col gap-0.5 leading-tight">
+          <span :class="fixStatusCls(f.status)">{{ fixStatusLabel(f.status) }}</span>
+          <span v-if="f.status === 'ready' && f.filesChanged" class="text-[10px] text-dimmed">{{ f.filesChanged }} · +{{ f.additions }}/-{{ f.deletions }}</span>
+        </span>
+        <span class="text-center text-xs tabular-nums" :title="$t('project.fixCountsTitle')">
+          <span class="text-highlighted">{{ f.counts.checked }}</span><span class="text-dimmed">/{{ f.counts.total }}</span>
+          <span v-if="f.counts.fixed" class="text-dimmed"> · ✓{{ f.counts.fixed }}</span>
+        </span>
+        <div class="flex items-center justify-end opacity-0 group-hover:opacity-100 transition-opacity">
+          <button class="text-dimmed hover:text-highlighted" :title="$t('fix.discard')" @click="discardFix(f)">✕</button>
+        </div>
+      </div>
+      <p v-if="!fixes?.length" class="py-16 text-center text-xs text-dimmed">
+        {{ $t('project.noFixes') }}
+      </p>
+      <div v-if="fixPages > 1" class="flex items-center justify-between mt-5 text-xs text-dimmed">
+        <span>{{ $t('project.pagination.summaryPages', { total: fixes?.length, page: fixPage + 1, pages: fixPages }) }}</span>
+        <div class="flex gap-4">
+          <button class="hover:text-highlighted disabled:opacity-30" :disabled="fixPage === 0" @click="fixPage--">{{ $t('project.pagination.prev') }}</button>
+          <button class="hover:text-highlighted disabled:opacity-30" :disabled="fixPage >= fixPages - 1" @click="fixPage++">{{ $t('project.pagination.next') }}</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- 修复指示弹框：默认系统内置指令，可补针对性指示 -->
+    <div v-if="fixModalOpen" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40" @click.self="fixModalOpen = false">
+      <div class="bg-default border border-default rounded-lg p-5 w-full max-w-lg shadow-xl">
+        <div class="text-sm font-medium mb-1">{{ $t('fix.modalTitle', { count: fixableSelected.length }) }}</div>
+        <p class="text-xs text-dimmed mb-3">{{ $t('fix.modalHint') }}</p>
+        <textarea
+          v-model="fixInstruction" rows="3" :placeholder="$t('fix.instructionPlaceholder')"
+          class="w-full text-sm bg-muted border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-accented"
+        />
+        <div class="flex justify-end gap-3 mt-4">
+          <button class="text-sm text-dimmed hover:text-highlighted" @click="fixModalOpen = false">{{ $t('common.cancel') }}</button>
+          <button class="text-sm bg-inverted text-inverted px-4 py-1.5 hover:bg-inverted/90 disabled:opacity-40" :disabled="fixStarting" @click="fixSelected">
+            {{ fixStarting ? $t('fix.creating') : $t('fix.start') }}
+          </button>
+        </div>
+      </div>
+    </div>
+
     <PrDetailDrawer v-model:open="drawerOpen" :project-id="projectId" :pr-number="drawerPr" :review-id="drawerReviewId" @task-created="onTaskCreated" />
+    <FixDrawer v-model:open="fixDrawerOpen" :fix-id="fixDrawerId" @changed="refreshFixes(); refreshPulls()" />
   </div>
 </template>
