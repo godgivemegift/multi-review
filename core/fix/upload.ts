@@ -1,10 +1,27 @@
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { writeFile, rm, mkdtemp } from 'node:fs/promises'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { z } from 'zod'
 import { runClaude } from '../agent/claudeCli'
 import { salvageJson } from '../agent/jsonSalvage'
 
 const pexec = promisify(execFile)
+
+// gh api 写 JSON body：payload 写临时文件再 --input <file>。
+// 不用 `-f body=...`：body 是 LLM 产物，可能超长 / 含换行 / 特殊字符，走 JSON 文件最稳，
+// 也彻底避开任何参数解析歧义。
+async function ghPostJson(path: string, payload: object): Promise<void> {
+  const dir = await mkdtemp(join(tmpdir(), 'mr-reply-'))
+  const file = join(dir, 'payload.json')
+  await writeFile(file, JSON.stringify(payload))
+  try {
+    await pexec('gh', ['api', path, '--method', 'POST', '--input', file], { maxBuffer: 1024 * 1024 * 8 })
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {})
+  }
+}
 
 // 「上传修复并回复作者」的回复装配（#16）：
 //   fixed   → 勾选且修好的：回复「已修，改了什么」+ commit 引用
@@ -44,10 +61,7 @@ ${JSON.stringify(items.map(({ key, kind, title, text }) => ({ key, kind, title, 
 // 挂回原 thread：POST /pulls/{pr}/comments/{id}/replies。失败（thread 被 resolve/删除等）返回 false → 调用方并进总评。
 export async function replyToThread(repo: string, prNumber: number, commentId: number, body: string): Promise<boolean> {
   try {
-    await pexec('gh', [
-      'api', `repos/${repo}/pulls/${prNumber}/comments/${commentId}/replies`,
-      '--method', 'POST', '-f', `body=${body}`,
-    ], { maxBuffer: 1024 * 1024 * 8 })
+    await ghPostJson(`repos/${repo}/pulls/${prNumber}/comments/${commentId}/replies`, { body })
     return true
   } catch {
     return false
@@ -56,8 +70,5 @@ export async function replyToThread(repo: string, prNumber: number, commentId: n
 
 // 兜底总评（无锚点 / 挂 thread 失败的条目）
 export async function postSummaryComment(repo: string, prNumber: number, body: string): Promise<void> {
-  await pexec('gh', [
-    'api', `repos/${repo}/issues/${prNumber}/comments`,
-    '--method', 'POST', '-f', `body=${body}`,
-  ], { maxBuffer: 1024 * 1024 * 8 })
+  await ghPostJson(`repos/${repo}/issues/${prNumber}/comments`, { body })
 }

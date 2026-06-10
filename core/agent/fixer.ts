@@ -5,17 +5,14 @@ import { outputLangClause } from './lang'
 
 // 「修复」第二阶段：写模式 agent。子进程跑 headless claude（不是 SDK）：
 // ① 要 Edit/Write + acceptEdits ② stream-json 自带 session_id，后续 --resume 续聊（M2）。
-// 安全：白名单工具 + 显式 deny git/网络/破坏性命令（白名单外的 Bash 前缀在 -p 模式下直接被拒），
-// commit/push 由 Node 侧完成，agent 物理上推不了。
-const ALLOWED = [
-  'Read', 'Grep', 'Glob', 'Edit', 'Write',
-  'Bash(pnpm:*)', 'Bash(ls:*)', 'Bash(cat:*)', 'Bash(rg:*)', 'Bash(grep:*)', 'Bash(sed:*)', 'Bash(node:*)', 'Bash(npx:*)',
-]
-const DISALLOWED = [
-  'Bash(git:*)', 'Bash(curl:*)', 'Bash(wget:*)', 'Bash(nc:*)', 'Bash(ncat:*)', 'Bash(ssh:*)', 'Bash(scp:*)',
-  'Bash(rsync:*)', 'Bash(rm:*)', 'Bash(sudo:*)', 'Bash(chmod:*)', 'Bash(chown:*)', 'Bash(kill:*)', 'Bash(pkill:*)',
-  'WebFetch', 'WebSearch',
-]
+//
+// 安全（关键）：**完全不给 Bash**。原因：node/npx/pnpm/sed 这类命令能当二级 shell 绕过
+// 任何 git/网络 deny —— `node -e "child_process.execSync('git push')"`、`sed -i` 改 worktree
+// 外的绝对路径文件、pnpm run 触发 package.json 里的 postinstall 跑 git。前缀级 deny 拦不住
+// 子进程里跑的东西。修复只需改文件，Read/Grep/Glob/Edit/Write 足够；commit/push 全由 Node 做。
+// DISALLOWED 里再把 Bash 和网络工具整个钉死，纵深防御。
+const ALLOWED = ['Read', 'Grep', 'Glob', 'Edit', 'Write']
+const DISALLOWED = ['Bash', 'WebFetch', 'WebSearch', 'Task', 'KillShell', 'NotebookEdit']
 
 // 喂给修复 agent 的条目（已勾选的 fix_findings）
 export type FixItem = {

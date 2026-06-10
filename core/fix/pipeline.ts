@@ -46,9 +46,10 @@ function helpers(ctx: FixJobCtx) {
     emit('stage', stage)
   }
   const row = () => db.select().from(schema.fixes).where(eq(schema.fixes.id, fixId)).get()
+  // 任务被外部终结（删除 / 用户 discard / 重启恢复置 error）→ 丢弃在途结果，别再写回
   const gone = () => {
     const r = row()
-    return !r || r.status === 'discarded'
+    return !r || r.status === 'discarded' || r.status === 'error'
   }
   return { now, emit, setStatus, setStage, row, gone }
 }
@@ -179,6 +180,13 @@ async function runFixPhase(ctx: FixJobCtx) {
     h.setStage('准备 worktree')
     const wt = await ensureWorktree(ctx, h)
     if (h.gone()) return
+
+    // 每次跑修复都从 PR 原始 head 干净开始：reset 掉上一轮的 commit/改动，按「当前所有勾选」重修一遍。
+    // 这样 diff 不累计、commit 不叠加、语义可预测（保留某条修复就保持它勾选）。
+    const base = h.row()?.baseHeadSha
+    if (base) await git(wt.path, ['reset', '--hard', base])
+    // 清掉所有条目上一轮的修复反馈（避免旧的 fixed/failed 串到这一轮）
+    db.update(schema.fixFindings).set({ fixStatus: null, fixText: null }).where(eq(schema.fixFindings.fixId, fixId)).run()
 
     h.setStage(`修复中：${checked.length} 条`)
     const items: FixItem[] = checked.map((f: any) => ({
