@@ -385,7 +385,7 @@
     "replyFailed": "部分回复没挂上（评论可能已被解决/删除）",
     "chatTitle": "对话跟进",
     "you": "你",
-    "chatPlaceholder": "继续聊 / 让 AI 再改（如：F3 换个写法；这里漏了空值判断…）回车发送",
+    "chatPlaceholder": "继续聊 / 让 AI 再改（如：F3 换个写法；这里漏了空值判断…）",
     "send": "发送",
     "stop": "停止",
     "stoppedTag": "已停止",

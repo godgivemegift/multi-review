@@ -385,7 +385,7 @@
     "replyFailed": "Certaines réponses n'ont pas pu être postées (fils résolus/supprimés)",
     "chatTitle": "Suivi par chat",
     "you": "Vous",
-    "chatPlaceholder": "Continuez / demandez d'autres changements (ex. réécris F3 ; vérif. de null manquante ici…) Entrée pour envoyer",
+    "chatPlaceholder": "Continuez / demandez d'autres changements (ex. réécris F3 ; vérif. de null manquante ici…)",
     "send": "Envoyer",
     "stop": "Arrêter",
     "stoppedTag": "arrêté",

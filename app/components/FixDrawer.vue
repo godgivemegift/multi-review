@@ -363,7 +363,6 @@ async function copyWorktree() {
               <textarea
                 v-model="chatInput" rows="2" :placeholder="$t('fix.chatPlaceholder')" :disabled="chatting"
                 class="flex-1 text-sm bg-muted border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-accented disabled:opacity-50"
-                @keydown.enter.exact.prevent="sendChat"
               />
               <button v-if="chatting" class="text-sm border border-accented px-4 py-2 hover:bg-muted shrink-0" @click="stopChat">{{ $t('fix.stop') }}</button>
               <button v-else class="text-sm bg-inverted text-inverted px-4 py-2 hover:bg-inverted/90 disabled:opacity-40 shrink-0" :disabled="!chatInput.trim() || !!busy" @click="sendChat">{{ $t('fix.send') }}</button>

@@ -385,7 +385,7 @@
     "replyFailed": "Some replies couldn't be posted (threads may be resolved/deleted)",
     "chatTitle": "Follow-up chat",
     "you": "You",
-    "chatPlaceholder": "Keep chatting / ask the AI to change more (e.g. rewrite F3; missing null check here…) Enter to send",
+    "chatPlaceholder": "Keep chatting / ask the AI to change more (e.g. rewrite F3; missing null check here…)",
     "send": "Send",
     "stop": "Stop",
     "stoppedTag": "stopped",
