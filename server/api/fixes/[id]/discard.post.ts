@@ -2,7 +2,8 @@ import { eq } from 'drizzle-orm'
 import { schema } from '~core/db/client'
 import { removeWorktree } from '~core/git/worktree'
 
-// 放弃修复任务：清 worktree、标记 discarded。进行中的状态不可弃。
+// 删除修复任务：清 worktree + 删行（fix_findings 走 FK cascade 一起删）。
+// 进行中的状态不可删。删行 = 列表里消失，该 PR 之后可重新建修复任务（和审核任务的删除一致）。
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
   const cfg = useRuntimeConfig()
@@ -14,7 +15,7 @@ export default defineEventHandler(async (event) => {
   }
 
   const project = d.select().from(schema.projects).where(eq(schema.projects.id, fix.projectId)).get()
-  await removeWorktree(project?.localPath ?? null, cfg.reposDir as string, id)
-  d.update(schema.fixes).set({ status: 'discarded', worktreePath: null, updatedAt: new Date().toISOString() }).where(eq(schema.fixes.id, id)).run()
-  return { ok: true, status: 'discarded' }
+  await removeWorktree(project?.localPath ?? null, cfg.reposDir as string, id).catch(() => {})
+  d.delete(schema.fixes).where(eq(schema.fixes.id, id)).run()
+  return { ok: true, status: 'deleted' }
 })

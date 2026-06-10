@@ -12,6 +12,7 @@ export default defineEventHandler(async (event) => {
     .where(eq(schema.fixes.projectId, projectId))
     .orderBy(desc(schema.fixes.createdAt))
     .all()
+    .filter((r: any) => r.status !== 'discarded') // 防御：旧数据里被软删的不显示（新删走真删行）
   if (!rows.length) return []
 
   // 一次拉这些 fix 的全部 findings，内存里按 fixId 分组（避免 N+1）
