@@ -9,6 +9,10 @@ export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
   const cfg = useRuntimeConfig()
   const d = db()
+  // fresh=true → audit complet à zéro (efface les findings, revue NON guidée).
+  // Par défaut → re-revue guidée qui conserve findings + notes (« Recontrôler selon mes retours »).
+  const body = (await readBody(event).catch(() => ({}))) as { fresh?: boolean }
+  const fresh = body?.fresh === true
 
   const review = d.select().from(schema.reviews).where(eq(schema.reviews.id, id)).get()
   if (!review) throw createError({ statusCode: 404, statusMessage: 'review 不存在' })
@@ -53,7 +57,7 @@ export default defineEventHandler(async (event) => {
     reposDir: cfg.reposDir as string,
     model: rc.model,
     effort: rc.effort,
-    guided: true,
+    guided: !fresh,
   })
 
   return { ok: true, status: 'queued' }
