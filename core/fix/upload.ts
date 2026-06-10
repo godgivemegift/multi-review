@@ -30,9 +30,9 @@ async function ghPostJson(path: string, payload: object): Promise<void> {
 // 对外永远专业英文（工作语言 → 英文，一次 claude 调用批量转）。
 export type ReplyItem = {
   key: string // fix_findings.id
-  kind: 'fixed' | 'wontfix'
+  kind: 'fixed' | 'wontfix' | 'pending' // pending=勾选要修但还没修好 / 其他中间态，按作者补充回应
   title: string
-  text: string // fixed: fixText；wontfix: verdict + reason（工作语言）
+  text: string // fixed: fixText；wontfix/pending: verdict + reason（工作语言）
   commentIds: number[]
 }
 
@@ -49,6 +49,7 @@ export async function buildReplyBodies(model: string, items: ReplyItem[], userNo
 For each item below write ONE short professional English reply body (markdown allowed, no heading):
 - kind "fixed": acknowledge and summarize what was changed, based on "text". Do not mention commit hashes — the engine appends the reference.
 - kind "wontfix": politely explain why this won't be changed, based on "text" (the validation verdict/reason). Be factual, not defensive.
+- kind "pending": this point is still open (under review / being worked on). Respond per the author's guidance and the finding context — e.g. acknowledge it and say it's being addressed. Don't claim it's already fixed.
 Translate any non-English content.${guidance}Output ONLY one JSON object: {"replies":[{"key":"<same key>","body":"..."}]}
 Inside JSON string values never use unescaped double quotes — use backticks.
 

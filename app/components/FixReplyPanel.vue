@@ -9,19 +9,28 @@ function notify(msg: string, ok = false) {
   toast.add({ title: msg, color: ok ? 'success' : 'error', icon: ok ? 'i-lucide-check' : 'i-lucide-triangle-alert' })
 }
 
-type PreviewItem = { key: string; kind: 'fixed' | 'wontfix'; title: string; hasAnchor: boolean; body: string }
+type Kind = 'fixed' | 'wontfix' | 'pending'
+type PreviewItem = { key: string; kind: Kind; title: string; hasAnchor: boolean; body: string; send: boolean }
 const note = ref('')
 const preview = ref<PreviewItem[] | null>(null)
 const busy = ref<'' | 'gen' | 'send'>('')
 
+const KIND: Record<Kind, { icon: string; cls: string }> = {
+  fixed: { icon: '✅', cls: 'text-highlighted' },
+  wontfix: { icon: '🚫', cls: 'text-dimmed' },
+  pending: { icon: '◷', cls: 'text-toned' },
+}
+const selectedCount = computed(() => preview.value?.filter((it) => it.send).length ?? 0)
+
 async function genPreview() {
   busy.value = 'gen'
   try {
-    const res = await $fetch<{ items: PreviewItem[] }>(`/api/fixes/${props.fixId}/reply`, {
+    const res = await $fetch<{ items: Omit<PreviewItem, 'send'>[] }>(`/api/fixes/${props.fixId}/reply`, {
       method: 'POST',
       body: { dryRun: true, note: note.value.trim() || undefined },
     })
-    preview.value = res.items
+    // 默认：已修/不修勾选要发，待处理默认不发（避免误发一堆「正在处理」）
+    preview.value = res.items.map((it) => ({ ...it, send: it.kind !== 'pending' }))
   } catch (e: any) {
     notify(e?.data?.statusMessage || t('common.failed'))
   } finally {
@@ -30,13 +39,18 @@ async function genPreview() {
 }
 
 async function send() {
-  if (!preview.value?.length) return
+  const picked = preview.value?.filter((it) => it.send) ?? []
+  if (!picked.length) return
   busy.value = 'send'
   try {
-    const bodies = Object.fromEntries(preview.value.map((it) => [it.key, it.body]))
     const res = await $fetch<{ replied: number; summaryPosted: boolean; leftoverCount: number }>(`/api/fixes/${props.fixId}/reply`, {
       method: 'POST',
-      body: { dryRun: false, note: note.value.trim() || undefined, bodies },
+      body: {
+        dryRun: false,
+        note: note.value.trim() || undefined,
+        keys: picked.map((it) => it.key),
+        bodies: Object.fromEntries(picked.map((it) => [it.key, it.body])),
+      },
     })
     const base = t('fix.replied', { replied: res.replied })
     if (res.leftoverCount && !res.summaryPosted) notify(`${base} ⚠ ${t('fix.replyFailed')}`)
@@ -74,23 +88,25 @@ async function send() {
     <!-- 预览：每条可微调，发送即所见 -->
     <div v-if="preview" class="mt-4 space-y-3">
       <p v-if="!preview.length" class="text-xs text-dimmed">{{ t('fix.replyNone') }}</p>
-      <div v-for="it in preview" :key="it.key" class="border border-default rounded p-2.5">
-        <div class="flex items-center gap-2 mb-1.5 text-xs">
-          <span :class="it.kind === 'fixed' ? 'text-highlighted' : 'text-dimmed'">{{ it.kind === 'fixed' ? '✅' : '🚫' }}</span>
+      <div v-for="it in preview" :key="it.key" class="border border-default rounded p-2.5" :class="it.send ? '' : 'opacity-55'">
+        <label class="flex items-center gap-2 mb-1.5 text-xs cursor-pointer">
+          <input v-model="it.send" type="checkbox" :disabled="busy === 'send'" class="accent-neutral-900 dark:accent-neutral-100" />
+          <span :class="KIND[it.kind].cls">{{ KIND[it.kind].icon }}</span>
           <span class="text-toned font-medium truncate">{{ it.title }}</span>
+          <span class="text-[10px] text-dimmed shrink-0">· {{ t(`fix.kind.${it.kind}`) }}</span>
           <span v-if="!it.hasAnchor" class="text-[10px] text-dimmed shrink-0">· {{ t('fix.noAnchor') }}</span>
-        </div>
+        </label>
         <textarea
-          v-model="it.body" rows="3" :disabled="busy === 'send'"
+          v-model="it.body" rows="3" :disabled="busy === 'send' || !it.send"
           class="w-full text-sm bg-muted border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-accented disabled:opacity-50"
         />
       </div>
       <div v-if="preview.length" class="flex items-center gap-3 pt-1">
         <button
           class="text-sm bg-inverted text-inverted px-4 py-1.5 hover:bg-inverted/90 disabled:opacity-40"
-          :disabled="!!busy" @click="send"
+          :disabled="!!busy || !selectedCount" @click="send"
         >
-          {{ busy === 'send' ? t('fix.sending') : t('fix.sendToGithub') }}
+          {{ busy === 'send' ? t('fix.sending') : t('fix.sendToGithubN', { n: selectedCount }) }}
         </button>
         <button class="text-sm text-dimmed hover:text-highlighted" :disabled="!!busy" @click="emit('done', false)">{{ t('common.cancel') }}</button>
       </div>

@@ -12,6 +12,7 @@ const Body = z.object({
   dryRun: z.boolean().default(true),
   note: z.string().max(4000).optional(), // 作者补充指示（语气/强调/额外承诺）
   bodies: z.record(z.string(), z.string()).optional(), // dryRun=false：作者在预览里确认的文案（按 finding key）
+  keys: z.array(z.string()).optional(), // dryRun=false：只发这些 finding 的回复（作者在预览里挑的）
 })
 
 function parseIds(raw: string | null): number[] {
@@ -23,13 +24,19 @@ function parseIds(raw: string | null): number[] {
   }
 }
 
+function classify(f: any): { kind: 'fixed' | 'wontfix' | 'pending'; text: string } {
+  if (f.checked && f.fixStatus === 'fixed') return { kind: 'fixed', text: f.fixText || f.title }
+  if (!f.checked && !f.suggestFix) return { kind: 'wontfix', text: `${f.verdict}${f.reason ? ` — ${f.reason}` : ''}` }
+  return { kind: 'pending', text: `${f.verdict}${f.reason ? ` — ${f.reason}` : ''}` } // 勾选要修但还没修好 / 其他中间态
+}
+
 // 同一 fix 同时只允许一次「真发」进行中（防双击重发）。生成预览不发评论，不占锁。
 const replying = new Set<string>()
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
   const cfg = useRuntimeConfig()
-  const { dryRun, note, bodies } = Body.parse((await readBody(event)) || {})
+  const { dryRun, note, bodies, keys } = Body.parse((await readBody(event)) || {})
   const d = db()
   const fix = d.select().from(schema.fixes).where(eq(schema.fixes.id, id)).get()
   if (!fix) throw createError({ statusCode: 404, statusMessage: 'fix 不存在' })
@@ -51,16 +58,12 @@ export default defineEventHandler(async (event) => {
     .where(eq(schema.fixFindings.fixId, id))
     .orderBy(asc(schema.fixFindings.ord))
     .all()
-  const items: ReplyItem[] = []
-  for (const f of findings as any[]) {
-    const ids = parseIds(f.sourceCommentIds)
-    if (f.checked && f.fixStatus === 'fixed') {
-      items.push({ key: f.id, kind: 'fixed', title: f.title, text: f.fixText || f.title, commentIds: ids })
-    } else if (!f.checked && !f.suggestFix) {
-      items.push({ key: f.id, kind: 'wontfix', title: f.title, text: `${f.verdict}${f.reason ? ` — ${f.reason}` : ''}`, commentIds: ids })
-    }
-  }
-  if (!items.length) throw createError({ statusCode: 400, statusMessage: '没有可回复的内容（先标记已修复，或留下不修说明）' })
+  // 所有 finding 都可回复（放宽）：按现状分三类（已修/不修/待处理），AI 参考状态 + 作者补充生成
+  const items: ReplyItem[] = (findings as any[]).map((f) => {
+    const { kind, text } = classify(f)
+    return { key: f.id, kind, title: f.title, text, commentIds: parseIds(f.sourceCommentIds) }
+  })
+  if (!items.length) throw createError({ statusCode: 400, statusMessage: '这个任务还没有 finding 可回复' })
 
   // ── 预览：AI 生成英文回复（带作者补充），返回每条 body，不发 ──
   if (dryRun) {
@@ -76,21 +79,25 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // ── 真发：用作者确认的 bodies（缺的回落 AI 生成），逐条挂 thread，失败并进总评 ──
+  // ── 真发：只发作者在预览里挑的条目（keys，不传=全发），用确认的 bodies（缺的回落 AI 生成）──
   if (replying.has(id)) throw createError({ statusCode: 409, statusMessage: '正在回复，请稍候' })
   replying.add(id)
   try {
+    const pick = keys && keys.length ? new Set(keys) : null
+    const toSend = pick ? items.filter((it) => pick.has(it.key)) : items
+    if (!toSend.length) throw createError({ statusCode: 400, statusMessage: '没有选择要发送的条目' })
+
     let confirmed: Record<string, string> = bodies || {}
-    if (items.some((it) => !confirmed[it.key]?.trim())) {
-      const gen = await buildReplyBodies(cfg.translateModel as string, items, note)
+    if (toSend.some((it) => !confirmed[it.key]?.trim())) {
+      const gen = await buildReplyBodies(cfg.translateModel as string, toSend, note)
       confirmed = { ...gen, ...confirmed } // 作者确认的优先，缺的用生成的兜底
     }
 
     const shortSha = (fix.lastPushSha || fix.fixHeadSha || '').slice(0, 7)
     let replied = 0
     const leftovers: { kind: string; title: string; body: string }[] = []
-    for (const it of items) {
-      const base = confirmed[it.key]?.trim() || (it.kind === 'fixed' ? 'Addressed in the latest commit.' : 'After review, no change needed.')
+    for (const it of toSend) {
+      const base = confirmed[it.key]?.trim() || (it.kind === 'fixed' ? 'Addressed in the latest commit.' : it.kind === 'wontfix' ? 'After review, no change needed.' : 'Noted — this is being addressed.')
       const body = it.kind === 'fixed' && shortSha ? `${base}\n\n_Fixed in ${shortSha}._` : base
       const target = it.commentIds[0]
       if (target && (await replyToThread(project.repo, fix.prNumber, target, body))) replied++
