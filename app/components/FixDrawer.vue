@@ -154,8 +154,8 @@ async function doPush() {
   } catch (e: any) { notify(e?.data?.statusMessage || t('fix.pushFailed')) }
   finally { busy.value = '' }
 }
-// 「回复作者」改为打开一个面板（输入补充 → AI 预览 → 发送），FixReplyPanel 自管。
-function doReply() { replyMode.value = true }
+// 「回复作者」就地在 findings 下面展开（输入补充 → AI 预览 → 发送）。任意 tab 点都切到 findings。
+function doReply() { activeTab.value = 'findings'; replyMode.value = true }
 function onReplyDone(refresh: boolean) {
   replyMode.value = false
   if (refresh) load()
@@ -292,9 +292,6 @@ async function copyWorktree() {
 
         <!-- 内容区 -->
         <div class="flex-1 overflow-y-auto px-6 py-5">
-          <!-- 回复作者面板：盖住内容区（写补充 → AI 预览 → 发到 GitHub）-->
-          <FixReplyPanel v-if="replyMode && fixId" :fix-id="fixId" @done="onReplyDone" />
-          <template v-else>
           <!-- 全局：运行日志 + error（任何 tab 都显示进度）-->
           <div v-if="running || live || logLines.length" class="text-xs text-dimmed mb-3">
             <div class="flex items-center gap-2">
@@ -379,6 +376,11 @@ async function copyWorktree() {
                 </template>
               </FixActionBar>
             </section>
+
+            <!-- 回复作者：就地在 findings 下面展开（不另开面板）-->
+            <section v-if="replyMode" class="mt-5 border-t border-default pt-4">
+              <FixReplyPanel v-if="fixId" :fix-id="fixId" @done="onReplyDone" />
+            </section>
           </template>
 
           <!-- ── 改动（GitHub 式左右对比）── -->
@@ -437,7 +439,6 @@ async function copyWorktree() {
                 </FixActionBar>
               </div>
             </div>
-          </template>
           </template>
         </div>
       </div>
