@@ -14,6 +14,9 @@ function parseIds(raw: string | null): number[] {
   }
 }
 
+// 同一 fix 同时只允许一次回复进行中（防双击/重试重复发评论）。回复不碰 worktree，进程内 Set 足够。
+const replying = new Set<string>()
+
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
   const cfg = useRuntimeConfig()
@@ -29,64 +32,72 @@ export default defineEventHandler(async (event) => {
   const project = d.select().from(schema.projects).where(eq(schema.projects.id, fix.projectId)).get()
   if (!project) throw createError({ statusCode: 404, statusMessage: '项目不存在' })
 
-  const findings = d
-    .select()
-    .from(schema.fixFindings)
-    .where(eq(schema.fixFindings.fixId, id))
-    .orderBy(asc(schema.fixFindings.ord))
-    .all()
-
-  // 回复装配：已修的（fixed）+ 验证判不修的（wontfix）。suggestFix=true 但用户反勾的不回（先不表态）。
-  const items: ReplyItem[] = []
-  for (const f of findings as any[]) {
-    const ids = parseIds(f.sourceCommentIds)
-    if (f.checked && f.fixStatus === 'fixed') {
-      items.push({ key: f.id, kind: 'fixed', title: f.title, text: f.fixText || f.title, commentIds: ids })
-    } else if (!f.checked && !f.suggestFix) {
-      items.push({ key: f.id, kind: 'wontfix', title: f.title, text: `${f.verdict}${f.reason ? ` — ${f.reason}` : ''}`, commentIds: ids })
-    }
-  }
-  if (!items.length) throw createError({ statusCode: 400, statusMessage: '没有可回复的内容（先标记已修复，或留下不修说明）' })
-
-  // 先把英文回复都备好（翻译失败就中止，无副作用）
-  let bodies: Record<string, string> = {}
+  if (replying.has(id)) throw createError({ statusCode: 409, statusMessage: '正在回复，请稍候' })
+  replying.add(id)
   try {
-    bodies = await buildReplyBodies(cfg.translateModel as string, items)
-  } catch (e: any) {
-    throw createError({ statusCode: 500, statusMessage: `回复翻译失败，已中止：${String(e?.message).slice(0, 200)}` })
-  }
+    const findings = d
+      .select()
+      .from(schema.fixFindings)
+      .where(eq(schema.fixFindings.fixId, id))
+      .orderBy(asc(schema.fixFindings.ord))
+      .all()
 
-  const shortSha = (fix.lastPushSha || fix.fixHeadSha || '').slice(0, 7)
-  let replied = 0
-  const leftovers: { kind: string; title: string; body: string }[] = []
-  for (const it of items) {
-    const base = bodies[it.key] || (it.kind === 'fixed' ? 'Addressed in the latest commit.' : 'After review, no change needed.')
-    const body = it.kind === 'fixed' && shortSha ? `${base}\n\n_Fixed in ${shortSha}._` : base
-    const target = it.commentIds[0]
-    if (target && (await replyToThread(project.repo, fix.prNumber, target, body))) replied++
-    else leftovers.push({ kind: it.kind, title: it.title, body })
-  }
-  let summaryPosted = false
-  if (leftovers.length) {
-    const md =
-      `### Review feedback addressed\n\n` +
-      leftovers.map((l) => `- ${l.kind === 'fixed' ? '✅' : '🚫'} **${l.title}** — ${l.body}`).join('\n')
-    try {
-      await postSummaryComment(project.repo, fix.prNumber, md)
-      summaryPosted = true
-    } catch {
-      /* 总评也失败：留给响应提示 */
+    // 回复装配：已修的（fixed）+ 验证判不修的（wontfix）。suggestFix=true 但用户反勾的不回（先不表态）。
+    const items: ReplyItem[] = []
+    for (const f of findings as any[]) {
+      const ids = parseIds(f.sourceCommentIds)
+      if (f.checked && f.fixStatus === 'fixed') {
+        items.push({ key: f.id, kind: 'fixed', title: f.title, text: f.fixText || f.title, commentIds: ids })
+      } else if (!f.checked && !f.suggestFix) {
+        items.push({ key: f.id, kind: 'wontfix', title: f.title, text: `${f.verdict}${f.reason ? ` — ${f.reason}` : ''}`, commentIds: ids })
+      }
     }
-  }
+    if (!items.length) throw createError({ statusCode: 400, statusMessage: '没有可回复的内容（先标记已修复，或留下不修说明）' })
 
-  const now = new Date().toISOString()
-  d.update(schema.fixes).set({ lastActionKind: 'replied', updatedAt: now }).where(eq(schema.fixes.id, id)).run()
+    // 先把英文回复都备好（翻译失败就中止，无副作用）
+    let bodies: Record<string, string> = {}
+    try {
+      bodies = await buildReplyBodies(cfg.translateModel as string, items)
+    } catch (e: any) {
+      throw createError({ statusCode: 500, statusMessage: `回复翻译失败，已中止：${String(e?.message).slice(0, 200)}` })
+    }
 
-  return {
-    ok: true,
-    replied,
-    summaryPosted,
-    leftoverCount: summaryPosted ? 0 : leftovers.length,
-    prUrl: `https://github.com/${project.repo}/pull/${fix.prNumber}`,
+    const shortSha = (fix.lastPushSha || fix.fixHeadSha || '').slice(0, 7)
+    let replied = 0
+    const leftovers: { kind: string; title: string; body: string }[] = []
+    for (const it of items) {
+      const base = bodies[it.key] || (it.kind === 'fixed' ? 'Addressed in the latest commit.' : 'After review, no change needed.')
+      const body = it.kind === 'fixed' && shortSha ? `${base}\n\n_Fixed in ${shortSha}._` : base
+      const target = it.commentIds[0]
+      if (target && (await replyToThread(project.repo, fix.prNumber, target, body))) replied++
+      else leftovers.push({ kind: it.kind, title: it.title, body })
+    }
+    let summaryPosted = false
+    if (leftovers.length) {
+      const md =
+        `### Review feedback addressed\n\n` +
+        leftovers.map((l) => `- ${l.kind === 'fixed' ? '✅' : '🚫'} **${l.title}** — ${l.body}`).join('\n')
+      try {
+        await postSummaryComment(project.repo, fix.prNumber, md)
+        summaryPosted = true
+      } catch {
+        /* 总评也失败：留给响应提示 */
+      }
+    }
+
+    // 只有真送达了（逐条或总评）才标记「最近动作=回复」，避免一条都没发出却显示已回复
+    if (replied > 0 || summaryPosted) {
+      d.update(schema.fixes).set({ lastActionKind: 'replied', updatedAt: new Date().toISOString() }).where(eq(schema.fixes.id, id)).run()
+    }
+
+    return {
+      ok: true,
+      replied,
+      summaryPosted,
+      leftoverCount: summaryPosted ? 0 : leftovers.length,
+      prUrl: `https://github.com/${project.repo}/pull/${fix.prNumber}`,
+    }
+  } finally {
+    replying.delete(id)
   }
 })

@@ -1,11 +1,13 @@
 import { eq, and, inArray } from 'drizzle-orm'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { existsSync } from 'node:fs'
 import { schema } from '~core/db/client'
 import { getCurrentUserLogin } from '~core/github/gh'
 
 const pexec = promisify(execFile)
-const SAFE_REF = /^[A-Za-z0-9._\-/]+$/ // git 分支名白名单（防奇异 refspec）
+// 首字符必须字母数字（禁前导 `-`/`.`，防被当 git flag 或路径穿越）；和 diff/merge-base 保持一致
+const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._\-/]*$/
 
 // 「上传改动」（#16）：只把本地 commit push 到 PR 分支，**不回复作者**（回复是独立按钮）。
 // 永远手动触发；只允许自己的 PR（决策 A）。push 完记录 lastPushSha → 前端据此判断「还有没有未上传改动」。
@@ -15,7 +17,7 @@ export default defineEventHandler(async (event) => {
   const fix = d.select().from(schema.fixes).where(eq(schema.fixes.id, id)).get()
   if (!fix) throw createError({ statusCode: 404, statusMessage: 'fix 不存在' })
   if (!['ready', 'pushed'].includes(fix.status)) throw createError({ statusCode: 409, statusMessage: '该修复未就绪' })
-  if (!fix.worktreePath || !fix.fixHeadSha) throw createError({ statusCode: 400, statusMessage: '缺少本地提交' })
+  if (!fix.worktreePath || !existsSync(fix.worktreePath) || !fix.fixHeadSha) throw createError({ statusCode: 400, statusMessage: '缺少本地提交或 worktree 不在了' })
   if (fix.fixHeadSha === fix.lastPushSha) throw createError({ statusCode: 400, statusMessage: '没有未上传的改动' })
   if (!SAFE_REF.test(fix.branch)) throw createError({ statusCode: 400, statusMessage: `分支名不合法: ${fix.branch}` })
 

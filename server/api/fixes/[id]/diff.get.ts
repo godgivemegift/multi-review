@@ -22,8 +22,10 @@ export default defineEventHandler(async (event) => {
   try {
     let range: string | null = null
     if (fix.baseRef && SAFE_REF.test(fix.baseRef)) {
-      await git(['fetch', 'origin', fix.baseRef]).catch(() => {}) // 拿最新 base，失败就用本地已有的
-      range = `origin/${fix.baseRef}...HEAD` // 三点：merge-base(origin/base, HEAD)..HEAD
+      // 拿最新 base；fetch 成功才用三点（否则 origin/<base> 可能不存在 → 退回只看修复增量）
+      const fetched = await git(['fetch', 'origin', fix.baseRef]).then(() => true).catch(() => false)
+      if (fetched) range = `origin/${fix.baseRef}...HEAD` // 三点：merge-base(origin/base, HEAD)..HEAD
+      else if (fix.baseHeadSha) range = `${fix.baseHeadSha}..HEAD`
     } else if (fix.baseHeadSha) {
       range = `${fix.baseHeadSha}..HEAD`
     }
