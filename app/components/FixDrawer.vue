@@ -55,8 +55,14 @@ onBeforeUnmount(() => es?.close())
 // finding 勾选 / note
 const saving = ref<Record<string, any>>({})
 async function toggleFinding(f: FixFinding) {
+  const prev = f.checked
   f.checked = !f.checked
-  await $fetch(`/api/fix-findings/${f.id}`, { method: 'PATCH', body: { checked: f.checked } })
+  try {
+    await $fetch(`/api/fix-findings/${f.id}`, { method: 'PATCH', body: { checked: f.checked } })
+  } catch (e: any) {
+    f.checked = prev // 服务端没改成 → 回滚本地，避免 checkedCount 和实际不一致
+    live.value = e?.data?.statusMessage || t('common.failed')
+  }
 }
 function saveNote(f: FixFinding) {
   clearTimeout(saving.value[f.id])
@@ -99,8 +105,10 @@ async function pushFix() {
   if (!ok) return
   busy.value = 'push'
   try {
-    const res = await $fetch<{ sha: string; replied: number }>(`/api/fixes/${props.fixId}/push`, { method: 'POST' })
-    live.value = t('fix.pushed', { sha: res.sha, replied: res.replied })
+    const res = await $fetch<{ sha: string; replied: number; summaryPosted: boolean; leftoverCount: number }>(`/api/fixes/${props.fixId}/push`, { method: 'POST' })
+    const base = t('fix.pushed', { sha: res.sha, replied: res.replied })
+    // 回复全失败（thread 被 resolve/删 + 总评也没发出）→ 明确告警，别让用户以为都回复了
+    live.value = res.leftoverCount && !res.summaryPosted ? `${base} ⚠ ${t('fix.replyFailed')}` : base
     await load()
   } catch (e: any) { live.value = e?.data?.statusMessage || t('fix.pushFailed') }
   finally { busy.value = '' }
@@ -109,8 +117,13 @@ async function pushFix() {
 async function discard() {
   if (!(await ask({ title: t('fix.discardTitle'), message: t('fix.discardConfirm'), okText: t('common.delete'), danger: true }))) return
   busy.value = 'discard'
-  try { await $fetch(`/api/fixes/${props.fixId}/discard`, { method: 'POST' }); open.value = false; emit('changed') }
-  finally { busy.value = '' }
+  try {
+    await $fetch(`/api/fixes/${props.fixId}/discard`, { method: 'POST' })
+    open.value = false
+    emit('changed')
+  } catch (e: any) {
+    live.value = e?.data?.statusMessage || t('common.failed')
+  } finally { busy.value = '' }
 }
 
 function fixStatusLabel(s: string) { const k = `status.fix.${s}`; return te(k) ? t(k) : s }

@@ -81,6 +81,8 @@ export function enqueueValidate(ctx: FixJobCtx) {
 async function runValidateJob(ctx: FixJobCtx) {
   const { db, schema, fixId } = ctx
   const h = helpers(ctx)
+  const git = (wtPath: string, args: string[]) =>
+    pexec('git', ['-C', wtPath, ...args], { maxBuffer: 64 * 1024 * 1024 })
   try {
     h.setStatus('validating')
     h.setStage('读取 PR 评论与时间线')
@@ -98,6 +100,10 @@ async function runValidateJob(ctx: FixJobCtx) {
     h.setStage('准备 worktree')
     const wt = await ensureWorktree(ctx, h)
     if (h.gone()) return
+    // 验证必须在 PR 原始 head 上做：worktree 可能复用自上一轮修复（已含 fix commit），
+    // reset 回 baseHeadSha 才能保证验证看到的是 PR 真实代码，而非自己改过的版本。
+    const base0 = h.row()?.baseHeadSha
+    if (base0) await git(wt.path, ['reset', '--hard', base0])
 
     h.setStage('验证中：逐条核对评论是否成立')
     const fix = h.row()

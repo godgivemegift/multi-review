@@ -377,6 +377,7 @@
     "pushOk": "确认上传",
     "pushConfirm": "将向分支 {branch} push {files} 个文件的改动；并回复作者：{fixed} 条已修复、{wontfix} 条说明不修。",
     "pushed": "已上传 {sha} · 回复 {replied} 条",
-    "pushFailed": "上传失败"
+    "pushFailed": "上传失败",
+    "replyFailed": "部分回复没挂上（评论可能已被解决/删除）"
   }
 }

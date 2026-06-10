@@ -56,6 +56,8 @@ export default defineEventHandler(async (event) => {
     .all()
 
   // 回复装配：已修的（fixed）+ 验证判不修的（wontfix）。挂 thread 失败/无锚点 → 总评。
+  // 故意只回这两类：suggestFix=true 但用户主动反勾的，视为「先不回应这条」，不发回复
+  // （用户改了主意，可能下轮再处理，此刻不该替他表态）。
   const items: ReplyItem[] = []
   for (const f of findings as any[]) {
     const ids = parseIds(f.sourceCommentIds)

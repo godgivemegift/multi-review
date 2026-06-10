@@ -66,17 +66,18 @@ export async function runValidateAgent(opts: {
   const prompt = `你在一个 git worktree 里（已 checkout ${opts.repo} PR #${opts.prNumber} 的分支 ${opts.branch}，未合并默认分支）。这是「修复 PR」流程的**验证阶段**：把 PR 收到的评论逐条对照真实代码，判断每条意见**成立吗**。你只验证，不修改任何文件。
 
 ${opts.instruction?.trim() ? `审核员的针对性指示（优先遵循）：\n${opts.instruction.trim()}\n` : ''}
+当前目录就是这个 PR 的代码（已 checkout，未合并默认分支）。你只有读类工具：Read 读文件、Grep / Glob 搜代码。没有 shell、不能跑 git —— 直接读 + 搜代码来核实。
+
 步骤：
-1. 看变更摸上下文：\`git diff origin/${opts.defaultBranch}...HEAD\`、\`git log origin/${opts.defaultBranch}..HEAD --oneline\`
-2. 把下面的评论归并成独立的「待办意见」（同一 thread 的来回、或多条评论说同一件事 → 合成一条 finding）：
+1. 把下面的评论归并成独立的「待办意见」（同一 thread 的来回、或多条评论说同一件事 → 合成一条 finding）：
    - 行级评论自带 [id:N]，finding 的 sourceCommentIds **必须原样引用**这些数字 id（一条 finding 可引用多个）。
    - 顶层 review/会话内容没有可锚定 id → 对应 finding 的 sourceCommentIds 给空数组。
    - 如果评论里嵌有 \`<!-- mr:... -->\` 元数据标记（本工具发的结构化审核），直接用标记里的 severity/fid 还原。
    - 跳过纯寒暄/无可操作内容的评论（approve 留言、"LGTM"等）。
-3. **逐条对照代码验证**：读相关文件、grep 调用点，判断这条意见在当前代码上是否成立（也许作者已经改了、也许评论者看错了、也许问题真实存在）。
-4. 每条给 verdict：用简短自然语言自由表达（如「成立」「不成立——代码已处理该情况」「成立但优先级不高」「已过时——后续 commit 已修」等，**不限定固定类别**），并给 suggestFix（true=建议修，会被预勾选）和 reason（判断依据，引用 path:line 或 commit）。
+2. **逐条对照代码验证**：用 Read / Grep 读相关文件、找调用点，判断这条意见在当前代码上是否成立（也许作者已经改了、也许评论者看错了、也许问题真实存在）。评论里若提到 path:line，直接 Read 那个文件看现状。
+3. 每条给 verdict：用简短自然语言自由表达（如「成立」「不成立——代码已处理该情况」「成立但优先级不高」等，**不限定固定类别**），并给 suggestFix（true=建议修，会被预勾选）和 reason（判断依据，引用 path:line）。
 
-纪律：只读（git diff/log/show、grep、读文件、gh pr view）。❌ 禁止任何写操作。
+纪律：只读（Read / Grep / Glob）。❌ 禁止任何写操作、禁止 shell。
 
 ## 行级评论（带锚定 id）
 ${lineBlock}
