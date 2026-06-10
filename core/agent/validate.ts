@@ -63,38 +63,43 @@ export async function runValidateAgent(opts: {
   const lineBlock = opts.comments.length ? serializeComments(opts.comments) : '(none)'
   const topBlock = serializeTimeline(opts.timeline) || '(none)'
 
-  const prompt = `你在一个 git worktree 里（已 checkout ${opts.repo} PR #${opts.prNumber} 的分支 ${opts.branch}，未合并默认分支）。这是「修复 PR」流程的**验证阶段**：把 PR 收到的评论逐条对照真实代码，判断每条意见**成立吗**。你只验证，不修改任何文件。
+  // Prompt 正文用中性英文 —— 不写任何具体语言的示例词（之前用中文示例「成立」导致 agent
+  // 直接照抄那个中文词，verdict 出中文）。输出语言完全由 outputLangClause(lang) 决定，
+  // 跟 UI locale 走。
+  const instructionBlock = opts.instruction?.trim()
+    ? `Reviewer's targeted instruction (follow this first):\n${opts.instruction.trim()}\n\n`
+    : ''
+  const prompt = `You are in a git worktree with ${opts.repo} PR #${opts.prNumber} (branch ${opts.branch}) checked out; the default branch is NOT merged. This is the VALIDATION phase of the fix flow: check each review comment against the real code and judge whether it holds. You only validate — do not modify any file.
 
-${opts.instruction?.trim() ? `审核员的针对性指示（优先遵循）：\n${opts.instruction.trim()}\n` : ''}
-当前目录就是这个 PR 的代码（已 checkout，未合并默认分支）。你只有读类工具：Read 读文件、Grep / Glob 搜代码。没有 shell、不能跑 git —— 直接读 + 搜代码来核实。
+${instructionBlock}The current directory IS this PR's code. You only have read tools: Read for files, Grep / Glob to search. No shell, no git — read and search the code directly to verify.
 
-步骤：
-1. 把下面的评论归并成独立的「待办意见」（同一 thread 的来回、或多条评论说同一件事 → 合成一条 finding）：
-   - 行级评论自带 [id:N]，finding 的 sourceCommentIds **必须原样引用**这些数字 id（一条 finding 可引用多个）。
-   - 顶层 review/会话内容没有可锚定 id → 对应 finding 的 sourceCommentIds 给空数组。
-   - 如果评论里嵌有 \`<!-- mr:... -->\` 元数据标记（本工具发的结构化审核），直接用标记里的 severity/fid 还原。
-   - 跳过纯寒暄/无可操作内容的评论（approve 留言、"LGTM"等）。
-2. **逐条对照代码验证**：用 Read / Grep 读相关文件、找调用点，判断这条意见在当前代码上是否成立（也许作者已经改了、也许评论者看错了、也许问题真实存在）。评论里若提到 path:line，直接 Read 那个文件看现状。
-3. 每条给 verdict：用简短自然语言自由表达（如「成立」「不成立——代码已处理该情况」「成立但优先级不高」等，**不限定固定类别**），并给 suggestFix（true=建议修，会被预勾选）和 reason（判断依据，引用 path:line）。
+Steps:
+1. Merge the comments below into distinct actionable findings (a back-and-forth on one thread, or several comments about the same thing -> one finding):
+   - Inline comments carry [id:N]; a finding's sourceCommentIds MUST cite those numeric ids verbatim (a finding may cite several).
+   - Top-level review / conversation text has no anchorable id -> give that finding an empty sourceCommentIds array.
+   - If a comment embeds an "<!-- mr:... -->" metadata marker (a structured review this tool posted), reconstruct from the marker's severity/fid.
+   - Skip pure pleasantries / non-actionable comments (approval notes, "LGTM", etc.).
+2. Verify each one against the code: use Read / Grep to open the relevant files and call sites, and decide whether the comment holds on the CURRENT code (maybe the author already fixed it, maybe the commenter was wrong, maybe the issue is real). If a comment mentions path:line, Read that file to see the current state.
+3. For each finding give: a free-form "verdict" in your own words describing whether it holds (do NOT pick from a fixed list — write a natural phrase, e.g. whether it holds, doesn't hold, or holds but is low priority); a "suggestFix" boolean (true = recommend fixing; this pre-checks the box); and a "reason" citing path:line.
 
-纪律：只读（Read / Grep / Glob）。❌ 禁止任何写操作、禁止 shell。
+Discipline: read-only (Read / Grep / Glob). Do NOT write anything, no shell.
 
-## 行级评论（带锚定 id）
+## Inline comments (with anchor ids)
 ${lineBlock}
 
-## 顶层 review / 会话评论（无锚定 id）
+## Top-level review / conversation comments (no anchor id)
 ${topBlock}
 
-最后**只输出一个 JSON 对象**（无代码围栏）：
+Finally output ONLY one JSON object (no code fences):
 {
-  "summary": "整体判断：这批评论里多少成立、核心要修什么",
-  "findings": [ { "severity": "High|Medium|Low", "title": "一句话标题", "location": "path:line",
-    "verdict": "自由文本判断", "suggestFix": true, "reason": "判断依据",
+  "summary": "overall judgment: how many comments hold, and the core thing to fix",
+  "findings": [ { "severity": "High|Medium|Low", "title": "one-line title", "location": "path:line",
+    "verdict": "free-form judgment", "suggestFix": true, "reason": "your basis",
     "sourceCommentIds": [123456] } ]
 }
 
-${outputLangClause(opts.lang)}
-⚠️ 严格合法 JSON：字符串值内绝不要未转义的英文双引号 \`"\`，引用一律用「」或反引号 \`。`
+${outputLangClause(opts.lang)} Every string value (summary, title, verdict, reason) MUST be written in that language.
+Output strictly valid JSON: never put an unescaped double quote inside a string value — use guillemets or backticks instead.`
 
   const stream = query({
     prompt,

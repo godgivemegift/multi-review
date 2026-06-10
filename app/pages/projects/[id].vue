@@ -394,7 +394,7 @@ function sevCls(n: number, level: 'h' | 'm' | 'l') {
 </script>
 
 <template>
-  <div class="max-w-4xl mx-auto px-10 py-12">
+  <div class="max-w-6xl mx-auto px-10 py-12">
     <!-- 头 -->
     <div v-if="project" class="flex items-end justify-between">
       <div>
@@ -515,13 +515,13 @@ function sevCls(n: number, level: 'h' | 'm' | 'l') {
 
       <!-- PR 列表 -->
       <div class="mt-4">
-        <div class="grid grid-cols-[1.5rem_3.5rem_1fr_8rem_5rem] gap-x-4 px-1 pb-3 text-[10px] uppercase tracking-[0.15em] text-dimmed border-b border-inverted">
+        <div class="grid grid-cols-[1.5rem_3.5rem_1fr_8rem_6rem] gap-x-4 px-1 pb-3 text-[10px] uppercase tracking-[0.15em] text-dimmed border-b border-inverted">
           <span></span><span>PR</span><span>{{ $t('project.col.title') }}</span><span>{{ $t('project.col.author') }}</span><span class="text-center">{{ $t('project.col.status') }}</span>
         </div>
         <div
           v-for="p in visiblePulls"
           :key="p.number"
-          class="grid grid-cols-[1.5rem_3.5rem_1fr_8rem_5rem] gap-x-4 items-center px-1 py-3 border-b border-default text-sm"
+          class="grid grid-cols-[1.5rem_3.5rem_1fr_8rem_6rem] gap-x-4 items-center px-1 py-3 border-b border-default text-sm"
         >
           <input
             type="checkbox"
@@ -537,7 +537,7 @@ function sevCls(n: number, level: 'h' | 'm' | 'l') {
           <button class="text-xs text-muted hover:text-highlighted truncate text-left" @click="pickAuthor(p.author)">{{ p.author }}</button>
           <span class="text-center">
             <button
-              class="text-[10px] uppercase tracking-wider px-2 py-0.5 border rounded-full cursor-pointer hover:opacity-70 transition"
+              class="inline-block whitespace-nowrap text-[10px] uppercase tracking-wider px-2 py-0.5 border rounded-full cursor-pointer hover:opacity-70 transition"
               :class="[pullBadge(p).cls, statusFilter === pullKey(p) ? 'ring-1 ring-inverted' : '']"
               :title="statusFilter === pullKey(p) ? $t('project.clearFilter') : $t('project.filterByStatus')"
               @click.stop="toggleStatus(pullKey(p))"
@@ -572,13 +572,13 @@ function sevCls(n: number, level: 'h' | 'm' | 'l') {
           {{ cleaning === 'posted' ? $t('project.clean.cleaning') : $t('project.clean.cleanPosted') }}
         </button>
       </div>
-      <div class="grid grid-cols-[3.5rem_1fr_6rem_5rem_5rem_4.5rem_2rem] gap-x-4 px-1 pb-3 text-[10px] uppercase tracking-[0.15em] text-dimmed border-b border-inverted">
+      <div class="grid grid-cols-[3.5rem_1fr_6rem_5rem_5rem_6rem_2rem] gap-x-4 px-1 pb-3 text-[10px] uppercase tracking-[0.15em] text-dimmed border-b border-inverted">
         <span>PR</span><span>{{ $t('project.col.title') }}</span><span>{{ $t('project.col.author') }}</span><span>{{ $t('project.col.review') }}</span><span class="text-center">{{ $t('project.col.severity') }}</span><span class="text-center">PR</span><span></span>
       </div>
       <div
         v-for="r in pagedTasks"
         :key="r.id"
-        class="grid grid-cols-[3.5rem_1fr_6rem_5rem_5rem_4.5rem_2rem] gap-x-4 items-center px-1 py-4 border-b border-default text-sm group"
+        class="grid grid-cols-[3.5rem_1fr_6rem_5rem_5rem_6rem_2rem] gap-x-4 items-center px-1 py-4 border-b border-default text-sm group"
       >
         <button class="font-medium tabular-nums hover:underline underline-offset-4 text-left" @click="openDetail(r.prNumber, r.id)">#{{ r.prNumber }}</button>
         <button class="truncate text-toned text-left hover:text-highlighted" :title="r.title || ''" @click="openDetail(r.prNumber, r.id)">{{ r.title || '—' }}</button>
@@ -591,7 +591,7 @@ function sevCls(n: number, level: 'h' | 'm' | 'l') {
           <span :class="sevCls(r.counts.High, 'h')">{{ r.counts.High }}</span><span class="text-dimmed"> · </span><span :class="sevCls(r.counts.Medium, 'm')">{{ r.counts.Medium }}</span><span class="text-dimmed"> · </span><span :class="sevCls(r.counts.Low, 'l')">{{ r.counts.Low }}</span>
         </span>
         <span class="text-center">
-          <span class="text-[10px] uppercase tracking-wider px-2 py-0.5 border rounded-full" :class="prBadge(r).cls">{{ $t(prBadge(r).label) }}</span>
+          <span class="inline-block whitespace-nowrap text-[10px] uppercase tracking-wider px-2 py-0.5 border rounded-full" :class="prBadge(r).cls">{{ $t(prBadge(r).label) }}</span>
         </span>
         <div class="flex items-center gap-1 justify-end opacity-0 group-hover:opacity-100 transition-opacity">
           <button class="text-dimmed hover:text-highlighted" :class="{ 'opacity-100 animate-spin': refreshing === r.id }" :title="$t('project.refreshPrStatus')" @click="refreshTask(r)">↻</button>
