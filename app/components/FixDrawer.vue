@@ -20,11 +20,17 @@ type FixData = {
 }
 
 const data = ref<FixData | null>(null)
-const live = ref('')
+const live = ref('') // 仅用于「跑动中」状态行（SSE 进度文案）
 const logLines = ref<string[]>([])
 const showLog = ref(false)
 const busy = ref('')
 let es: EventSource | null = null
+
+// 操作的成功/失败统一弹 toast（之前 live 只在 running 时才渲染，静止态点 checkbox 报错完全看不到）
+const toast = useToast()
+function notify(msg: string, ok = false) {
+  toast.add({ title: msg, color: ok ? 'success' : 'error', icon: ok ? 'i-lucide-check' : 'i-lucide-triangle-alert' })
+}
 
 const RUNNING = ['queued', 'validating', 'fixing', 'pushing']
 const running = computed(() => RUNNING.includes(data.value?.fix?.status))
@@ -90,13 +96,14 @@ async function toggleFinding(f: FixFinding) {
     await $fetch(`/api/fix-findings/${f.id}`, { method: 'PATCH', body: { checked: f.checked } })
   } catch (e: any) {
     f.checked = prev // 服务端没改成 → 回滚本地，避免 checkedCount 和实际不一致
-    live.value = e?.data?.statusMessage || t('common.failed')
+    notify(e?.data?.statusMessage || t('common.failed'))
   }
 }
 function saveNote(f: FixFinding) {
   clearTimeout(saving.value[f.id])
-  saving.value[f.id] = setTimeout(() => {
-    $fetch(`/api/fix-findings/${f.id}`, { method: 'PATCH', body: { note: f.note || '' } })
+  saving.value[f.id] = setTimeout(async () => {
+    try { await $fetch(`/api/fix-findings/${f.id}`, { method: 'PATCH', body: { note: f.note || '' } }) }
+    catch (e: any) { notify(e?.data?.statusMessage || t('common.failed')) }
   }, 600)
 }
 
@@ -116,7 +123,7 @@ async function doRunFix() {
   confirming.value = ''
   busy.value = 'fix'; logLines.value = []; showLog.value = true
   try { await $fetch(`/api/fixes/${props.fixId}/run-fix`, { method: 'POST' }); await load() }
-  catch (e: any) { live.value = e?.data?.statusMessage || t('common.failed') }
+  catch (e: any) { notify(e?.data?.statusMessage || t('common.failed')) }
   finally { busy.value = '' }
 }
 
@@ -125,7 +132,7 @@ const diff = ref<string | null>(null)
 async function loadDiff() {
   busy.value = 'diff'
   try { diff.value = (await $fetch<{ diff: string }>(`/api/fixes/${props.fixId}/diff`)).diff || '' }
-  catch (e: any) { live.value = e?.data?.statusMessage || t('common.failed') }
+  catch (e: any) { notify(e?.data?.statusMessage || t('common.failed')) }
   finally { busy.value = '' }
 }
 // 切到「改动」tab 且还没拉过 diff → 自动加载
@@ -164,10 +171,11 @@ async function doPush() {
     const res = await $fetch<{ sha: string; replied: number; summaryPosted: boolean; leftoverCount: number; prUrl: string }>(`/api/fixes/${props.fixId}/push`, { method: 'POST' })
     const base = t('fix.pushed', { sha: res.sha, replied: res.replied })
     // 回复全失败（thread 被 resolve/删 + 总评也没发出）→ 明确告警，别让用户以为都回复了
-    live.value = res.leftoverCount && !res.summaryPosted ? `${base} ⚠ ${t('fix.replyFailed')}` : base
+    if (res.leftoverCount && !res.summaryPosted) notify(`${base} ⚠ ${t('fix.replyFailed')}`)
+    else notify(base, true)
     pushedUrl.value = res.prUrl || data.value?.prUrl || ''
     await load()
-  } catch (e: any) { live.value = e?.data?.statusMessage || t('fix.pushFailed') }
+  } catch (e: any) { notify(e?.data?.statusMessage || t('fix.pushFailed')) }
   finally { busy.value = '' }
 }
 
@@ -179,7 +187,7 @@ async function doDiscard() {
     open.value = false
     emit('changed')
   } catch (e: any) {
-    live.value = e?.data?.statusMessage || t('common.failed')
+    notify(e?.data?.statusMessage || t('common.failed'))
   } finally { busy.value = '' }
 }
 
@@ -219,12 +227,12 @@ async function sendChat() {
     await load() // 立刻拉出 user 轮 + streaming 占位轮；后续 SSE 'chat' 事件再刷新
   } catch (e: any) {
     chatInput.value = msg // 失败把输入还回去，别丢
-    live.value = e?.data?.statusMessage || t('common.failed')
+    notify(e?.data?.statusMessage || t('common.failed'))
   }
 }
 async function stopChat() {
   try { await $fetch(`/api/fixes/${props.fixId}/stop`, { method: 'POST' }); await load() }
-  catch (e: any) { live.value = e?.data?.statusMessage || t('common.failed') }
+  catch (e: any) { notify(e?.data?.statusMessage || t('common.failed')) }
 }
 // 合并 PR 的 base 分支解决冲突（Node 执行 git；冲突让用户在对话里指挥 agent 解决）
 async function mergeBase() {
@@ -232,15 +240,15 @@ async function mergeBase() {
   try {
     const res = await $fetch<{ merged: boolean; conflicts: string[]; baseRef: string }>(`/api/fixes/${props.fixId}/merge-base`, { method: 'POST' })
     if (res.merged) {
-      live.value = t('fix.mergeClean', { base: res.baseRef })
+      notify(t('fix.mergeClean', { base: res.baseRef }), true)
     } else {
       // 有冲突 → 切到对话，预填一条指令草稿（用户可补方向），让 agent 解决
-      live.value = t('fix.mergeConflicts', { base: res.baseRef, count: res.conflicts.length })
+      notify(t('fix.mergeConflicts', { base: res.baseRef, count: res.conflicts.length }))
       chatInput.value = t('fix.mergeChatDraft', { files: res.conflicts.join(', ') })
       activeTab.value = 'chat'
     }
     await load()
-  } catch (e: any) { live.value = e?.data?.statusMessage || t('common.failed') }
+  } catch (e: any) { notify(e?.data?.statusMessage || t('common.failed')) }
   finally { busy.value = '' }
 }
 
@@ -248,7 +256,7 @@ async function mergeBase() {
 async function copyWorktree() {
   const p = data.value?.fix?.worktreePath
   if (!p) return
-  try { await navigator.clipboard.writeText(p); live.value = t('fix.pathCopied') } catch { /* 忽略 */ }
+  try { await navigator.clipboard.writeText(p); notify(t('fix.pathCopied'), true) } catch { /* 忽略 */ }
 }
 </script>
 
