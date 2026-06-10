@@ -28,7 +28,7 @@ export default defineEventHandler(async (event) => {
     repo: project.repo, prNumber: review.prNumber, branch: review.branch,
     defaultBranch: project.defaultBranch, localPath: project.localPath,
     methodology: rc.methodology,
-    reposDir: cfg.reposDir as string, model: rc.model, effort: rc.effort,
+    reposDir: cfg.reposDir as string, model: rc.model, effort: rc.effort, lang: getCookie(event, 'mr-locale') || 'zh',
   })
   return { ok: true, status: 'recheck_requested' }
 })

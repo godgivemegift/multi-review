@@ -11,7 +11,8 @@ export function runClaude(
   const maxBuffer = opts.maxBuffer ?? 1024 * 1024 * 32
   const hasInput = typeof opts.input === 'string'
   return new Promise((resolve, reject) => {
-    const cp = spawn('claude', args, { stdio: [hasInput ? 'pipe' : 'ignore', 'pipe', 'pipe'] })
+    // production 构建里 PATH 可能没有 claude → 用统一的解析逻辑（见 claude-bin.ts）
+    const cp = spawn(resolveClaudeExecutable() ?? 'claude', args, { stdio: [hasInput ? 'pipe' : 'ignore', 'pipe', 'pipe'] })
     let out = ''
     let err = ''
     let done = false
@@ -66,6 +67,25 @@ export function runClaudeStream(
     }
     const timer = setTimeout(() => finish(() => { cp.kill('SIGKILL'); reject(new Error('claude 修复调用超时')) }), timeout)
 
+    const consume = (line: string) => {
+      if (!line) return
+      let msg: StreamMsg
+      try {
+        msg = JSON.parse(line)
+      } catch {
+        return // 非 JSON 行（极少）跳过
+      }
+      if (typeof msg?.session_id === 'string' && !sessionId) sessionId = msg.session_id
+      if (msg?.type === 'result') {
+        if (typeof msg.total_cost_usd === 'number') costUsd = msg.total_cost_usd
+        if (typeof msg.result === 'string') result = msg.result
+      }
+      try {
+        opts.onEvent?.(msg)
+      } catch {
+        /* 订阅者异常不影响主流程 */
+      }
+    }
     cp.stdout!.setEncoding('utf8')
     cp.stdout!.on('data', (d: string) => {
       buf += d
@@ -73,30 +93,15 @@ export function runClaudeStream(
       while ((nl = buf.indexOf('\n')) >= 0) {
         const line = buf.slice(0, nl).trim()
         buf = buf.slice(nl + 1)
-        if (!line) continue
-        let msg: StreamMsg
-        try {
-          msg = JSON.parse(line)
-        } catch {
-          continue // 非 JSON 行（极少）跳过
-        }
-        if (typeof msg?.session_id === 'string' && !sessionId) sessionId = msg.session_id
-        if (msg?.type === 'result') {
-          if (typeof msg.total_cost_usd === 'number') costUsd = msg.total_cost_usd
-          if (typeof msg.result === 'string') result = msg.result
-        }
-        try {
-          opts.onEvent?.(msg)
-        } catch {
-          /* 订阅者异常不影响主流程 */
-        }
+        consume(line)
       }
     })
     cp.stderr!.on('data', (d) => { err += d })
     cp.on('error', (e) => finish(() => reject(e)))
-    cp.on('close', (code) =>
-      finish(() => (code === 0 ? resolve({ costUsd, result, sessionId }) : reject(new Error(`claude 修复退出码 ${code}: ${err.slice(0, 500)}`)))),
-    )
+    cp.on('close', (code) => {
+      consume(buf.trim()) // 最后一行可能没有换行符（result 行丢了 cost/sessionId 就麻烦）
+      finish(() => (code === 0 ? resolve({ costUsd, result, sessionId }) : reject(new Error(`claude 修复退出码 ${code}: ${err.slice(0, 500)}`))))
+    })
     if (hasInput) {
       cp.stdin!.on('error', () => {})
       cp.stdin!.write(opts.input!)

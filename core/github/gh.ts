@@ -254,9 +254,10 @@ export type ReviewComment = {
 }
 
 // PR 的行级 review 评论（timeline 不含这些）。「修复」流程拿它做验证与回复锚点。
+// --paginate 多页时输出 "[...][...]"（非法 JSON）→ --slurp 包成页数组再 flat。
 export async function fetchReviewComments(repo: string, prNumber: number): Promise<ReviewComment[]> {
-  const out = await gh(['api', `repos/${repo}/pulls/${prNumber}/comments`, '--paginate'])
-  const arr = JSON.parse(out) as any[]
+  const out = await gh(['api', `repos/${repo}/pulls/${prNumber}/comments`, '--paginate', '--slurp'])
+  const arr = (JSON.parse(out) as any[][]).flat()
   return arr.map((c) => ({
     id: c.id,
     path: c.path ?? '',
@@ -269,7 +270,8 @@ export async function fetchReviewComments(repo: string, prNumber: number): Promi
   }))
 }
 
-// 当前登录用户（修复只允许 push 自己的 PR、「审核已更新」排除自己的评论）。会话内不变，缓存。
+// 当前登录用户（修复只允许 push 自己的 PR、「审核已更新」排除自己的评论）。
+// 进程级缓存：gh auth switch 后需重启服务才会刷新（push 门控依赖它，单用户本地工具可接受）。
 let _login: string | null = null
 export async function getCurrentUserLogin(): Promise<string> {
   if (_login) return _login
