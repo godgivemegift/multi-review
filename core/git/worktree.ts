@@ -62,6 +62,11 @@ export async function prepareWorktree(opts: {
   if (!localPath || !existsSync(localPath)) {
     throw new Error(`项目未配置有效的本地 clone 路径：${localPath || '(空)'}`)
   }
+  // Sans branche, `git rev-parse origin/${branch}` deviendrait `origin/` → erreur git illisible.
+  // On échoue tôt avec un message clair (l'appelant doit fournir/résoudre la branche en amont).
+  if (!branch) {
+    throw new Error('PR 分支为空，无法准备 worktree（PR 元数据缺失或分支已删除）')
+  }
   if (!existsSync(reposDir)) mkdirSync(reposDir, { recursive: true })
   const wtPath = resolve(reposDir, reviewId)
 

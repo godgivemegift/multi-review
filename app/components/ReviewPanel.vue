@@ -80,11 +80,13 @@ async function startReview() {
   } finally { busy.value = '' }
 }
 // 抽屉里弹模态会被 USlideover 的焦点陷阱挡住、点不动 → 改成就地两步确认，且不关抽屉，能边跑边看日志
-const confirming = ref<'' | 'rerun' | 'recheck'>('')
-async function rerun() {
+const confirming = ref<'' | 'rerun' | 'recheck' | 'fresh'>('')
+// fresh=true → audit complet à zéro (efface findings/notes, revue non guidée) ;
+// false → re-revue guidée qui conserve findings + notes.
+async function rerun(fresh = false) {
   confirming.value = ''
   busy.value = 'run'; logLines.value = []; showLog.value = true
-  try { await $fetch(`/api/reviews/${rid.value}/run`, { method: 'POST' }); await load() }
+  try { await $fetch(`/api/reviews/${rid.value}/run`, { method: 'POST', body: { fresh } }); await load() }
   catch (e: any) { live.value = e?.data?.statusMessage || t('review.triggerFailed') }
   finally { busy.value = '' }
 }
@@ -191,7 +193,7 @@ function skipReasonLabel(s: string) { const k = SKIP_REASON[s]; return k ? t(k) 
         <div class="flex items-center gap-3 text-xs">
           <template v-if="confirming === 'rerun'">
             <span class="text-dimmed">{{ $t('review.rerunConfirm') }}</span>
-            <button class="text-highlighted font-medium hover:underline disabled:opacity-40" :disabled="!!busy" @click="rerun">{{ $t('review.startRerun') }}</button>
+            <button class="text-highlighted font-medium hover:underline disabled:opacity-40" :disabled="!!busy" @click="rerun()">{{ $t('review.startRerun') }}</button>
             <button class="text-dimmed hover:text-highlighted" @click="confirming = ''">{{ $t('common.cancel') }}</button>
           </template>
           <template v-else-if="confirming === 'recheck'">
@@ -199,7 +201,14 @@ function skipReasonLabel(s: string) { const k = SKIP_REASON[s]; return k ? t(k) 
             <button class="text-highlighted font-medium hover:underline disabled:opacity-40" :disabled="!!busy" @click="recheck">{{ $t('review.startRecheck') }}</button>
             <button class="text-dimmed hover:text-highlighted" @click="confirming = ''">{{ $t('common.cancel') }}</button>
           </template>
+          <template v-else-if="confirming === 'fresh'">
+            <span class="text-dimmed">{{ $t('review.freshConfirm') }}</span>
+            <button class="text-highlighted font-medium hover:underline disabled:opacity-40" :disabled="!!busy" @click="rerun(true)">{{ $t('review.startFresh') }}</button>
+            <button class="text-dimmed hover:text-highlighted" @click="confirming = ''">{{ $t('common.cancel') }}</button>
+          </template>
           <template v-else>
+            <!-- Relance une revue complète à zéro (efface findings + notes) → confirmation in-place. Dispo en error/draft. -->
+            <button v-if="data.review.status === 'error' || data.review.status === 'draft'" class="bg-inverted text-inverted px-3 py-1 hover:bg-inverted/90 disabled:opacity-40" :disabled="running || !!busy" :title="$t('review.retryTitle')" @click="confirming = 'fresh'">{{ $t('review.retryBtn') }}</button>
             <button class="text-muted hover:text-highlighted disabled:opacity-40" :disabled="running || !!busy" :title="$t('review.rerunTitle')" @click="confirming = 'rerun'">{{ $t('review.rerunBtn') }}</button>
             <button class="hover:text-highlighted disabled:opacity-40" :class="data.review.authorUpdated ? 'text-highlighted font-medium' : 'text-muted'" :disabled="running || !!busy" :title="$t('review.recheckTitle')" @click="confirming = 'recheck'">{{ $t('review.recheckBtn') }}</button>
           </template>
