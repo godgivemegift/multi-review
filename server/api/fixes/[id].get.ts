@@ -28,12 +28,23 @@ export default defineEventHandler(async (event) => {
     .orderBy(asc(schema.fixEvents.ts))
     .all()
   const me = await getCurrentUserLogin().catch(() => '')
+  // 有可回复内容：已修（fixed 且勾选）或 验证判不修（未勾且不建议修）
+  const canReply = (findings as any[]).some(
+    (f) => (f.checked && f.fixStatus === 'fixed') || (!f.checked && !f.suggestFix),
+  )
+  // 有本地 commit 还没 push（上传按钮的显示条件）
+  const hasUnpushed = !!fix.fixHeadSha && fix.fixHeadSha !== fix.lastPushSha
+  const prUrl = project ? `https://github.com/${project.repo}/pull/${fix.prNumber}` : null
   return {
-    fix, // 含 worktreePath，前端展示「在编辑器打开」用
+    fix, // 含 worktreePath / baseRef / lastPushSha / lastActionKind
     findings: findings.map((f: any) => ({ ...f, sourceCommentIds: JSON.parse(f.sourceCommentIds || '[]') })),
     turns,
     events,
     canPush: !!fix.prAuthor && !!me && fix.prAuthor === me,
-    prUrl: project ? `https://github.com/${project.repo}/pull/${fix.prNumber}` : null,
+    hasUnpushed,
+    canReply,
+    prUrl,
+    // 「最近一次我的动作」入口：上传→看那次 commit；回复→看 PR 评论
+    commitUrl: project && fix.lastPushSha ? `https://github.com/${project.repo}/pull/${fix.prNumber}/commits/${fix.lastPushSha}` : null,
   }
 })

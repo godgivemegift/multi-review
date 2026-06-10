@@ -46,6 +46,7 @@ export default defineEventHandler(async (event) => {
     projectId,
     prNumber,
     branch: meta.branch,
+    baseRef: meta.baseBranch || project.defaultBranch || null, // PR 目标分支，diff 三点 + merge 用
     prAuthor: meta.author || null,
     title: meta.title || null,
     instruction: instruction?.trim() || null,

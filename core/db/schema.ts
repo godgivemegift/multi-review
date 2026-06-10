@@ -172,8 +172,11 @@ export const fixes = sqliteTable('fixes', {
   stage: text('stage'), // 当前细粒度阶段文案（实时展示）
   summary: text('summary'), // 验证阶段的整体结论
   worktreePath: text('worktree_path'),
+  baseRef: text('base_ref'), // PR 的目标分支名（diff 三点基线 origin/<baseRef>...HEAD + merge 用）
   baseHeadSha: text('base_head_sha'), // 改动前的 PR head（diff 基线）
   fixHeadSha: text('fix_head_sha'), // 本地 commit 后的 head
+  lastPushSha: text('last_push_sha'), // 最近成功 push 上去的 commit；和 fixHeadSha 不等 = 有未上传改动
+  lastActionKind: text('last_action_kind', { enum: ['pushed', 'replied'] }), // 最近一次对外动作 → 决定「查看改动/评论」入口
   filesChanged: integer('files_changed'),
   additions: integer('additions'),
   deletions: integer('deletions'),

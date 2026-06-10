@@ -41,11 +41,13 @@ export default defineEventHandler(async (event) => {
     d.update(schema.fixes).set({ status: status as any, updatedAt: now(), ...extra }).where(eq(schema.fixes.id, id)).run()
 
   try {
-    // PR 的目标分支（开在哪个分支就 merge 哪个）；拿不到就退回项目默认分支
+    // PR 的目标分支（开在哪个分支就 merge 哪个）；优先用建任务时存的 baseRef，回退实时查 / 默认分支
     const meta = await fetchPrMeta(project.repo, fix.prNumber).catch(() => null)
-    const baseRef = meta?.baseBranch || project.defaultBranch
+    const baseRef = fix.baseRef || meta?.baseBranch || project.defaultBranch
     if (!baseRef || !SAFE_REF.test(baseRef)) { restore(prevStatus); throw createError({ statusCode: 400, statusMessage: `基础分支不合法: ${baseRef || '(空)'}` }) }
+    if (baseRef !== fix.baseRef) d.update(schema.fixes).set({ baseRef }).where(eq(schema.fixes.id, id)).run() // 回填
 
+    // fetch 最新 base 再 merge（= 切回基础分支 pull 最新再合）
     await git(['fetch', 'origin', baseRef])
     try {
       await git(['merge', '--no-edit', `origin/${baseRef}`])

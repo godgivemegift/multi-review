@@ -36,6 +36,9 @@ function ensureColumns(sqlite: Database.Database) {
     ['reviews', 'preview_sig', 'TEXT'],
     ['reviews', 'author_updated', 'INTEGER NOT NULL DEFAULT 0'],
     ['reviews', 'review_decision', 'TEXT'],
+    ['fixes', 'base_ref', 'TEXT'],
+    ['fixes', 'last_push_sha', 'TEXT'],
+    ['fixes', 'last_action_kind', 'TEXT'],
   ]
   for (const [table, col, type] of adds) {
     const cols = sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
@@ -43,6 +46,11 @@ function ensureColumns(sqlite: Database.Database) {
       sqlite.exec(`ALTER TABLE ${table} ADD COLUMN ${col} ${type}`)
     }
   }
+  // 已存在的 pushed 任务：回填 last_push_sha = fix_head_sha（视作已上传，避免重构后误显示「上传改动」）
+  try {
+    sqlite.exec(`UPDATE fixes SET last_push_sha = fix_head_sha, last_action_kind = 'pushed'
+                 WHERE pushed_at IS NOT NULL AND last_push_sha IS NULL AND fix_head_sha IS NOT NULL`)
+  } catch { /* 老库无相关列时忽略 */ }
 }
 
 function ensureSchema(sqlite: Database.Database) {
@@ -163,8 +171,11 @@ function ensureSchema(sqlite: Database.Database) {
       stage TEXT,
       summary TEXT,
       worktree_path TEXT,
+      base_ref TEXT,
       base_head_sha TEXT,
       fix_head_sha TEXT,
+      last_push_sha TEXT,
+      last_action_kind TEXT,
       files_changed INTEGER,
       additions INTEGER,
       deletions INTEGER,

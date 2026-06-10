@@ -16,7 +16,10 @@ type FixData = {
   turns: FixTurn[]
   events: { ts: string; kind: string; message: string | null }[]
   canPush: boolean
+  hasUnpushed: boolean // 有本地 commit 没 push → 显示「上传改动」
+  canReply: boolean // 有可回复内容 → 显示「回复作者」
   prUrl: string | null
+  commitUrl: string | null // 最近 push 的 commit 链接（查看改动入口）
 }
 
 const data = ref<FixData | null>(null)
@@ -111,8 +114,7 @@ const checkedCount = computed(() => data.value?.findings.filter((f) => f.checked
 
 // 就地两步确认（USlideover 的 focus trap 会挡住全局 dialog，点不动 → 不用 useConfirm，
 // 改成抽屉内联确认，和 ReviewPanel 一致）
-const confirming = ref<'' | 'push' | 'discard' | 'runfix'>('')
-const pushedUrl = ref('') // 上传成功后给个「查看评论」入口
+const confirming = ref<'' | 'push' | 'reply' | 'discard' | 'runfix'>('')
 
 function runFix() {
   // 重跑修复会 reset --hard 回 PR 原始 head，丢掉对话里改的东西 → 有对话就先就地确认
@@ -140,42 +142,27 @@ watch(activeTab, (tab) => {
   if (tab === 'changes' && diff.value === null && !running.value) loadDiff()
 })
 
-// 自动决策：有可回复的（已修 / 验证不修）就回复作者；没有（纯解冲突等）就只 push
-const replyCounts = computed(() => {
-  const d = data.value
-  if (!d) return { fixed: 0, wontfix: 0 }
-  return {
-    fixed: d.findings.filter((f) => f.checked && f.fixStatus === 'fixed').length,
-    wontfix: d.findings.filter((f) => !f.checked && !f.suggestFix).length,
-  }
-})
-const willReply = computed(() => replyCounts.value.fixed + replyCounts.value.wontfix > 0)
-const pushConfirmMsg = computed(() => {
-  const d = data.value
-  if (!d) return ''
-  const files = d.fix.filesChanged ?? 0
-  return willReply.value
-    ? t('fix.pushConfirm', { files, branch: d.fix.branch, fixed: replyCounts.value.fixed, wontfix: replyCounts.value.wontfix })
-    : t('fix.pushConfirmNoReply', { files, branch: d.fix.branch })
-})
-// 上传按钮文案随情况变：纯 push / 上传并回复 / 再次上传
-const pushBtnLabel = computed(() => {
-  if (data.value?.fix.status === 'pushed') return t('fix.pushAgain')
-  return willReply.value ? t('fix.pushBtn') : t('fix.pushOnly')
-})
+// 上传（只 push）/ 回复作者（只回复）彻底分开，各自独立按钮 + 就地确认（确认文案在 FixActionBar 里）。
 async function doPush() {
   confirming.value = ''
   busy.value = 'push'
   try {
-    // 不传 reply：后端按有无可回复项自动决策（items 为空就不回复）
-    const res = await $fetch<{ sha: string; replied: number; summaryPosted: boolean; leftoverCount: number; prUrl: string }>(`/api/fixes/${props.fixId}/push`, { method: 'POST' })
-    const base = t('fix.pushed', { sha: res.sha, replied: res.replied })
-    // 回复全失败（thread 被 resolve/删 + 总评也没发出）→ 明确告警，别让用户以为都回复了
-    if (res.leftoverCount && !res.summaryPosted) notify(`${base} ⚠ ${t('fix.replyFailed')}`)
-    else notify(base, true)
-    pushedUrl.value = res.prUrl || data.value?.prUrl || ''
+    const res = await $fetch<{ sha: string }>(`/api/fixes/${props.fixId}/push`, { method: 'POST' })
+    notify(t('fix.pushedOnly', { sha: res.sha }), true)
     await load()
   } catch (e: any) { notify(e?.data?.statusMessage || t('fix.pushFailed')) }
+  finally { busy.value = '' }
+}
+async function doReply() {
+  confirming.value = ''
+  busy.value = 'reply'
+  try {
+    const res = await $fetch<{ replied: number; summaryPosted: boolean; leftoverCount: number }>(`/api/fixes/${props.fixId}/reply`, { method: 'POST' })
+    const base = t('fix.replied', { replied: res.replied })
+    if (res.leftoverCount && !res.summaryPosted) notify(`${base} ⚠ ${t('fix.replyFailed')}`)
+    else notify(base, true)
+    await load()
+  } catch (e: any) { notify(e?.data?.statusMessage || t('common.failed')) }
   finally { busy.value = '' }
 }
 
@@ -375,51 +362,24 @@ async function copyWorktree() {
                 <button class="text-error font-medium hover:underline disabled:opacity-40" :disabled="!!busy" @click="doRunFix">{{ $t('fix.runFixOk') }}</button>
                 <button class="text-dimmed hover:text-highlighted" @click="confirming = ''">{{ $t('common.cancel') }}</button>
               </div>
-              <!-- 上传的就地确认（列明将发生什么）-->
-              <div v-else-if="confirming === 'push'" class="flex items-center gap-3 text-xs">
-                <span class="text-dimmed min-w-0 flex-1">{{ pushConfirmMsg }}</span>
-                <button class="text-highlighted font-medium hover:underline disabled:opacity-40 shrink-0" :disabled="!!busy" @click="doPush">{{ $t('fix.pushOk') }}</button>
-                <button class="text-dimmed hover:text-highlighted shrink-0" @click="confirming = ''">{{ $t('common.cancel') }}</button>
-              </div>
-              <!-- 正常工具条 -->
-              <div v-else class="flex items-center gap-3">
-                <button
-                  class="text-sm border border-accented px-4 py-1.5 hover:bg-muted disabled:opacity-40"
-                  :disabled="!checkedCount || running || !!busy || ['pushed', 'merging', 'conflict'].includes(data.fix.status)"
-                  :title="data.fix.status === 'pushed' ? $t('fix.runFixAfterPushHint') : ''"
-                  @click="runFix"
-                >
-                  {{ busy === 'fix' ? $t('fix.fixing') : $t('fix.runFix', { count: checkedCount }) }}
-                </button>
-                <button
-                  v-if="(data.fix.filesChanged ?? 0) > 0"
-                  class="text-sm text-dimmed hover:text-highlighted disabled:opacity-40"
-                  @click="activeTab = 'changes'"
-                >
-                  {{ $t('fix.viewDiff') }}
-                </button>
-                <button
-                  v-if="data.fix.worktreePath"
-                  class="text-sm text-dimmed hover:text-highlighted disabled:opacity-40"
-                  :disabled="running || chatting || !!busy || ['merging', 'conflict'].includes(data.fix.status)"
-                  :title="$t('fix.mergeBaseTitle')"
-                  @click="mergeBase"
-                >
-                  {{ busy === 'merge' ? $t('fix.merging') : $t('fix.mergeBase') }}
-                </button>
-                <a v-if="pushedUrl" :href="pushedUrl" target="_blank" class="text-sm text-highlighted hover:underline">{{ $t('fix.viewOnGithub') }} ↗</a>
-                <div class="ml-auto flex items-center gap-2">
-                  <span v-if="['ready', 'pushed'].includes(data.fix.status) && !data.canPush" class="text-[10px] text-dimmed">{{ $t('fix.pushOthersHint') }}</span>
+              <!-- 共享动作条：合并基础分支 / 回复作者 / 查看入口 / 上传改动；findings 额外有「跑修复」 -->
+              <FixActionBar
+                v-else
+                v-model:confirming="confirming"
+                :data="data" :busy="busy" :running="running" :chatting="chatting"
+                @push="doPush" @reply="doReply" @merge="mergeBase"
+              >
+                <template #lead>
                   <button
-                    v-if="data.fix.status === 'ready' || data.fix.status === 'pushed'"
-                    class="text-sm bg-inverted text-inverted px-4 py-1.5 hover:bg-inverted/90 disabled:opacity-40"
-                    :disabled="running || !!busy || !data.canPush || (data.fix.filesChanged ?? 0) === 0"
-                    @click="confirming = 'push'"
+                    class="text-sm border border-accented px-4 py-1.5 hover:bg-muted disabled:opacity-40"
+                    :disabled="!checkedCount || running || !!busy || ['pushed', 'merging', 'conflict'].includes(data.fix.status)"
+                    :title="data.fix.status === 'pushed' ? $t('fix.runFixAfterPushHint') : ''"
+                    @click="runFix"
                   >
-                    {{ busy === 'push' ? $t('fix.pushing') : pushBtnLabel }}
+                    {{ busy === 'fix' ? $t('fix.fixing') : $t('fix.runFix', { count: checkedCount }) }}
                   </button>
-                </div>
-              </div>
+                </template>
+              </FixActionBar>
             </section>
           </template>
 
@@ -460,26 +420,23 @@ async function copyWorktree() {
               </div>
             </div>
 
-            <!-- 输入区：4 行文本框；按钮全在右边，[再次上传][发送] 等宽 -->
+            <!-- 输入区：4 行文本框；下方共享动作条，最右边是 chat 专属的发送/停止 -->
             <div v-if="['ready', 'error', 'pushed', 'conflict'].includes(data.fix.status)" class="sticky bottom-0 bg-default pt-2 pb-1">
               <textarea
                 v-model="chatInput" rows="4" :placeholder="$t('fix.chatPlaceholder')" :disabled="chatting"
                 class="w-full text-sm bg-muted border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-accented disabled:opacity-50"
               />
-              <div class="flex items-center gap-2 mt-2">
-                <span v-if="['ready', 'pushed'].includes(data.fix.status) && !data.canPush" class="text-[10px] text-dimmed">{{ $t('fix.pushOthersHint') }}</span>
-                <div class="ml-auto flex items-center gap-2">
-                  <button
-                    v-if="['ready', 'pushed'].includes(data.fix.status)"
-                    class="w-28 text-sm border border-accented py-2 hover:bg-muted disabled:opacity-40"
-                    :disabled="running || chatting || !!busy || !data.canPush || (data.fix.filesChanged ?? 0) === 0"
-                    @click="confirming = 'push'; activeTab = 'findings'"
-                  >
-                    {{ busy === 'push' ? $t('fix.pushing') : pushBtnLabel }}
-                  </button>
-                  <button v-if="chatting" class="w-28 text-sm border border-accented py-2 hover:bg-muted" @click="stopChat">{{ $t('fix.stop') }}</button>
-                  <button v-else class="w-28 text-sm bg-inverted text-inverted py-2 hover:bg-inverted/90 disabled:opacity-40" :disabled="!chatInput.trim() || !!busy" @click="sendChat">{{ $t('fix.send') }}</button>
-                </div>
+              <div class="mt-2">
+                <FixActionBar
+                  v-model:confirming="confirming"
+                  :data="data" :busy="busy" :running="running" :chatting="chatting"
+                  @push="doPush" @reply="doReply" @merge="mergeBase"
+                >
+                  <template #trail>
+                    <button v-if="chatting" class="w-24 text-sm border border-accented py-1.5 hover:bg-muted" @click="stopChat">{{ $t('fix.stop') }}</button>
+                    <button v-else class="w-24 text-sm bg-inverted text-inverted py-1.5 hover:bg-inverted/90 disabled:opacity-40" :disabled="!chatInput.trim() || !!busy" @click="sendChat">{{ $t('fix.send') }}</button>
+                  </template>
+                </FixActionBar>
               </div>
             </div>
           </template>
