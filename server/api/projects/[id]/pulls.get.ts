@@ -31,10 +31,27 @@ export default defineEventHandler(async (event) => {
     .all()
   const taskByPr = new Map(tasks.map((t) => [t.prNumber, t]))
 
+  // 修复任务：每个 PR 取最新一个未废弃的（tags 显示「修复中/待上传」用）
+  const fixRows = d
+    .select({ id: schema.fixes.id, prNumber: schema.fixes.prNumber, status: schema.fixes.status, createdAt: schema.fixes.createdAt })
+    .from(schema.fixes)
+    .where(eq(schema.fixes.projectId, id))
+    .all()
+  const fixByPr = new Map<number, { id: string; status: string }>()
+  for (const f of fixRows.sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
+    if (f.status === 'discarded') continue
+    fixByPr.set(f.prNumber, { id: f.id, status: f.status }) // 后写覆盖 → 留下最新
+  }
+
   return {
     pulls: page.pulls.map((p) => {
       const task = taskByPr.get(p.number)
-      return { ...p, hasTask: !!task, taskId: task?.id ?? null, taskStatus: task?.status ?? null }
+      const fix = fixByPr.get(p.number)
+      return {
+        ...p,
+        hasTask: !!task, taskId: task?.id ?? null, taskStatus: task?.status ?? null,
+        fixId: fix?.id ?? null, fixStatus: fix?.status ?? null,
+      }
     }),
     totalCount: page.totalCount,
     hasNextPage: page.hasNextPage,

@@ -2,6 +2,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
 import { withContract, reviewCanUseTool, ISOLATED } from './guard'
 import { salvageJson } from './jsonSalvage'
+import { outputLangClause } from './lang'
 
 export const RecheckSchema = z.object({
   rechecks: z
@@ -45,6 +46,7 @@ export async function runRecheckAgent(opts: {
   methodology: string
   model: string
   effort?: string
+  lang?: string
   onTool?: (name: string, info: string) => void
 }): Promise<{ result: RecheckResult; costUsd: number }> {
   const baseline = opts.lastPostSha
@@ -79,13 +81,14 @@ ${JSON.stringify(opts.findings.map((f) => ({ fid: f.fid, title: f.title, locatio
 
 最后**只输出 JSON**（无代码围栏）：
 {
-  "rechecks": [ { "fid": "F1", "status": "fixed", "text": "中文说明，引用具体 commit/行" } ],
+  "rechecks": [ { "fid": "F1", "status": "fixed", "text": "说明，引用具体 commit/行" } ],
   "newFindings": [ { "severity": "High|Medium|Low", "title": "一句话标题", "location": "path:line",
     "problem": "为什么是问题", "detail": "详情", "fix": "修复方向", "text": "在哪个 commit/行引入" } ],
   "conclusion": "复审后的整体结论：还剩哪些 blocking、现在能不能合"
 }
 
-⚠️ 严格合法 JSON：text/problem 等字段里**绝不要未转义的英文双引号 \`"\`**，引用一律用中文「」或反引号 \`。`
+${outputLangClause(opts.lang || 'zh')}
+⚠️ 严格合法 JSON：text/problem 等字段里**绝不要未转义的英文双引号 \`"\`**，引用一律用「」或反引号 \`。`
 
   const stream = query({
     prompt,

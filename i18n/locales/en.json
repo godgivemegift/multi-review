@@ -60,20 +60,34 @@
       "approved": "Approved",
       "changes": "Changes requested",
       "unknown": "—"
+    },
+    "fix": {
+      "queued": "Queued",
+      "validating": "Validating",
+      "awaiting": "Awaiting selection",
+      "fixing": "Fixing",
+      "ready": "Ready to push",
+      "pushing": "Pushing",
+      "pushed": "Pushed",
+      "error": "Error",
+      "discarded": "Discarded"
     }
   },
   "project": {
     "tabs": {
       "pulls": "All PRs",
       "tasks": "Review tasks",
-      "config": "Configuration"
+      "config": "Configuration",
+      "fixes": "Fix PRs"
     },
     "col": {
       "title": "Title",
       "author": "Author",
       "status": "Status",
       "review": "Review",
-      "severity": "Severity"
+      "severity": "Severity",
+      "fix": "Fix",
+      "findings": "Items"
     },
     "selectAllReviewable": "Select all reviewable",
     "reviewSelected": "Review selected ({count})",
@@ -116,11 +130,25 @@
       "tasksCreated": "{count} review task(s) created",
       "refreshFailed": "Refresh failed",
       "refreshedStates": "Refreshed GitHub state of {count} task(s)",
-      "noStatesToRefresh": "No tasks to refresh"
+      "noStatesToRefresh": "No tasks to refresh",
+      "fixesCreated": "Created {count} fix task(s)"
     },
     "refreshAll": "Refresh all",
     "refreshAllTitle": "Refresh GitHub state of all tasks (approved / merged / author updated)",
-    "refreshingAll": "Refreshing…"
+    "refreshingAll": "Refreshing…",
+    "tag": {
+      "reviewing": "reviewing",
+      "reviewed": "reviewed",
+      "fixing": "fixing",
+      "fixAwaiting": "to select",
+      "fixReady": "to push"
+    },
+    "selectAll": "Select all",
+    "noneReviewable": "All selected PRs already have a review task",
+    "noneFixable": "All selected PRs already have an active fix task",
+    "fixSelected": "Fix selected ({count})",
+    "noFixes": "No fix tasks yet. Pick PRs in \"All PRs\" and click \"Fix selected\".",
+    "fixCountsTitle": "checked / total items · fixed"
   },
   "prDrawer": {
     "loadFailed": "Load failed",
@@ -322,5 +350,38 @@
       "repliedNoNote": "reply only · no response note",
       "retracted": "retracted"
     }
+  },
+  "fix": {
+    "modalTitle": "Fix {count} PR(s)",
+    "modalHint": "Validates comments with the built-in instruction by default. Add targeted guidance below (optional).",
+    "instructionPlaceholder": "e.g. only security-related comments; I disagree with this one, double-check…",
+    "start": "Start validation",
+    "creating": "Creating…",
+    "discard": "Discard",
+    "discardTitle": "Discard fix task",
+    "discardConfirm": "Discard this fix task? (clears the local worktree, GitHub untouched)",
+    "working": "Working…",
+    "logLines": "Run log ({count} lines)",
+    "summary": "Validation summary",
+    "validating": "Validating: checking each comment…",
+    "noFindings": "No actionable comments.",
+    "findings": "Items ({count})",
+    "suggestFix": "suggest fix",
+    "verdictTag": "verdict",
+    "notePlaceholder": "Fix instruction (for the AI: how to fix this / extra context). Used when you run the fix.",
+    "runFix": "Run fix ({count})",
+    "fixing": "Fixing…",
+    "viewDiff": "View diff",
+    "noDiff": "(no changes)",
+    "pushBtn": "Push fix & reply to author",
+    "pushing": "Pushing…",
+    "pushedBadge": "Pushed",
+    "pushOthersHint": "Can only push your own PR",
+    "pushTitle": "Push fix & reply to author",
+    "pushOk": "Confirm push",
+    "pushConfirm": "Will push changes across {files} file(s) to {branch}; and reply to the author: {fixed} fixed, {wontfix} explained as won't-fix.",
+    "pushed": "Pushed {sha} · {replied} replies",
+    "pushFailed": "Push failed",
+    "replyFailed": "Some replies couldn't be posted (threads may be resolved/deleted)"
   }
 }

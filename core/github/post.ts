@@ -96,7 +96,7 @@ async function translate(
 
   if (globalNotes.trim()) {
     tasks.push(
-      claudePrint(model, `Translate this Chinese PR-review preface into concise professional English. Output ONLY the English text, no preamble:\n\n${globalNotes}`)
+      claudePrint(model, `Translate this PR-review preface (any source language) into concise professional English. Output ONLY the English text, no preamble:\n\n${globalNotes}`)
         .then((t) => { globalNotesEn = t }),
     )
   }
@@ -114,7 +114,7 @@ async function translate(
     const hasNote = !!(f.notes && f.notes.trim())
     // note = 审核员对这条"怎么写评论"的指令（调语气/取舍内容/补充上下文/降级措辞…），融进评论，不原样贴出
     const noteClause = hasNote
-      ? `\n\nThe reviewer left a NOTE on this finding. Treat it as an INSTRUCTION for how to write/adjust THIS comment — e.g. soften or sharpen tone, add or drop detail, add context, downgrade/reframe, merge wording. Follow it and weave its intent into the comment. **Do NOT output the note text verbatim, and do NOT add a separate "Reviewer note" line** — it is guidance for you, not text for the PR author.\nReviewer note (Chinese): ${f.notes}`
+      ? `\n\nThe reviewer left a NOTE on this finding. Treat it as an INSTRUCTION for how to write/adjust THIS comment — e.g. soften or sharpen tone, add or drop detail, add context, downgrade/reframe, merge wording. Follow it and weave its intent into the comment. **Do NOT output the note text verbatim, and do NOT add a separate "Reviewer note" line** — it is guidance for you, not text for the PR author.\nReviewer note (source language): ${f.notes}`
       : ''
     const verdict = f.recheck?.text || '' // 最新一轮复审结论（作者改了没 / 回应了啥）
 
@@ -122,29 +122,29 @@ async function translate(
     if (plan.action === 'fixed') {
       // 已确认修复：一句话进 summary 的「Confirmed fixed」清单（纯文本，无标题/无围栏）
       prompt = `The author CONFIRMED-FIXED this PR-review finding. Write ONE short professional English sentence acknowledging it's resolved, naming the topic so the author knows which finding. Plain text only — no markdown heading, no bullet, no code fence.
-FINDING TITLE (Chinese): ${f.title}
-RE-REVIEW NOTE (Chinese): ${verdict}`
+FINDING TITLE (source language): ${f.title}
+RE-REVIEW NOTE (source language): ${verdict}`
     } else if (plan.kind === 'partial') {
       // 部分修复 / 改得不对：只说还差什么
       prompt = `Write ONE finding of a GitHub PR review as professional English markdown. This finding was RE-REVIEWED: the author's latest changes only PARTIALLY addressed it (or addressed it incorrectly). Focus the comment on WHAT IS STILL MISSING OR WRONG — briefly acknowledge what was done, then state precisely what remains. Do NOT restate the whole original finding.
 Output ONLY the markdown body — a bold line "**[<severity>] <title>**", then the remaining problem, then a fix section. Keep file paths, line numbers, identifiers and any code fences UNCHANGED.${noteClause}
 
-RE-REVIEW VERDICT (Chinese): ${verdict}
-ORIGINAL FINDING (Chinese): ${JSON.stringify(one)}`
+RE-REVIEW VERDICT (source language): ${verdict}
+ORIGINAL FINDING (source language): ${JSON.stringify(one)}`
     } else if (plan.kind === 'reply') {
       // 作者回过、代码没改：发针对作者回应的再回应（note 是审核员要回的话，不是"怎么写评论"的指令）
       prompt = `Write ONE GitHub PR-review comment as professional English markdown. Context: you previously raised the finding below; the author REPLIED in the PR but did NOT change the code. Respond to the author's reply and move the discussion forward — concede, push back with reasoning, or ask for clarification — per the reviewer's response. Do NOT just restate the original finding.
 Output ONLY the markdown body (you may open with a bold "**[<severity>] <title>**" line). Keep file paths, line numbers, identifiers and any code fences UNCHANGED.
 
-AUTHOR'S REPLY / RE-REVIEW VERDICT (Chinese): ${verdict}
-REVIEWER'S RESPONSE TO THE AUTHOR (Chinese — weave its intent into the comment, do NOT quote verbatim): ${f.notes}
-ORIGINAL FINDING for context (Chinese): ${JSON.stringify(one)}`
+AUTHOR'S REPLY / RE-REVIEW VERDICT (source language): ${verdict}
+REVIEWER'S RESPONSE TO THE AUTHOR (source language — weave its intent into the comment, do NOT quote verbatim): ${f.notes}
+ORIGINAL FINDING for context (source language): ${JSON.stringify(one)}`
     } else {
       // normal：翻译原 finding（原逻辑）
       prompt = `Write ONE finding of a GitHub PR review as professional English markdown. Output ONLY the markdown body — no preamble, no outer code fences.
-Format: a bold line "**[<severity>] <title>**", then the problem, then detail (keep any lists), then a fix section. If "preexisting" is true, note "(pre-existing, not introduced by this PR)". Keep file paths, line numbers, identifiers and any code fences UNCHANGED. Translate the Chinese content to English.${noteClause}
+Format: a bold line "**[<severity>] <title>**", then the problem, then detail (keep any lists), then a fix section. If "preexisting" is true, note "(pre-existing, not introduced by this PR)". Keep file paths, line numbers, identifiers and any code fences UNCHANGED. Translate the content to professional English (source may be any language).${noteClause}
 
-FINDING (Chinese):
+FINDING (source language):
 ${JSON.stringify(one)}`
     }
     tasks.push(claudePrint(model, prompt).then((t) => { bodies[f.fid] = strip(t) }))
@@ -182,8 +182,10 @@ export async function assembleReview(opts: {
     if (plan.action === 'skip') { skipped.push({ fid: f.fid, title: f.title, reason: plan.reason }); continue }
     if (plan.action === 'fixed') { confirmedFixed.push(bodies[f.fid] || f.title); continue }
     const loc = parseLoc(f.location)
+    // 不可见元数据标记：GitHub 渲染时看不见，但「修复 PR」验证阶段能据此无损还原结构化 finding（#16）
+    const marker = `<!-- mr:fid=${f.fid} sev=${f.severity} -->\n`
     if (loc && right.get(loc.path)?.has(loc.line)) {
-      comments.push({ path: loc.path, line: loc.line, side: 'RIGHT', body: bodies[f.fid] || f.title })
+      comments.push({ path: loc.path, line: loc.line, side: 'RIGHT', body: marker + (bodies[f.fid] || f.title) })
     } else {
       summaryFindings.push(f)
     }
@@ -194,7 +196,7 @@ export async function assembleReview(opts: {
   if (summaryFindings.length) {
     body += `### Additional findings (not tied to changed lines)\n\n`
     for (const f of summaryFindings) {
-      body += `${bodies[f.fid] || f.title}\n\n`
+      body += `<!-- mr:fid=${f.fid} sev=${f.severity} -->\n${bodies[f.fid] || f.title}\n\n`
       if (f.location) body += `\`${f.location}\`\n\n`
       body += `---\n\n`
     }
@@ -223,8 +225,8 @@ export async function postReview(opts: {
   // 自愈：先清掉本人残留的 PENDING review（GitHub 只允许每人每 PR 一个 pending，残留会让新 review 422）。
   // GET 返回里能看到的 PENDING 一定是自己的（别人的 pending 不可见），直接删。
   try {
-    const { stdout } = await pexec('gh', ['api', `repos/${repo}/pulls/${prNumber}/reviews`, '--paginate'], { maxBuffer: 1024 * 1024 * 16 })
-    for (const r of JSON.parse(stdout) as any[]) {
+    const { stdout } = await pexec('gh', ['api', `repos/${repo}/pulls/${prNumber}/reviews`, '--paginate', '--slurp'], { maxBuffer: 1024 * 1024 * 16 })
+    for (const r of (JSON.parse(stdout) as any[][]).flat()) {
       if (r.state === 'PENDING') {
         await pexec('gh', ['api', `repos/${repo}/pulls/${prNumber}/reviews/${r.id}`, '--method', 'DELETE']).catch(() => {})
       }

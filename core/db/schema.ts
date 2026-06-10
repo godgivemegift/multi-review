@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer } from 'drizzle-orm/sqlite-core'
+import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core'
 
 // 项目：一个 repo + 一套方法学（review 模板）
 export const projects = sqliteTable('projects', {
@@ -148,6 +148,65 @@ export const events = sqliteTable('events', {
   message: text('message'),
 })
 
+// 一次「修复 PR」任务（见 issue #16）。两阶段：
+//   ① 验证（只读）：拉评论 → 归一化成 fix_findings + verdict → status=awaiting 等用户勾选
+//   ② 修复（写）：只修勾选条目 → 本地 commit（不 push）→ status=ready
+// push + 回复作者永远手动（确认弹窗）。worktree 保留到 push/discard。
+export const fixes = sqliteTable('fixes', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  prNumber: integer('pr_number').notNull(),
+  branch: text('branch').notNull(),
+  prAuthor: text('pr_author'), // PR 作者；push 只允许 == 当前 gh 用户（#16 决策 A）
+  title: text('title'),
+  instruction: text('instruction'), // 建任务时 prompt 框里的针对性指示（可空 = 用系统默认）
+  lang: text('lang').notNull().default('en'), // 工作语言 = 建任务时的 UI locale（verdict/反馈用它写）
+  status: text('status', {
+    enum: ['queued', 'validating', 'awaiting', 'fixing', 'ready', 'pushing', 'pushed', 'error', 'discarded'],
+  })
+    .notNull()
+    .default('queued'),
+  stage: text('stage'), // 当前细粒度阶段文案（实时展示）
+  summary: text('summary'), // 验证阶段的整体结论
+  worktreePath: text('worktree_path'),
+  baseHeadSha: text('base_head_sha'), // 改动前的 PR head（diff 基线）
+  fixHeadSha: text('fix_head_sha'), // 本地 commit 后的 head
+  filesChanged: integer('files_changed'),
+  additions: integer('additions'),
+  deletions: integer('deletions'),
+  sessionId: text('session_id'), // claude stream-json 的会话 id（后续 --resume 续聊）
+  lastUploadAt: text('last_upload_at'), // 上次上传时间 → 「审核已更新」基线（M3）
+  costUsd: real('cost_usd'),
+  error: text('error'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+  pushedAt: text('pushed_at'),
+})
+
+// 验证阶段产出的「评论 → finding」。verdict 是 AI 自由文本（成立/不成立/优先级不高/…，
+// 不限定枚举，#16 决策 B），suggestFix 是唯一机器可读骨架（UI 预勾选用）。
+export const fixFindings = sqliteTable('fix_findings', {
+  id: text('id').primaryKey(),
+  fixId: text('fix_id')
+    .notNull()
+    .references(() => fixes.id, { onDelete: 'cascade' }),
+  ord: integer('ord').notNull().default(0),
+  severity: text('severity'), // High/Medium/Low（AI 给，仅展示，可空）
+  title: text('title').notNull(),
+  location: text('location'), // path:line
+  verdict: text('verdict').notNull(), // 自由文本
+  suggestFix: integer('suggest_fix', { mode: 'boolean' }).notNull().default(false),
+  reason: text('reason'),
+  sourceCommentIds: text('source_comment_ids'), // JSON number[]，锚定 GitHub 评论（增量验证 + 回复挂 thread）
+  checked: integer('checked', { mode: 'boolean' }).notNull().default(false), // 用户勾选要修
+  note: text('note'), // 用户对这条的修复指示
+  fixStatus: text('fix_status'), // 修复后回填：fixed / failed / skipped
+  fixText: text('fix_text'), // 修复反馈（改了什么 / 为什么没改成）
+  createdAt: text('created_at').notNull(),
+})
+
 export type Project = typeof projects.$inferSelect
 export type Skill = typeof skills.$inferSelect
 export type Review = typeof reviews.$inferSelect
@@ -155,3 +214,5 @@ export type Finding = typeof findings.$inferSelect
 export type FindingRecheck = typeof findingRechecks.$inferSelect
 export type Post = typeof posts.$inferSelect
 export type ReviewEvent = typeof events.$inferSelect
+export type Fix = typeof fixes.$inferSelect
+export type FixFinding = typeof fixFindings.$inferSelect

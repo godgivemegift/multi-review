@@ -2,6 +2,7 @@ import { query } from '@anthropic-ai/claude-agent-sdk'
 import { z } from 'zod'
 import { withContract, reviewCanUseTool, ISOLATED } from './guard'
 import { salvageJson } from './jsonSalvage'
+import { outputLangClause } from './lang'
 
 export const FindingSchema = z.object({
   severity: z.enum(['High', 'Medium', 'Low']),
@@ -23,7 +24,8 @@ export const ReviewResultSchema = z.object({
 })
 export type ReviewResult = z.infer<typeof ReviewResultSchema>
 
-const OUTPUT_SPEC = `审完后，最后**只输出一个 JSON 对象**（不要 markdown 代码围栏、不要任何额外文字），结构：
+// 输出语言跟 UI locale 走（#16「工作语言」），不再硬编码中文
+const outputSpec = (lang: string) => `审完后，最后**只输出一个 JSON 对象**（不要 markdown 代码围栏、不要任何额外文字），结构：
 {
   "findings": [
     { "severity": "High|Medium|Low", "title": "一句话标题", "location": "path:line",
@@ -37,12 +39,12 @@ const OUTPUT_SPEC = `审完后，最后**只输出一个 JSON 对象**（不要 
   "requirement": "这条 PR 在做什么业务诉求(用业务语言)",
   "testPath": "用户视角的最短手动测试路径 + 回归点"
 }
-findings 按严重度 High→Medium→Low 排序。所有字段用中文。
+findings 按严重度 High→Medium→Low 排序。${outputLangClause(lang)}
 requirement / testPath 用**真实换行**分行（JSON 字符串里用 \\n），每个步骤/要点单独一行，分节（正向 / 负向·边界 / 回归点）各自起新行，不要挤成一大段流水。
 
-⚠️ 输出**严格合法 JSON**：字符串值内**绝不要出现未转义的英文双引号 \`"\`**（这会截断 JSON）。需要引用代码/文案时，一律用中文引号「」或反引号 \`，不要用英文双引号。代码片段也放进反引号里。`
+⚠️ 输出**严格合法 JSON**：字符串值内**绝不要出现未转义的英文双引号 \`"\`**（这会截断 JSON）。需要引用代码/文案时，一律用「」或反引号 \`，不要用英文双引号。代码片段也放进反引号里。`
 
-function buildPrompt(opts: { repo: string; prNumber: number; branch: string; defaultBranch: string }) {
+function buildPrompt(opts: { repo: string; prNumber: number; branch: string; defaultBranch: string; lang: string }) {
   const { repo, prNumber, branch, defaultBranch } = opts
   return `你在一个 git worktree 里（当前目录就是仓库，已 checkout PR #${prNumber} 的分支 ${branch} 并合并了 ${defaultBranch}）。
 
@@ -58,7 +60,7 @@ function buildPrompt(opts: { repo: string; prNumber: number; branch: string; def
 - 只读操作：git diff/log/show、grep、读文件、gh pr view。
 - ❌ 绝对禁止 git add/commit/push/checkout 新分支/reset，禁止任何写操作。
 
-${OUTPUT_SPEC}`
+${outputSpec(opts.lang)}`
 }
 
 // 跑一次审核：Agent SDK 带 git 工具在 worktree 里干活，返回结构化结果。
@@ -71,10 +73,11 @@ export async function runReviewAgent(opts: {
   methodology: string
   model: string
   effort?: string
+  lang?: string
   onTool?: (name: string, info: string) => void
 }): Promise<{ result: ReviewResult; costUsd: number; raw: string }> {
   const stream = query({
-    prompt: buildPrompt(opts),
+    prompt: buildPrompt({ ...opts, lang: opts.lang || 'zh' }),
     options: {
       model: opts.model,
       ...(opts.effort ? { effort: opts.effort as any } : {}),
@@ -153,6 +156,7 @@ export async function runGuidedReviewAgent(opts: {
   methodology: string
   model: string
   effort?: string
+  lang?: string
   existing: GuidedInput[]
   instruction: string
   globalNotes: string
@@ -187,7 +191,8 @@ ${JSON.stringify(opts.existing, null, 2)}
   "logic": "...", "quality": "...", "risk": "...", "conclusion": "本轮复审整体结论",
   "requirement": "...", "testPath": "..." }
 
-⚠️ 严格合法 JSON：字符串里**绝不要未转义的英文双引号 \`"\`**，引用一律用中文「」或反引号 \`。`
+${outputLangClause(opts.lang || 'zh')}
+⚠️ 严格合法 JSON：字符串里**绝不要未转义的英文双引号 \`"\`**，引用一律用「」或反引号 \`。`
 
   const stream = query({
     prompt,
