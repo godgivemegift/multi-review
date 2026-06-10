@@ -39,6 +39,7 @@ export type PrMeta = {
   changedFiles: number
   isDraft: boolean
   body: string
+  author: string
 }
 
 const PR_FIELDS = [
@@ -53,6 +54,7 @@ const PR_FIELDS = [
   'changedFiles',
   'isDraft',
   'body',
+  'author',
 ].join(',')
 
 function normState(raw: string, isDraft: boolean): PrMeta['state'] {
@@ -78,6 +80,7 @@ export async function fetchPrMeta(repo: string, prNumber: number): Promise<PrMet
     changedFiles: j.changedFiles ?? 0,
     isDraft: !!j.isDraft,
     body: j.body ?? '',
+    author: j.author?.login ?? '',
   }
 }
 
@@ -242,6 +245,43 @@ export async function fetchPrDiff(repo: string, prNumber: number): Promise<{ dif
   return { diff: out, truncated: false }
 }
 
+export type ReviewComment = {
+  id: number
+  path: string
+  line: number | null
+  body: string
+  author: string
+  isBot: boolean
+  inReplyToId: number | null
+  createdAt: string
+}
+
+// PR 的行级 review 评论（timeline 不含这些）。「修复」流程拿它做验证与回复锚点。
+// --paginate 多页时输出 "[...][...]"（非法 JSON）→ --slurp 包成页数组再 flat。
+export async function fetchReviewComments(repo: string, prNumber: number): Promise<ReviewComment[]> {
+  const out = await gh(['api', `repos/${repo}/pulls/${prNumber}/comments`, '--paginate', '--slurp'])
+  const arr = (JSON.parse(out) as any[][]).flat()
+  return arr.map((c) => ({
+    id: c.id,
+    path: c.path ?? '',
+    line: c.line ?? c.original_line ?? null,
+    body: c.body ?? '',
+    author: c.user?.login ?? '',
+    isBot: c.user?.type === 'Bot' || /\[bot\]$/i.test(c.user?.login ?? ''),
+    inReplyToId: c.in_reply_to_id ?? null,
+    createdAt: c.created_at ?? '',
+  }))
+}
+
+// 当前登录用户（修复只允许 push 自己的 PR、「审核已更新」排除自己的评论）。
+// 进程级缓存：gh auth switch 后需重启服务才会刷新（push 门控依赖它，单用户本地工具可接受）。
+let _login: string | null = null
+export async function getCurrentUserLogin(): Promise<string> {
+  if (_login) return _login
+  _login = (await gh(['api', 'user', '--jq', '.login'])).trim()
+  return _login
+}
+
 export type PullListItem = {
   number: number
   title: string
@@ -251,6 +291,7 @@ export type PullListItem = {
   state: PrMeta['state']
   isDraft: boolean
   reviewDecision: string // APPROVED / CHANGES_REQUESTED / REVIEW_REQUIRED / ''
+  reviewsCount: number // GitHub 上已提交的 review 数（任何来源）→ 列表「已评审」tag
   updatedAt: string
   additions: number
   deletions: number
@@ -279,7 +320,7 @@ export async function listPulls(
       pullRequests(first:$first${statesArg}, after:$after, orderBy:{field:UPDATED_AT,direction:DESC}){
         totalCount
         pageInfo{ hasNextPage endCursor }
-        nodes{ number title author{login} headRefName headRefOid isDraft state reviewDecision additions deletions updatedAt }
+        nodes{ number title author{login} headRefName headRefOid isDraft state reviewDecision additions deletions updatedAt reviews(first:1){ totalCount } }
       }
     }
   }`
@@ -297,6 +338,7 @@ export async function listPulls(
       state: normState(j.state, !!j.isDraft),
       isDraft: !!j.isDraft,
       reviewDecision: j.reviewDecision ?? '',
+      reviewsCount: j.reviews?.totalCount ?? 0,
       updatedAt: j.updatedAt ?? '',
       additions: j.additions ?? 0,
       deletions: j.deletions ?? 0,

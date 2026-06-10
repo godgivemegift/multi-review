@@ -60,20 +60,34 @@
       "approved": "Approuvée",
       "changes": "Modifs demandées",
       "unknown": "—"
+    },
+    "fix": {
+      "queued": "En file",
+      "validating": "Validation",
+      "awaiting": "À cocher",
+      "fixing": "Correction",
+      "ready": "À pousser",
+      "pushing": "Envoi",
+      "pushed": "Poussé",
+      "error": "Erreur",
+      "discarded": "Abandonné"
     }
   },
   "project": {
     "tabs": {
       "pulls": "Toutes les PR",
       "tasks": "Tâches de revue",
-      "config": "Configuration"
+      "config": "Configuration",
+      "fixes": "Corriger PRs"
     },
     "col": {
       "title": "Titre",
       "author": "Auteur",
       "status": "Statut",
       "review": "Revue",
-      "severity": "Sévérité"
+      "severity": "Sévérité",
+      "fix": "Correction",
+      "findings": "Points"
     },
     "selectAllReviewable": "Tout sélectionner",
     "reviewSelected": "Revoir la sélection ({count})",
@@ -116,11 +130,25 @@
       "tasksCreated": "{count} tâche(s) de revue créée(s)",
       "refreshFailed": "Échec de l'actualisation",
       "refreshedStates": "État GitHub de {count} tâche(s) rafraîchi",
-      "noStatesToRefresh": "Aucune tâche à rafraîchir"
+      "noStatesToRefresh": "Aucune tâche à rafraîchir",
+      "fixesCreated": "{count} tâche(s) de correction créée(s)"
     },
     "refreshAll": "Tout rafraîchir",
     "refreshAllTitle": "Rafraîchir l'état GitHub de toutes les tâches (approuvé / fusionné / mis à jour par l'auteur)",
-    "refreshingAll": "Rafraîchissement…"
+    "refreshingAll": "Rafraîchissement…",
+    "tag": {
+      "reviewing": "en revue",
+      "reviewed": "revu",
+      "fixing": "correction",
+      "fixAwaiting": "à cocher",
+      "fixReady": "à pousser"
+    },
+    "selectAll": "Tout sélectionner",
+    "noneReviewable": "Toutes les PR sélectionnées ont déjà une tâche de revue",
+    "noneFixable": "Toutes les PR sélectionnées ont déjà une tâche de correction active",
+    "fixSelected": "Corriger la sélection ({count})",
+    "noFixes": "Aucune tâche de correction. Cochez des PR dans « Toutes les PR » puis « Corriger la sélection ».",
+    "fixCountsTitle": "cochés / total · corrigés"
   },
   "prDrawer": {
     "loadFailed": "Échec du chargement",
@@ -318,5 +346,38 @@
       "repliedNoNote": "réponse seule · pas de note",
       "retracted": "retiré"
     }
+  },
+  "fix": {
+    "modalTitle": "Corriger {count} PR",
+    "modalHint": "Valide les commentaires avec l'instruction intégrée par défaut. Ajoutez des consignes ciblées ci-dessous (facultatif).",
+    "instructionPlaceholder": "ex. : uniquement les commentaires de sécurité ; je ne suis pas d'accord avec celui-ci, revérifie…",
+    "start": "Lancer la validation",
+    "creating": "Création…",
+    "discard": "Abandonner",
+    "discardTitle": "Abandonner la correction",
+    "discardConfirm": "Abandonner cette tâche ? (nettoie le worktree local, GitHub intact)",
+    "working": "Traitement…",
+    "logLines": "Journal ({count} lignes)",
+    "summary": "Bilan de validation",
+    "validating": "Validation : vérification de chaque commentaire…",
+    "noFindings": "Aucun commentaire exploitable.",
+    "findings": "Points ({count})",
+    "suggestFix": "à corriger",
+    "verdictTag": "verdict",
+    "notePlaceholder": "Consigne de correction (pour l'IA : comment corriger / contexte). Utilisée au lancement.",
+    "runFix": "Lancer la correction ({count})",
+    "fixing": "Correction…",
+    "viewDiff": "Voir le diff",
+    "noDiff": "(aucun changement)",
+    "pushBtn": "Pousser & répondre à l'auteur",
+    "pushing": "Envoi…",
+    "pushedBadge": "Poussé",
+    "pushOthersHint": "Seules vos propres PR",
+    "pushTitle": "Pousser la correction & répondre",
+    "pushOk": "Confirmer",
+    "pushConfirm": "Poussera les changements de {files} fichier(s) vers {branch} ; et répondra à l'auteur : {fixed} corrigé(s), {wontfix} expliqué(s) comme non corrigé(s).",
+    "pushed": "Poussé {sha} · {replied} réponses",
+    "pushFailed": "Échec de l'envoi",
+    "replyFailed": "Certaines réponses n'ont pas pu être postées (fils résolus/supprimés)"
   }
 }

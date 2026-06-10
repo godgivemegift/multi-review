@@ -40,6 +40,7 @@ export default defineEventHandler(async (event) => {
     reposDir: cfg.reposDir as string,
     model: rc.model,
     effort: rc.effort,
+    lang: getCookie(event, 'mr-locale') || 'zh',
     guided: true,
   })
 
