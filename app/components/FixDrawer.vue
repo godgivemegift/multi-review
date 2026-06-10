@@ -85,11 +85,17 @@ function saveNote(f: FixFinding) {
 
 const checkedCount = computed(() => data.value?.findings.filter((f) => f.checked).length ?? 0)
 
-async function runFix() {
-  // 重跑修复会 reset --hard 回 PR 原始 head，丢掉对话里改的东西 → 有对话就先确认
-  if ((data.value?.turns?.length ?? 0) > 0) {
-    if (!(await ask({ title: t('fix.runFixTitle'), message: t('fix.runFixResetWarn'), okText: t('fix.runFixOk'), danger: true }))) return
-  }
+// 就地两步确认（USlideover 的 focus trap 会挡住全局 dialog，点不动 → 不用 useConfirm，
+// 改成抽屉内联确认，和 ReviewPanel 一致）
+const confirming = ref<'' | 'push' | 'discard' | 'runfix'>('')
+
+function runFix() {
+  // 重跑修复会 reset --hard 回 PR 原始 head，丢掉对话里改的东西 → 有对话就先就地确认
+  if ((data.value?.turns?.length ?? 0) > 0) { confirming.value = 'runfix'; return }
+  doRunFix()
+}
+async function doRunFix() {
+  confirming.value = ''
   busy.value = 'fix'; logLines.value = []; showLog.value = true
   try { await $fetch(`/api/fixes/${props.fixId}/run-fix`, { method: 'POST' }); await load() }
   catch (e: any) { live.value = e?.data?.statusMessage || t('common.failed') }
@@ -109,20 +115,16 @@ watch(activeTab, (tab) => {
   if (tab === 'changes' && diff.value === null && !running.value) loadDiff()
 })
 
-// 上传修复并回复作者（确认弹窗列明将发生什么）
-const ask = useConfirm()
-async function pushFix() {
+// 上传确认文案的填充值（就地确认行里展示将发生什么）
+const pushConfirmMsg = computed(() => {
   const d = data.value
-  if (!d) return
-  const fixedN = d.findings.filter((f) => f.checked && f.fixStatus === 'fixed').length
-  const wontfixN = d.findings.filter((f) => !f.checked && !f.suggestFix).length
-  const ok = await ask({
-    title: t('fix.pushTitle'),
-    message: t('fix.pushConfirm', { files: d.fix.filesChanged ?? 0, branch: d.fix.branch, fixed: fixedN, wontfix: wontfixN }),
-    okText: t('fix.pushOk'),
-    danger: false,
-  })
-  if (!ok) return
+  if (!d) return ''
+  const fixed = d.findings.filter((f) => f.checked && f.fixStatus === 'fixed').length
+  const wontfix = d.findings.filter((f) => !f.checked && !f.suggestFix).length
+  return t('fix.pushConfirm', { files: d.fix.filesChanged ?? 0, branch: d.fix.branch, fixed, wontfix })
+})
+async function doPush() {
+  confirming.value = ''
   busy.value = 'push'
   try {
     const res = await $fetch<{ sha: string; replied: number; summaryPosted: boolean; leftoverCount: number }>(`/api/fixes/${props.fixId}/push`, { method: 'POST' })
@@ -134,8 +136,8 @@ async function pushFix() {
   finally { busy.value = '' }
 }
 
-async function discard() {
-  if (!(await ask({ title: t('fix.discardTitle'), message: t('fix.discardConfirm'), okText: t('common.delete'), danger: true }))) return
+async function doDiscard() {
+  confirming.value = ''
   busy.value = 'discard'
   try {
     await $fetch(`/api/fixes/${props.fixId}/discard`, { method: 'POST' })
@@ -200,7 +202,12 @@ async function copyWorktree() {
             </div>
             <div class="flex items-center gap-3 shrink-0">
               <a v-if="data.prUrl" :href="data.prUrl" target="_blank" class="text-xs text-muted hover:text-highlighted whitespace-nowrap">{{ $t('prDrawer.openInGithub') }}</a>
-              <button class="text-dimmed hover:text-highlighted disabled:opacity-40 text-xs whitespace-nowrap" :disabled="running || chatting || !!busy" @click="discard">{{ $t('fix.discard') }}</button>
+              <template v-if="confirming === 'discard'">
+                <span class="text-xs text-dimmed">{{ $t('fix.discardConfirm') }}</span>
+                <button class="text-xs text-error font-medium hover:underline disabled:opacity-40" :disabled="!!busy" @click="doDiscard">{{ $t('common.delete') }}</button>
+                <button class="text-xs text-dimmed hover:text-highlighted" @click="confirming = ''">{{ $t('common.cancel') }}</button>
+              </template>
+              <button v-else class="text-dimmed hover:text-highlighted disabled:opacity-40 text-xs whitespace-nowrap" :disabled="running || chatting || !!busy" @click="confirming = 'discard'">{{ $t('fix.discard') }}</button>
               <button class="text-dimmed hover:text-highlighted text-lg leading-none" @click="open = false">✕</button>
             </div>
           </div>
@@ -272,32 +279,47 @@ async function copyWorktree() {
               </div>
             </template>
 
-            <!-- 工具条：跑修复（左）+ 上传修复并回复作者（右）-->
-            <section v-if="data.findings.length" class="mt-5 border-t border-default pt-4 flex items-center gap-3">
-              <button
-                class="text-sm border border-accented px-4 py-1.5 hover:bg-muted disabled:opacity-40"
-                :disabled="!checkedCount || running || !!busy"
-                @click="runFix"
-              >
-                {{ busy === 'fix' ? $t('fix.fixing') : $t('fix.runFix', { count: checkedCount }) }}
-              </button>
-              <button
-                v-if="(data.fix.filesChanged ?? 0) > 0"
-                class="text-sm text-dimmed hover:text-highlighted disabled:opacity-40"
-                @click="activeTab = 'changes'"
-              >
-                {{ $t('fix.viewDiff') }}
-              </button>
-              <div class="ml-auto flex items-center gap-2">
-                <span v-if="data.fix.status === 'ready' && !data.canPush" class="text-[10px] text-dimmed">{{ $t('fix.pushOthersHint') }}</span>
+            <!-- 工具条：跑修复（左）+ 上传修复并回复作者（右）。确认走就地两步（不弹全局 dialog）-->
+            <section v-if="data.findings.length" class="mt-5 border-t border-default pt-4">
+              <!-- 重跑会丢对话改动的就地确认 -->
+              <div v-if="confirming === 'runfix'" class="flex items-center gap-3 text-xs">
+                <span class="text-dimmed">{{ $t('fix.runFixResetWarn') }}</span>
+                <button class="text-error font-medium hover:underline disabled:opacity-40" :disabled="!!busy" @click="doRunFix">{{ $t('fix.runFixOk') }}</button>
+                <button class="text-dimmed hover:text-highlighted" @click="confirming = ''">{{ $t('common.cancel') }}</button>
+              </div>
+              <!-- 上传的就地确认（列明将发生什么）-->
+              <div v-else-if="confirming === 'push'" class="flex items-center gap-3 text-xs">
+                <span class="text-dimmed min-w-0 flex-1">{{ pushConfirmMsg }}</span>
+                <button class="text-highlighted font-medium hover:underline disabled:opacity-40 shrink-0" :disabled="!!busy" @click="doPush">{{ $t('fix.pushOk') }}</button>
+                <button class="text-dimmed hover:text-highlighted shrink-0" @click="confirming = ''">{{ $t('common.cancel') }}</button>
+              </div>
+              <!-- 正常工具条 -->
+              <div v-else class="flex items-center gap-3">
                 <button
-                  v-if="data.fix.status === 'ready' || data.fix.status === 'pushed'"
-                  class="text-sm bg-inverted text-inverted px-4 py-1.5 hover:bg-inverted/90 disabled:opacity-40"
-                  :disabled="running || !!busy || !data.canPush || (data.fix.filesChanged ?? 0) === 0 || data.fix.status === 'pushed'"
-                  @click="pushFix"
+                  class="text-sm border border-accented px-4 py-1.5 hover:bg-muted disabled:opacity-40"
+                  :disabled="!checkedCount || running || !!busy"
+                  @click="runFix"
                 >
-                  {{ data.fix.status === 'pushed' ? $t('fix.pushedBadge') : busy === 'push' ? $t('fix.pushing') : $t('fix.pushBtn') }}
+                  {{ busy === 'fix' ? $t('fix.fixing') : $t('fix.runFix', { count: checkedCount }) }}
                 </button>
+                <button
+                  v-if="(data.fix.filesChanged ?? 0) > 0"
+                  class="text-sm text-dimmed hover:text-highlighted disabled:opacity-40"
+                  @click="activeTab = 'changes'"
+                >
+                  {{ $t('fix.viewDiff') }}
+                </button>
+                <div class="ml-auto flex items-center gap-2">
+                  <span v-if="data.fix.status === 'ready' && !data.canPush" class="text-[10px] text-dimmed">{{ $t('fix.pushOthersHint') }}</span>
+                  <button
+                    v-if="data.fix.status === 'ready' || data.fix.status === 'pushed'"
+                    class="text-sm bg-inverted text-inverted px-4 py-1.5 hover:bg-inverted/90 disabled:opacity-40"
+                    :disabled="running || !!busy || !data.canPush || (data.fix.filesChanged ?? 0) === 0 || data.fix.status === 'pushed'"
+                    @click="confirming = 'push'"
+                  >
+                    {{ data.fix.status === 'pushed' ? $t('fix.pushedBadge') : busy === 'push' ? $t('fix.pushing') : $t('fix.pushBtn') }}
+                  </button>
+                </div>
               </div>
             </section>
           </template>
