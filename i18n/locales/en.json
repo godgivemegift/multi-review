@@ -402,6 +402,12 @@
     "chatHint": "Run a fix first, then you can keep chatting here to refine it.",
     "pushAgain": "Push again",
     "viewOnGithub": "View comments",
-    "runFixAfterPushHint": "Already pushed; use the chat below to keep changing"
+    "runFixAfterPushHint": "Already pushed; use the chat below to keep changing",
+    "mergeBase": "Merge base",
+    "merging": "Merging…",
+    "mergeBaseTitle": "Merge the PR's target branch to resolve conflicts (git run by the engine)",
+    "mergeClean": "Merged {base}, no conflicts",
+    "mergeConflicts": "{count} conflicting file(s) with {base} — ask the AI in chat to resolve",
+    "mergeChatDraft": "Resolve the merge conflicts in these files: {files}. "
   }
 }

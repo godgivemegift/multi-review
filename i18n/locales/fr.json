@@ -402,6 +402,12 @@
     "chatHint": "Lancez d'abord une correction, puis affinez-la ici par chat.",
     "pushAgain": "Repousser",
     "viewOnGithub": "Voir les commentaires",
-    "runFixAfterPushHint": "Déjà poussé ; utilisez le chat ci-dessous pour continuer"
+    "runFixAfterPushHint": "Déjà poussé ; utilisez le chat ci-dessous pour continuer",
+    "mergeBase": "Fusionner la base",
+    "merging": "Fusion…",
+    "mergeBaseTitle": "Fusionner la branche cible de la PR pour résoudre les conflits (git exécuté par le moteur)",
+    "mergeClean": "{base} fusionné, aucun conflit",
+    "mergeConflicts": "{count} fichier(s) en conflit avec {base} — demandez à l'IA de résoudre dans le chat",
+    "mergeChatDraft": "Résous les conflits de fusion dans ces fichiers : {files}. "
   }
 }

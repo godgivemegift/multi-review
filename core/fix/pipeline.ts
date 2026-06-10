@@ -319,6 +319,11 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
     const fix = h.row()
     let stopped = false
     let newSessionId: string | null = fix?.sessionId ?? null
+    // worktree 里有没有未解决的 merge 冲突？有就提示 agent 去解决
+    const { stdout: uFiles } = await git(wt.path, ['diff', '--name-only', '--diff-filter=U']).catch(() => ({ stdout: '' }))
+    const conflictHint = uFiles.trim()
+      ? `There are UNRESOLVED merge conflicts in these files (they contain <<<<<<< / ======= / >>>>>>> markers): ${uFiles.trim().split('\n').join(', ')}. Resolve every conflict by editing the files (remove all conflict markers), following the reviewer's guidance below.`
+      : ''
     try {
       const r = await runFixChat({
         cwd: wt.path,
@@ -326,6 +331,7 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
         lang: ctx.lang,
         sessionId: fix?.sessionId ?? null,
         message,
+        conflictHint,
         onSpawn: (cp) => activeChats.set(fixId, cp),
         onText: (t) => {
           acc += t
@@ -347,10 +353,23 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
     flushTurn(stopped ? 'stopped' : 'done')
 
     // agent 改的文件（acceptEdits 已落盘，停止也保留）→ Node 侧 commit + 刷新 diff stats
-    const { stdout: porcelain } = await git(wt.path, ['status', '--porcelain'])
-    if (porcelain.trim()) {
-      await git(wt.path, ['add', '-A'])
-      await git(wt.path, ['commit', '-m', 'fix: follow-up from review chat'])
+    let inMerge = false
+    try { await git(wt.path, ['rev-parse', '-q', '--verify', 'MERGE_HEAD']); inMerge = true } catch { /* 不在 merge 中 */ }
+    if (inMerge) {
+      // 解冲突场景：还有未解决就别 commit（保持 merge 状态让用户继续指挥）；全解决了就完成 merge commit
+      const { stdout: u } = await git(wt.path, ['diff', '--name-only', '--diff-filter=U'])
+      if (u.trim()) {
+        h.emit('stage', `还有 ${u.trim().split('\n').length} 个文件的冲突未解决`)
+      } else {
+        await git(wt.path, ['add', '-A'])
+        await git(wt.path, ['commit', '--no-edit'])
+      }
+    } else {
+      const { stdout: porcelain } = await git(wt.path, ['status', '--porcelain'])
+      if (porcelain.trim()) {
+        await git(wt.path, ['add', '-A'])
+        await git(wt.path, ['commit', '-m', 'fix: follow-up from review chat'])
+      }
     }
     const base = h.row()?.baseHeadSha
     const { stdout: head } = await git(wt.path, ['rev-parse', 'HEAD'])

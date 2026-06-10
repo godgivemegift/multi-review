@@ -402,6 +402,12 @@
     "chatHint": "先跑一轮修复，之后可以在这里继续聊、继续改。",
     "pushAgain": "再次上传",
     "viewOnGithub": "查看评论",
-    "runFixAfterPushHint": "已上传；继续改请用下方对话"
+    "runFixAfterPushHint": "已上传；继续改请用下方对话",
+    "mergeBase": "合并基础分支",
+    "merging": "合并中…",
+    "mergeBaseTitle": "把 PR 的目标分支 merge 进来解决冲突（git 由引擎执行）",
+    "mergeClean": "已合并 {base}，无冲突",
+    "mergeConflicts": "与 {base} 有 {count} 个冲突文件，去对话里让 AI 解决",
+    "mergeChatDraft": "解决这些文件的合并冲突：{files}。"
   }
 }

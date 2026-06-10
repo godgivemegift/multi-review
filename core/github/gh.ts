@@ -40,6 +40,7 @@ export type PrMeta = {
   isDraft: boolean
   body: string
   author: string
+  baseBranch: string // PR 的目标分支（base），解冲突时 merge 它
 }
 
 const PR_FIELDS = [
@@ -48,6 +49,7 @@ const PR_FIELDS = [
   'url',
   'headRefName',
   'headRefOid',
+  'baseRefName',
   'state',
   'additions',
   'deletions',
@@ -81,6 +83,7 @@ export async function fetchPrMeta(repo: string, prNumber: number): Promise<PrMet
     isDraft: !!j.isDraft,
     body: j.body ?? '',
     author: j.author?.login ?? '',
+    baseBranch: j.baseRefName ?? '',
   }
 }
 

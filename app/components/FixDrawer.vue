@@ -192,6 +192,24 @@ async function stopChat() {
   try { await $fetch(`/api/fixes/${props.fixId}/stop`, { method: 'POST' }); await load() }
   catch (e: any) { live.value = e?.data?.statusMessage || t('common.failed') }
 }
+// 合并 PR 的 base 分支解决冲突（Node 执行 git；冲突让用户在对话里指挥 agent 解决）
+async function mergeBase() {
+  busy.value = 'merge'
+  try {
+    const res = await $fetch<{ merged: boolean; conflicts: string[]; baseRef: string }>(`/api/fixes/${props.fixId}/merge-base`, { method: 'POST' })
+    if (res.merged) {
+      live.value = t('fix.mergeClean', { base: res.baseRef })
+    } else {
+      // 有冲突 → 切到对话，预填一条指令草稿（用户可补方向），让 agent 解决
+      live.value = t('fix.mergeConflicts', { base: res.baseRef, count: res.conflicts.length })
+      chatInput.value = t('fix.mergeChatDraft', { files: res.conflicts.join(', ') })
+      activeTab.value = 'chat'
+    }
+    await load()
+  } catch (e: any) { live.value = e?.data?.statusMessage || t('common.failed') }
+  finally { busy.value = '' }
+}
+
 // 在编辑器/Finder 打开 worktree 路径（方便在 IDE 里 review 改动）
 async function copyWorktree() {
   const p = data.value?.fix?.worktreePath
@@ -332,6 +350,15 @@ async function copyWorktree() {
                   @click="activeTab = 'changes'"
                 >
                   {{ $t('fix.viewDiff') }}
+                </button>
+                <button
+                  v-if="data.fix.worktreePath"
+                  class="text-sm text-dimmed hover:text-highlighted disabled:opacity-40"
+                  :disabled="running || chatting || !!busy"
+                  :title="$t('fix.mergeBaseTitle')"
+                  @click="mergeBase"
+                >
+                  {{ busy === 'merge' ? $t('fix.merging') : $t('fix.mergeBase') }}
                 </button>
                 <a v-if="pushedUrl" :href="pushedUrl" target="_blank" class="text-sm text-highlighted hover:underline">{{ $t('fix.viewOnGithub') }} ↗</a>
                 <div class="ml-auto flex items-center gap-2">

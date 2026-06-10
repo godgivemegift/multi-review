@@ -125,6 +125,7 @@ export async function runFixChat(opts: {
   lang: string
   sessionId: string | null // 有就 --resume；没有就开新会话（agent 缺修复上下文，但仍可用）
   message: string
+  conflictHint?: string // worktree 里有未解决的 merge 冲突时，告诉 agent 去解决（文件列表）
   onSpawn?: (cp: import('node:child_process').ChildProcess) => void
   onText?: (text: string) => void
   onTool?: (name: string, info: string) => void
@@ -145,7 +146,7 @@ export async function runFixChat(opts: {
     ? 'You are continuing to fix this pull request in the same git worktree, following up after your previous fix.'
     : 'You are working on this pull request in a git worktree. You have no prior context in this session — read the code as needed before changing anything.'
   const prompt = `${opening}
-
+${opts.conflictHint ? '\n' + opts.conflictHint + '\n' : ''}
 Reviewer's message:
 ${opts.message}
 
