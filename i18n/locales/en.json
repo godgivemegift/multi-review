@@ -382,6 +382,15 @@
     "pushConfirm": "Will push changes across {files} file(s) to {branch}; and reply to the author: {fixed} fixed, {wontfix} explained as won't-fix.",
     "pushed": "Pushed {sha} · {replied} replies",
     "pushFailed": "Push failed",
-    "replyFailed": "Some replies couldn't be posted (threads may be resolved/deleted)"
+    "replyFailed": "Some replies couldn't be posted (threads may be resolved/deleted)",
+    "chatTitle": "Follow-up chat",
+    "you": "You",
+    "chatPlaceholder": "Keep chatting / ask the AI to change more (e.g. rewrite F3; missing null check here…) Enter to send",
+    "send": "Send",
+    "stop": "Stop",
+    "stoppedTag": "stopped",
+    "worktreeHint": "Changes in worktree:",
+    "copyPath": "Copy path",
+    "pathCopied": "Path copied"
   }
 }

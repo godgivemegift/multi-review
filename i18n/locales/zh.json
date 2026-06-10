@@ -382,6 +382,15 @@
     "pushConfirm": "将向分支 {branch} push {files} 个文件的改动；并回复作者：{fixed} 条已修复、{wontfix} 条说明不修。",
     "pushed": "已上传 {sha} · 回复 {replied} 条",
     "pushFailed": "上传失败",
-    "replyFailed": "部分回复没挂上（评论可能已被解决/删除）"
+    "replyFailed": "部分回复没挂上（评论可能已被解决/删除）",
+    "chatTitle": "对话跟进",
+    "you": "你",
+    "chatPlaceholder": "继续聊 / 让 AI 再改（如：F3 换个写法；这里漏了空值判断…）回车发送",
+    "send": "发送",
+    "stop": "停止",
+    "stoppedTag": "已停止",
+    "worktreeHint": "改动在 worktree：",
+    "copyPath": "复制路径",
+    "pathCopied": "路径已复制"
   }
 }

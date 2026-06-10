@@ -382,6 +382,15 @@
     "pushConfirm": "Poussera les changements de {files} fichier(s) vers {branch} ; et répondra à l'auteur : {fixed} corrigé(s), {wontfix} expliqué(s) comme non corrigé(s).",
     "pushed": "Poussé {sha} · {replied} réponses",
     "pushFailed": "Échec de l'envoi",
-    "replyFailed": "Certaines réponses n'ont pas pu être postées (fils résolus/supprimés)"
+    "replyFailed": "Certaines réponses n'ont pas pu être postées (fils résolus/supprimés)",
+    "chatTitle": "Suivi par chat",
+    "you": "Vous",
+    "chatPlaceholder": "Continuez / demandez d'autres changements (ex. réécris F3 ; vérif. de null manquante ici…) Entrée pour envoyer",
+    "send": "Envoyer",
+    "stop": "Arrêter",
+    "stoppedTag": "arrêté",
+    "worktreeHint": "Modifs dans le worktree :",
+    "copyPath": "Copier le chemin",
+    "pathCopied": "Chemin copié"
   }
 }

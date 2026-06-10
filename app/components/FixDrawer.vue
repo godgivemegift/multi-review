@@ -9,9 +9,11 @@ type FixFinding = {
   verdict: string; suggestFix: boolean; reason: string | null
   checked: boolean; note: string | null; fixStatus: string | null; fixText: string | null
 }
+type FixTurn = { id: string; seq: number; role: 'user' | 'assistant'; content: string; status: string }
 type FixData = {
   fix: any
   findings: FixFinding[]
+  turns: FixTurn[]
   canPush: boolean
 }
 
@@ -24,6 +26,11 @@ let es: EventSource | null = null
 
 const RUNNING = ['queued', 'validating', 'fixing', 'pushing']
 const running = computed(() => RUNNING.includes(data.value?.fix?.status))
+// 对话是否在生成中：最后一轮 assistant 还在 streaming
+const chatting = computed(() => {
+  const ts = data.value?.turns ?? []
+  return ts.length > 0 && ts[ts.length - 1]!.role === 'assistant' && ts[ts.length - 1]!.status === 'streaming'
+})
 
 async function load() {
   if (!props.fixId) return
@@ -42,7 +49,7 @@ function openSSE() {
         logLines.value.push(`${new Date().toLocaleTimeString(locale.value, { hour12: false })}  ${e.message}`)
         if (logLines.value.length > 200) logLines.value.shift()
       }
-      if (['validated', 'done', 'status', 'error'].includes(e.kind)) load()
+      if (['validated', 'done', 'status', 'error', 'chat'].includes(e.kind)) load()
     } catch {}
   }
 }
@@ -128,6 +135,31 @@ async function discard() {
 
 function fixStatusLabel(s: string) { const k = `status.fix.${s}`; return te(k) ? t(k) : s }
 const FIX_CLS: Record<string, string> = { fixed: 'text-highlighted', failed: 'text-highlighted font-medium', skipped: 'text-dimmed' }
+
+// ── M2 对话跟进 ──
+const chatInput = ref('')
+async function sendChat() {
+  const msg = chatInput.value.trim()
+  if (!msg || chatting.value || busy.value) return
+  chatInput.value = ''
+  try {
+    await $fetch(`/api/fixes/${props.fixId}/chat`, { method: 'POST', body: { message: msg } })
+    await load() // 立刻拉出 user 轮 + streaming 占位轮；后续 SSE 'chat' 事件再刷新
+  } catch (e: any) {
+    chatInput.value = msg // 失败把输入还回去，别丢
+    live.value = e?.data?.statusMessage || t('common.failed')
+  }
+}
+async function stopChat() {
+  try { await $fetch(`/api/fixes/${props.fixId}/stop`, { method: 'POST' }); await load() }
+  catch (e: any) { live.value = e?.data?.statusMessage || t('common.failed') }
+}
+// 在编辑器/Finder 打开 worktree 路径（方便在 IDE 里 review 改动）
+async function copyWorktree() {
+  const p = data.value?.fix?.worktreePath
+  if (!p) return
+  try { await navigator.clipboard.writeText(p); live.value = t('fix.pathCopied') } catch { /* 忽略 */ }
+}
 </script>
 
 <template>
@@ -233,8 +265,39 @@ const FIX_CLS: Record<string, string> = { fixed: 'text-highlighted', failed: 'te
           </div>
         </section>
 
+        <!-- worktree 路径：方便在 IDE 里 review 这次修复的改动 -->
+        <div v-if="data.fix.worktreePath" class="mt-3 text-[11px] text-dimmed flex items-center gap-2">
+          <span class="shrink-0">{{ $t('fix.worktreeHint') }}</span>
+          <code class="font-mono text-toned truncate flex-1">{{ data.fix.worktreePath }}</code>
+          <button class="hover:text-highlighted shrink-0 underline" @click="copyWorktree">{{ $t('fix.copyPath') }}</button>
+        </div>
+
         <!-- diff 预览 -->
         <pre v-if="diff" class="mt-3 text-[11px] text-toned whitespace-pre-wrap font-mono bg-elevated rounded p-3 max-h-80 overflow-auto">{{ diff }}</pre>
+
+        <!-- M2 对话跟进：修复出稿后继续聊、继续改（append-only，不清空）-->
+        <section v-if="data.turns.length || ['ready', 'error'].includes(data.fix.status)" class="mt-5 border-t border-default pt-4">
+          <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-3">{{ $t('fix.chatTitle') }}</div>
+          <div v-for="turn in data.turns" :key="turn.id" class="mb-3 text-sm">
+            <div v-if="turn.role === 'user'" class="text-highlighted">
+              <span class="text-[10px] uppercase tracking-wider text-dimmed mr-1.5">{{ $t('fix.you') }}</span>{{ turn.content }}
+            </div>
+            <div v-else class="text-toned whitespace-pre-wrap leading-relaxed">
+              {{ turn.content }}<span v-if="turn.status === 'streaming'" class="animate-pulse">▍</span>
+              <span v-if="turn.status === 'stopped'" class="text-[10px] text-dimmed ml-1">· {{ $t('fix.stoppedTag') }}</span>
+              <span v-else-if="turn.status === 'error'" class="text-[10px] text-dimmed ml-1">· {{ $t('common.failed') }}</span>
+            </div>
+          </div>
+          <div v-if="['ready', 'error'].includes(data.fix.status)" class="flex items-end gap-2 mt-2">
+            <textarea
+              v-model="chatInput" rows="2" :placeholder="$t('fix.chatPlaceholder')" :disabled="chatting"
+              class="flex-1 text-sm bg-muted border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-accented disabled:opacity-50"
+              @keydown.enter.exact.prevent="sendChat"
+            />
+            <button v-if="chatting" class="text-sm border border-accented px-4 py-2 hover:bg-muted shrink-0" @click="stopChat">{{ $t('fix.stop') }}</button>
+            <button v-else class="text-sm bg-inverted text-inverted px-4 py-2 hover:bg-inverted/90 disabled:opacity-40 shrink-0" :disabled="!chatInput.trim() || !!busy" @click="sendChat">{{ $t('fix.send') }}</button>
+          </div>
+        </section>
       </div>
       <p v-else class="p-8 text-sm text-dimmed">{{ $t('common.loading') }}</p>
     </template>
