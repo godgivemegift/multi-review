@@ -39,6 +39,7 @@ export type PrMeta = {
   changedFiles: number
   isDraft: boolean
   body: string
+  author: string
 }
 
 const PR_FIELDS = [
@@ -53,6 +54,7 @@ const PR_FIELDS = [
   'changedFiles',
   'isDraft',
   'body',
+  'author',
 ].join(',')
 
 function normState(raw: string, isDraft: boolean): PrMeta['state'] {
@@ -78,6 +80,7 @@ export async function fetchPrMeta(repo: string, prNumber: number): Promise<PrMet
     changedFiles: j.changedFiles ?? 0,
     isDraft: !!j.isDraft,
     body: j.body ?? '',
+    author: j.author?.login ?? '',
   }
 }
 

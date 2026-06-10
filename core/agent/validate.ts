@@ -41,7 +41,7 @@ function serializeComments(comments: ReviewComment[]): string {
 function serializeTimeline(timeline: TimelineNode[]): string {
   return timeline
     .filter((n) => (n.kind === 'review' || n.kind === 'comment') && (n.body ?? '').trim())
-    .map((n) => `— @${(n as any).author ?? '?'} (${n.kind}):\n${(n.body ?? '').trim()}`)
+    .map((n) => `— @${n.actor || '?'} (${n.kind}):\n${(n.body ?? '').trim()}`)
     .join('\n\n')
 }
 
