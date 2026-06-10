@@ -258,6 +258,8 @@
     "rerunTitle": "Conserve vos cases/notes ; recontrôle ciblé selon chaque note + l'instruction ci-dessous, l'IA répond point par point",
     "recheckBtn": "Vérifier les changements de l'auteur",
     "recheckTitle": "Lit les nouveaux commits de l'auteur depuis votre dernier commentaire et juge si chaque point a été corrigé",
+    "retryBtn": "Relancer la review",
+    "retryTitle": "Relance une revue complète depuis zéro (utile après une erreur)",
     "processing": "Traitement…",
     "runLog": "Journal d'exécution ({count} lignes)",
     "expandLog": "Déplier le journal ({count})",

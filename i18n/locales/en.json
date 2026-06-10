@@ -258,6 +258,8 @@
     "rerunTitle": "Keeps your checks/notes; targeted recheck using each note + the instruction below, the AI replies point by point",
     "recheckBtn": "Check author's changes",
     "recheckTitle": "Reads the author's new commits since your last comment and judges whether each item was addressed",
+    "retryBtn": "Re-run review",
+    "retryTitle": "Run a full fresh review from scratch (useful after an error)",
     "processing": "Processing…",
     "runLog": "Run log ({count} lines)",
     "expandLog": "Expand log ({count})",

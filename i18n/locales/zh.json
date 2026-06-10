@@ -258,6 +258,8 @@
     "rerunTitle": "保留你的勾选/notes，参考你每条 note + 下方审核指令做针对性复审，AI 逐条回应",
     "recheckBtn": "复查作者改动",
     "recheckTitle": "读你上次发评论之后作者的新 commit，判断每条改了没",
+    "retryBtn": "重新审核",
+    "retryTitle": "从头完整重跑一次审核（出错后可用）",
     "processing": "处理中…",
     "runLog": "运行日志（{count} 行）",
     "expandLog": "展开日志 ({count})",
