@@ -174,6 +174,24 @@ const FIX_CLS: Record<string, string> = { fixed: 'text-highlighted', failed: 'te
 const chatInput = ref('')
 const chatSteps = ref<string[]>([]) // chat 期间 agent 的工具/思考活动，实时展示
 const liveAssistant = ref('') // chat 流式文本（逐字实时，完成时由落库内容替换）
+
+// CLI 式进度：循环的动词 + 计时
+const chatElapsed = ref(0)
+const VERBS = ['Thinking', 'Working', 'Reading', 'Editing', 'Reasoning', 'Crunching', 'Resolving']
+const chatVerb = computed(() => VERBS[Math.floor(chatElapsed.value / 3) % VERBS.length])
+let chatTimer: ReturnType<typeof setInterval> | null = null
+let pollTimer: ReturnType<typeof setInterval> | null = null
+watch(chatting, (on) => {
+  if (chatTimer) { clearInterval(chatTimer); chatTimer = null }
+  if (on) { chatElapsed.value = 0; chatTimer = setInterval(() => { chatElapsed.value++ }, 1000) }
+})
+// running/chatting 期间轮询拉一次，确保 SSE 万一断了也能实时看到反馈（不用手动刷新）
+watch([running, chatting], ([r, c]) => {
+  const active = r || c
+  if (active && !pollTimer) pollTimer = setInterval(() => load(), 2500)
+  else if (!active && pollTimer) { clearInterval(pollTimer); pollTimer = null }
+})
+onBeforeUnmount(() => { if (chatTimer) clearInterval(chatTimer); if (pollTimer) clearInterval(pollTimer) })
 async function sendChat() {
   const msg = chatInput.value.trim()
   if (!msg || chatting.value || busy.value) return
@@ -407,31 +425,36 @@ async function copyWorktree() {
               </div>
             </div>
 
-            <!-- chat 期间的工具活动（Read / Edit / Grep …），像 CLI 一行行 -->
-            <div v-if="chatting && chatSteps.length" class="mb-3 border-l-2 border-default pl-2.5 space-y-0.5">
-              <div v-for="(s, i) in chatSteps" :key="i" class="text-[11px] font-mono text-dimmed truncate">{{ s }}</div>
+            <!-- chat 期间：CLI 式进度（脉冲 + 动词 + 计时）+ 工具活动一行行 -->
+            <div v-if="chatting" class="mb-3">
+              <div class="flex items-center gap-2 text-xs text-toned mb-1">
+                <span class="inline-block w-1.5 h-1.5 rounded-full bg-inverted animate-pulse" />
+                <span class="font-mono">{{ chatVerb }}… {{ chatElapsed }}s</span>
+              </div>
+              <div v-if="chatSteps.length" class="border-l-2 border-default pl-2.5 space-y-0.5">
+                <div v-for="(s, i) in chatSteps" :key="i" class="text-[11px] font-mono text-dimmed truncate">{{ s }}</div>
+              </div>
             </div>
 
-            <!-- 输入区：4 行文本框，按钮在下面一排（不和文本框同行）-->
-            <div v-if="['ready', 'error', 'pushed'].includes(data.fix.status)" class="sticky bottom-0 bg-default pt-2 pb-1">
+            <!-- 输入区：4 行文本框；按钮全在右边，[再次上传][发送] 等宽 -->
+            <div v-if="['ready', 'error', 'pushed', 'conflict'].includes(data.fix.status)" class="sticky bottom-0 bg-default pt-2 pb-1">
               <textarea
                 v-model="chatInput" rows="4" :placeholder="$t('fix.chatPlaceholder')" :disabled="chatting"
                 class="w-full text-sm bg-muted border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-accented disabled:opacity-50"
               />
               <div class="flex items-center gap-2 mt-2">
-                <button v-if="chatting" class="text-sm border border-accented px-4 py-2 hover:bg-muted" @click="stopChat">{{ $t('fix.stop') }}</button>
-                <button v-else class="text-sm bg-inverted text-inverted px-4 py-2 hover:bg-inverted/90 disabled:opacity-40" :disabled="!chatInput.trim() || !!busy" @click="sendChat">{{ $t('fix.send') }}</button>
-                <a v-if="pushedUrl" :href="pushedUrl" target="_blank" class="text-sm text-highlighted hover:underline">{{ $t('fix.viewOnGithub') }} ↗</a>
+                <span v-if="['ready', 'pushed'].includes(data.fix.status) && !data.canPush" class="text-[10px] text-dimmed">{{ $t('fix.pushOthersHint') }}</span>
                 <div class="ml-auto flex items-center gap-2">
-                  <span v-if="['ready', 'pushed'].includes(data.fix.status) && !data.canPush" class="text-[10px] text-dimmed">{{ $t('fix.pushOthersHint') }}</span>
                   <button
                     v-if="['ready', 'pushed'].includes(data.fix.status)"
-                    class="text-sm border border-accented px-4 py-2 hover:bg-muted disabled:opacity-40"
+                    class="w-28 text-sm border border-accented py-2 hover:bg-muted disabled:opacity-40"
                     :disabled="running || chatting || !!busy || !data.canPush || (data.fix.filesChanged ?? 0) === 0"
                     @click="confirming = 'push'; activeTab = 'findings'"
                   >
                     {{ busy === 'push' ? $t('fix.pushing') : data.fix.status === 'pushed' ? $t('fix.pushAgain') : $t('fix.pushBtn') }}
                   </button>
+                  <button v-if="chatting" class="w-28 text-sm border border-accented py-2 hover:bg-muted" @click="stopChat">{{ $t('fix.stop') }}</button>
+                  <button v-else class="w-28 text-sm bg-inverted text-inverted py-2 hover:bg-inverted/90 disabled:opacity-40" :disabled="!chatInput.trim() || !!busy" @click="sendChat">{{ $t('fix.send') }}</button>
                 </div>
               </div>
             </div>

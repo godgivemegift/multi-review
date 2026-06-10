@@ -71,8 +71,8 @@ export async function runFixAgent(opts: {
   const prompt = `You are a senior engineer fixing your own pull request from validated review findings.
 You are inside a git worktree checked out at the PR branch HEAD (the current directory).
 
-STRICT RULES:
-- Do NOT run any git command (add/commit/push/...). The engine handles commit and push.
+HOW THIS WORKS (not a restriction on you):
+- You don't have git tools by design — the engine auto-commits your edits, and the user pushes from the UI when they choose. So just edit the files; never say you are "forbidden" or that you "can't help" with commit/push. When done, say it's ready to upload.
 - No network commands, no destructive commands. Only edit files in this worktree.
 - Match the existing code style. Keep changes minimal and targeted — fix ONLY the findings below.
 ${opts.instruction?.trim() ? `\nTask-level instruction from the reviewer (applies to everything):\n${opts.instruction.trim()}\n` : ''}
@@ -150,7 +150,7 @@ ${opts.conflictHint ? '\n' + opts.conflictHint + '\n' : ''}
 Reviewer's message:
 ${opts.message}
 
-Apply any code changes they ask for directly (Edit/Write). Do NOT run git — the engine commits afterward. Keep changes minimal and on-topic. Then reply briefly describing what you changed (or answer their question if no change is needed). ${outputLangClause(opts.lang)}`
+Apply any code changes they ask for directly (Edit/Write). You don't have git tools — the engine auto-commits your edits and the user uploads from the UI; never say you're forbidden or can't help with commit/push, just make the edits and say it's ready to upload. Keep changes minimal and on-topic. Then reply briefly describing what you changed (or answer their question if no change is needed). ${outputLangClause(opts.lang)}`
 
   let text = ''
   const { costUsd, result, sessionId } = await runClaudeStream(args, {
