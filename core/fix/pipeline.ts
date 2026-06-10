@@ -331,7 +331,7 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
           acc += t
           const n = new Date().getTime()
           if (n - lastWrite > 400) { lastWrite = n; flushTurn('streaming') } // 节流写库
-          h.emit('text', t.slice(0, 200))
+          h.emit('text', t) // 完整推给前端实时流式拼接（不落库，见 emit 的 text 排除）
         },
       })
       acc = r.text || acc

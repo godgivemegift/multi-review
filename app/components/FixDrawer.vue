@@ -54,12 +54,22 @@ function openSSE() {
   es.onmessage = (ev) => {
     try {
       const e = JSON.parse(ev.data)
+      if (e.kind === 'text') {
+        // chat 的流式文本：实时逐字拼到对话区（不进运行日志）
+        liveAssistant.value += e.message || ''
+        return
+      }
       if (e.message) {
         live.value = e.message
         logLines.value.push(`${new Date().toLocaleTimeString(locale.value, { hour12: false })}  ${e.message}`)
         if (logLines.value.length > 200) logLines.value.shift()
+        // chat 期间把工具活动实时堆到对话区（Read / Edit … 一行行，像 CLI）
+        if (chatting.value && (e.kind === 'tool' || e.kind === 'stage')) {
+          chatSteps.value.push(e.message)
+          if (chatSteps.value.length > 80) chatSteps.value.shift()
+        }
       }
-      if (['validated', 'done', 'status', 'error', 'chat'].includes(e.kind)) load()
+      if (['validated', 'done', 'status', 'error', 'chat'].includes(e.kind)) { liveAssistant.value = ''; load() }
     } catch {}
   }
   // 断连重连后拉一次最新状态，避免 chatting 卡在 true（流式事件在断连期间丢了）
@@ -162,10 +172,14 @@ const FIX_CLS: Record<string, string> = { fixed: 'text-highlighted', failed: 'te
 
 // ── M2 对话跟进 ──
 const chatInput = ref('')
+const chatSteps = ref<string[]>([]) // chat 期间 agent 的工具/思考活动，实时展示
+const liveAssistant = ref('') // chat 流式文本（逐字实时，完成时由落库内容替换）
 async function sendChat() {
   const msg = chatInput.value.trim()
   if (!msg || chatting.value || busy.value) return
   chatInput.value = ''
+  chatSteps.value = []
+  liveAssistant.value = ''
   try {
     await $fetch(`/api/fixes/${props.fixId}/chat`, { method: 'POST', body: { message: msg } })
     await load() // 立刻拉出 user 轮 + streaming 占位轮；后续 SSE 'chat' 事件再刷新
@@ -349,23 +363,45 @@ async function copyWorktree() {
           <!-- ── 对话跟进 ── -->
           <template v-else-if="activeTab === 'chat'">
             <p v-if="!data.turns.length && !['ready', 'error', 'pushed'].includes(data.fix.status)" class="text-sm text-dimmed py-8">{{ $t('fix.chatHint') }}</p>
-            <div v-for="turn in data.turns" :key="turn.id" class="mb-3 text-sm">
+            <div v-for="(turn, ti) in data.turns" :key="turn.id" class="mb-3 text-sm">
               <div v-if="turn.role === 'user'" class="text-highlighted">
                 <span class="text-[10px] uppercase tracking-wider text-dimmed mr-1.5">{{ $t('fix.you') }}</span>{{ turn.content }}
               </div>
               <div v-else class="text-toned whitespace-pre-wrap leading-relaxed">
-                {{ turn.content }}<span v-if="turn.status === 'streaming'" class="animate-pulse">▍</span>
+                <!-- 流式中的最后一轮用实时拼接的文本；否则用落库内容 -->
+                {{ turn.status === 'streaming' && ti === data.turns.length - 1 ? liveAssistant : turn.content }}<span v-if="turn.status === 'streaming'" class="animate-pulse">▍</span>
                 <span v-if="turn.status === 'stopped'" class="text-[10px] text-dimmed ml-1">· {{ $t('fix.stoppedTag') }}</span>
                 <span v-else-if="turn.status === 'error'" class="text-[10px] text-dimmed ml-1">· {{ $t('common.failed') }}</span>
               </div>
             </div>
-            <div v-if="['ready', 'error', 'pushed'].includes(data.fix.status)" class="flex items-end gap-2 mt-2 sticky bottom-0 bg-default py-2">
+
+            <!-- chat 期间的工具活动（Read / Edit / Grep …），像 CLI 一行行 -->
+            <div v-if="chatting && chatSteps.length" class="mb-3 border-l-2 border-default pl-2.5 space-y-0.5">
+              <div v-for="(s, i) in chatSteps" :key="i" class="text-[11px] font-mono text-dimmed truncate">{{ s }}</div>
+            </div>
+
+            <!-- 输入区：4 行文本框，按钮在下面一排（不和文本框同行）-->
+            <div v-if="['ready', 'error', 'pushed'].includes(data.fix.status)" class="sticky bottom-0 bg-default pt-2 pb-1">
               <textarea
-                v-model="chatInput" rows="2" :placeholder="$t('fix.chatPlaceholder')" :disabled="chatting"
-                class="flex-1 text-sm bg-muted border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-accented disabled:opacity-50"
+                v-model="chatInput" rows="4" :placeholder="$t('fix.chatPlaceholder')" :disabled="chatting"
+                class="w-full text-sm bg-muted border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-accented disabled:opacity-50"
               />
-              <button v-if="chatting" class="text-sm border border-accented px-4 py-2 hover:bg-muted shrink-0" @click="stopChat">{{ $t('fix.stop') }}</button>
-              <button v-else class="text-sm bg-inverted text-inverted px-4 py-2 hover:bg-inverted/90 disabled:opacity-40 shrink-0" :disabled="!chatInput.trim() || !!busy" @click="sendChat">{{ $t('fix.send') }}</button>
+              <div class="flex items-center gap-2 mt-2">
+                <button v-if="chatting" class="text-sm border border-accented px-4 py-2 hover:bg-muted" @click="stopChat">{{ $t('fix.stop') }}</button>
+                <button v-else class="text-sm bg-inverted text-inverted px-4 py-2 hover:bg-inverted/90 disabled:opacity-40" :disabled="!chatInput.trim() || !!busy" @click="sendChat">{{ $t('fix.send') }}</button>
+                <a v-if="pushedUrl" :href="pushedUrl" target="_blank" class="text-sm text-highlighted hover:underline">{{ $t('fix.viewOnGithub') }} ↗</a>
+                <div class="ml-auto flex items-center gap-2">
+                  <span v-if="['ready', 'pushed'].includes(data.fix.status) && !data.canPush" class="text-[10px] text-dimmed">{{ $t('fix.pushOthersHint') }}</span>
+                  <button
+                    v-if="['ready', 'pushed'].includes(data.fix.status)"
+                    class="text-sm border border-accented px-4 py-2 hover:bg-muted disabled:opacity-40"
+                    :disabled="running || chatting || !!busy || !data.canPush || (data.fix.filesChanged ?? 0) === 0"
+                    @click="confirming = 'push'; activeTab = 'findings'"
+                  >
+                    {{ busy === 'push' ? $t('fix.pushing') : data.fix.status === 'pushed' ? $t('fix.pushAgain') : $t('fix.pushBtn') }}
+                  </button>
+                </div>
+              </div>
             </div>
           </template>
         </div>
