@@ -14,6 +14,7 @@ type FixData = {
   fix: any
   findings: FixFinding[]
   turns: FixTurn[]
+  events: { ts: string; kind: string; message: string | null }[]
   canPush: boolean
   prUrl: string | null
 }
@@ -39,6 +40,12 @@ async function load() {
   if (!props.fixId) return
   data.value = await $fetch<FixData>(`/api/fixes/${props.fixId}`)
   emit('changed')
+  // 用历史事件回填日志（打开任务也能看到之前 agent 一行行干了什么，同审核 drawer）
+  if (!logLines.value.length && data.value.events?.length) {
+    logLines.value = data.value.events
+      .filter((e) => e.message)
+      .map((e) => `${new Date(e.ts).toLocaleTimeString(locale.value, { hour12: false })}  ${e.message}`)
+  }
 }
 function openSSE() {
   if (!props.fixId || !import.meta.client) return
@@ -88,6 +95,7 @@ const checkedCount = computed(() => data.value?.findings.filter((f) => f.checked
 // 就地两步确认（USlideover 的 focus trap 会挡住全局 dialog，点不动 → 不用 useConfirm，
 // 改成抽屉内联确认，和 ReviewPanel 一致）
 const confirming = ref<'' | 'push' | 'discard' | 'runfix'>('')
+const pushedUrl = ref('') // 上传成功后给个「查看评论」入口
 
 function runFix() {
   // 重跑修复会 reset --hard 回 PR 原始 head，丢掉对话里改的东西 → 有对话就先就地确认
@@ -127,10 +135,11 @@ async function doPush() {
   confirming.value = ''
   busy.value = 'push'
   try {
-    const res = await $fetch<{ sha: string; replied: number; summaryPosted: boolean; leftoverCount: number }>(`/api/fixes/${props.fixId}/push`, { method: 'POST' })
+    const res = await $fetch<{ sha: string; replied: number; summaryPosted: boolean; leftoverCount: number; prUrl: string }>(`/api/fixes/${props.fixId}/push`, { method: 'POST' })
     const base = t('fix.pushed', { sha: res.sha, replied: res.replied })
     // 回复全失败（thread 被 resolve/删 + 总评也没发出）→ 明确告警，别让用户以为都回复了
     live.value = res.leftoverCount && !res.summaryPosted ? `${base} ⚠ ${t('fix.replyFailed')}` : base
+    pushedUrl.value = res.prUrl || data.value?.prUrl || ''
     await load()
   } catch (e: any) { live.value = e?.data?.statusMessage || t('fix.pushFailed') }
   finally { busy.value = '' }
@@ -237,7 +246,7 @@ async function copyWorktree() {
                 {{ showLog ? $t('review.collapseLog') : $t('review.expandLog', { count: logLines.length }) }}
               </button>
             </div>
-            <pre v-if="showLog && logLines.length" class="mt-2 max-h-48 overflow-auto bg-elevated text-toned rounded p-2 text-[11px] leading-relaxed font-mono whitespace-pre-wrap">{{ logLines.join('\n') }}</pre>
+            <pre v-if="showLog && logLines.length" class="mt-2 max-h-56 overflow-auto bg-neutral-900 text-neutral-300 rounded p-2 text-[11px] leading-relaxed font-mono whitespace-pre-wrap">{{ logLines.join('\n') }}</pre>
           </div>
           <p v-if="data.fix.error" class="text-xs text-highlighted border border-default rounded p-2 mb-4 whitespace-pre-wrap">{{ data.fix.error }}</p>
 
@@ -297,7 +306,8 @@ async function copyWorktree() {
               <div v-else class="flex items-center gap-3">
                 <button
                   class="text-sm border border-accented px-4 py-1.5 hover:bg-muted disabled:opacity-40"
-                  :disabled="!checkedCount || running || !!busy"
+                  :disabled="!checkedCount || running || !!busy || data.fix.status === 'pushed'"
+                  :title="data.fix.status === 'pushed' ? $t('fix.runFixAfterPushHint') : ''"
                   @click="runFix"
                 >
                   {{ busy === 'fix' ? $t('fix.fixing') : $t('fix.runFix', { count: checkedCount }) }}
@@ -309,15 +319,16 @@ async function copyWorktree() {
                 >
                   {{ $t('fix.viewDiff') }}
                 </button>
+                <a v-if="pushedUrl" :href="pushedUrl" target="_blank" class="text-sm text-highlighted hover:underline">{{ $t('fix.viewOnGithub') }} ↗</a>
                 <div class="ml-auto flex items-center gap-2">
-                  <span v-if="data.fix.status === 'ready' && !data.canPush" class="text-[10px] text-dimmed">{{ $t('fix.pushOthersHint') }}</span>
+                  <span v-if="['ready', 'pushed'].includes(data.fix.status) && !data.canPush" class="text-[10px] text-dimmed">{{ $t('fix.pushOthersHint') }}</span>
                   <button
                     v-if="data.fix.status === 'ready' || data.fix.status === 'pushed'"
                     class="text-sm bg-inverted text-inverted px-4 py-1.5 hover:bg-inverted/90 disabled:opacity-40"
-                    :disabled="running || !!busy || !data.canPush || (data.fix.filesChanged ?? 0) === 0 || data.fix.status === 'pushed'"
+                    :disabled="running || !!busy || !data.canPush || (data.fix.filesChanged ?? 0) === 0"
                     @click="confirming = 'push'"
                   >
-                    {{ data.fix.status === 'pushed' ? $t('fix.pushedBadge') : busy === 'push' ? $t('fix.pushing') : $t('fix.pushBtn') }}
+                    {{ busy === 'push' ? $t('fix.pushing') : data.fix.status === 'pushed' ? $t('fix.pushAgain') : $t('fix.pushBtn') }}
                   </button>
                 </div>
               </div>
@@ -337,7 +348,7 @@ async function copyWorktree() {
 
           <!-- ── 对话跟进 ── -->
           <template v-else-if="activeTab === 'chat'">
-            <p v-if="!data.turns.length && !['ready', 'error'].includes(data.fix.status)" class="text-sm text-dimmed py-8">{{ $t('fix.chatHint') }}</p>
+            <p v-if="!data.turns.length && !['ready', 'error', 'pushed'].includes(data.fix.status)" class="text-sm text-dimmed py-8">{{ $t('fix.chatHint') }}</p>
             <div v-for="turn in data.turns" :key="turn.id" class="mb-3 text-sm">
               <div v-if="turn.role === 'user'" class="text-highlighted">
                 <span class="text-[10px] uppercase tracking-wider text-dimmed mr-1.5">{{ $t('fix.you') }}</span>{{ turn.content }}
@@ -348,7 +359,7 @@ async function copyWorktree() {
                 <span v-else-if="turn.status === 'error'" class="text-[10px] text-dimmed ml-1">· {{ $t('common.failed') }}</span>
               </div>
             </div>
-            <div v-if="['ready', 'error'].includes(data.fix.status)" class="flex items-end gap-2 mt-2 sticky bottom-0 bg-default py-2">
+            <div v-if="['ready', 'error', 'pushed'].includes(data.fix.status)" class="flex items-end gap-2 mt-2 sticky bottom-0 bg-default py-2">
               <textarea
                 v-model="chatInput" rows="2" :placeholder="$t('fix.chatPlaceholder')" :disabled="chatting"
                 class="flex-1 text-sm bg-muted border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-accented disabled:opacity-50"

@@ -399,6 +399,9 @@
     "tabFindings": "Points & correction",
     "tabChanges": "Modifications",
     "tabChat": "Chat",
-    "chatHint": "Lancez d'abord une correction, puis affinez-la ici par chat."
+    "chatHint": "Lancez d'abord une correction, puis affinez-la ici par chat.",
+    "pushAgain": "Repousser",
+    "viewOnGithub": "Voir les commentaires",
+    "runFixAfterPushHint": "Déjà poussé ; utilisez le chat ci-dessous pour continuer"
   }
 }

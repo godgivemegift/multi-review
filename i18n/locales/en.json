@@ -399,6 +399,9 @@
     "tabFindings": "Findings & fix",
     "tabChanges": "Changes",
     "tabChat": "Chat",
-    "chatHint": "Run a fix first, then you can keep chatting here to refine it."
+    "chatHint": "Run a fix first, then you can keep chatting here to refine it.",
+    "pushAgain": "Push again",
+    "viewOnGithub": "View comments",
+    "runFixAfterPushHint": "Already pushed; use the chat below to keep changing"
   }
 }

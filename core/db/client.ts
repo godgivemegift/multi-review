@@ -207,6 +207,15 @@ function ensureSchema(sqlite: Database.Database) {
       created_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS fix_turns_fix_idx ON fix_turns(fix_id);
+
+    CREATE TABLE IF NOT EXISTS fix_events (
+      id TEXT PRIMARY KEY,
+      fix_id TEXT NOT NULL REFERENCES fixes(id) ON DELETE CASCADE,
+      ts TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      message TEXT
+    );
+    CREATE INDEX IF NOT EXISTS fix_events_fix_idx ON fix_events(fix_id);
   `)
 }
 

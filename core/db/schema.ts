@@ -221,6 +221,18 @@ export const fixTurns = sqliteTable('fix_turns', {
   createdAt: text('created_at').notNull(),
 })
 
+// 修复任务的进度事件（验证/修复/对话中 agent 一行行的动作）。和 events 表对 reviews 同构，
+// 单独建是因为 events FK 到 reviews。落库后打开任务能回填历史日志（同审核 drawer）。
+export const fixEvents = sqliteTable('fix_events', {
+  id: text('id').primaryKey(),
+  fixId: text('fix_id')
+    .notNull()
+    .references(() => fixes.id, { onDelete: 'cascade' }),
+  ts: text('ts').notNull(),
+  kind: text('kind').notNull(),
+  message: text('message'),
+})
+
 export type Project = typeof projects.$inferSelect
 export type Skill = typeof skills.$inferSelect
 export type Review = typeof reviews.$inferSelect
@@ -231,3 +243,4 @@ export type ReviewEvent = typeof events.$inferSelect
 export type Fix = typeof fixes.$inferSelect
 export type FixFinding = typeof fixFindings.$inferSelect
 export type FixTurn = typeof fixTurns.$inferSelect
+export type FixEvent = typeof fixEvents.$inferSelect

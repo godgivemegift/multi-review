@@ -1,9 +1,8 @@
-import { eq, and, asc } from 'drizzle-orm'
+import { eq, and, asc, inArray } from 'drizzle-orm'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { schema } from '~core/db/client'
 import { getCurrentUserLogin } from '~core/github/gh'
-import { removeWorktree } from '~core/git/worktree'
 import { buildReplyBodies, replyToThread, postSummaryComment, type ReplyItem } from '~core/fix/upload'
 
 const pexec = promisify(execFile)
@@ -26,7 +25,7 @@ export default defineEventHandler(async (event) => {
   const d = db()
   const fix = d.select().from(schema.fixes).where(eq(schema.fixes.id, id)).get()
   if (!fix) throw createError({ statusCode: 404, statusMessage: 'fix 不存在' })
-  if (fix.status !== 'ready') throw createError({ statusCode: 409, statusMessage: '该修复未就绪' })
+  if (!['ready', 'pushed'].includes(fix.status)) throw createError({ statusCode: 409, statusMessage: '该修复未就绪' })
   if (!fix.worktreePath || !fix.fixHeadSha) throw createError({ statusCode: 400, statusMessage: '缺少本地提交' })
   if ((fix.filesChanged ?? 0) === 0) throw createError({ statusCode: 400, statusMessage: '没有可推送的改动' })
   if (!SAFE_REF.test(fix.branch)) throw createError({ statusCode: 400, statusMessage: `分支名不合法: ${fix.branch}` })
@@ -40,11 +39,12 @@ export default defineEventHandler(async (event) => {
   const project = d.select().from(schema.projects).where(eq(schema.projects.id, fix.projectId)).get()
   if (!project) throw createError({ statusCode: 404, statusMessage: '项目不存在' })
 
-  // 防双击/并发：CAS 抢锁 ready→pushing，只有抢到的那次继续
+  const prevStatus = fix.status
+  // 防双击/并发：CAS 抢锁 (ready|pushed)→pushing。pushed 后可继续改、再次上传（增量）。
   const claimed = d
     .update(schema.fixes)
     .set({ status: 'pushing', updatedAt: new Date().toISOString() })
-    .where(and(eq(schema.fixes.id, id), eq(schema.fixes.status, 'ready')))
+    .where(and(eq(schema.fixes.id, id), inArray(schema.fixes.status, ['ready', 'pushed'])))
     .run()
   if (!claimed.changes) throw createError({ statusCode: 409, statusMessage: '该修复正在上传或状态已变，请刷新' })
 
@@ -75,7 +75,7 @@ export default defineEventHandler(async (event) => {
   try {
     bodies = await buildReplyBodies(cfg.translateModel as string, items)
   } catch (e: any) {
-    d.update(schema.fixes).set({ status: 'ready', updatedAt: now() }).where(eq(schema.fixes.id, id)).run()
+    d.update(schema.fixes).set({ status: prevStatus, updatedAt: now() }).where(eq(schema.fixes.id, id)).run()
     throw createError({ statusCode: 500, statusMessage: `回复翻译失败，已中止（未 push）：${String(e?.message).slice(0, 200)}` })
   }
 
@@ -93,7 +93,7 @@ export default defineEventHandler(async (event) => {
   let replied = 0
   const leftovers: { kind: string; title: string; body: string }[] = []
   for (const it of items) {
-    const base = bodies[it.key] || it.text
+    const base = bodies[it.key] || (it.kind === 'fixed' ? 'Addressed in the latest commit.' : 'After review, no change needed.')
     const body = it.kind === 'fixed' ? `${base}\n\n_Fixed in ${shortSha}._` : base
     const target = it.commentIds[0]
     if (target && (await replyToThread(project.repo, fix.prNumber, target, body))) replied++
@@ -112,12 +112,11 @@ export default defineEventHandler(async (event) => {
     }
   }
 
-  // 先把状态/worktreePath 落定（即使清理失败，状态也是一致的：已 pushed、路径已置空）
+  // 保留 worktree（不删）→ 用户可继续在对话里改、再次上传增量。worktree 只在 discard/删除时清。
   d.update(schema.fixes)
-    .set({ status: 'pushed', pushedAt: now(), lastUploadAt: now(), worktreePath: null, updatedAt: now() })
+    .set({ status: 'pushed', pushedAt: now(), lastUploadAt: now(), updatedAt: now() })
     .where(eq(schema.fixes.id, id))
     .run()
-  await removeWorktree(project.localPath ?? null, cfg.reposDir as string, id).catch(() => {})
 
-  return { ok: true, sha: shortSha, replied, summaryPosted, leftoverCount: summaryPosted ? 0 : leftovers.length }
+  return { ok: true, sha: shortSha, replied, summaryPosted, leftoverCount: summaryPosted ? 0 : leftovers.length, prUrl: `https://github.com/${project.repo}/pull/${fix.prNumber}` }
 })

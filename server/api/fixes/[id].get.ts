@@ -21,11 +21,18 @@ export default defineEventHandler(async (event) => {
     .where(eq(schema.fixTurns.fixId, id))
     .orderBy(asc(schema.fixTurns.seq))
     .all()
+  const events = d
+    .select({ ts: schema.fixEvents.ts, kind: schema.fixEvents.kind, message: schema.fixEvents.message })
+    .from(schema.fixEvents)
+    .where(eq(schema.fixEvents.fixId, id))
+    .orderBy(asc(schema.fixEvents.ts))
+    .all()
   const me = await getCurrentUserLogin().catch(() => '')
   return {
     fix, // 含 worktreePath，前端展示「在编辑器打开」用
     findings: findings.map((f: any) => ({ ...f, sourceCommentIds: JSON.parse(f.sourceCommentIds || '[]') })),
     turns,
+    events,
     canPush: !!fix.prAuthor && !!me && fix.prAuthor === me,
     prUrl: project ? `https://github.com/${project.repo}/pull/${fix.prNumber}` : null,
   }

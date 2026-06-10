@@ -399,6 +399,9 @@
     "tabFindings": "意见与修复",
     "tabChanges": "改动",
     "tabChat": "对话",
-    "chatHint": "先跑一轮修复，之后可以在这里继续聊、继续改。"
+    "chatHint": "先跑一轮修复，之后可以在这里继续聊、继续改。",
+    "pushAgain": "再次上传",
+    "viewOnGithub": "查看评论",
+    "runFixAfterPushHint": "已上传；继续改请用下方对话"
   }
 }

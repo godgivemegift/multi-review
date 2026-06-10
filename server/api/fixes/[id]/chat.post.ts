@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
 
   const fix = d.select().from(schema.fixes).where(eq(schema.fixes.id, id)).get()
   if (!fix) throw createError({ statusCode: 404, statusMessage: 'fix 不存在' })
-  if (!['ready', 'error'].includes(fix.status)) {
+  if (!['ready', 'error', 'pushed'].includes(fix.status)) {
     throw createError({ statusCode: 409, statusMessage: `当前状态（${fix.status}）不能对话，请先跑一轮修复` })
   }
   if (isChatting(id)) throw createError({ statusCode: 409, statusMessage: '上一条还在生成中，请等它完成或停止' })

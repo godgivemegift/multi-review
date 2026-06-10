@@ -51,9 +51,14 @@ export type FixJobCtx = {
 function helpers(ctx: FixJobCtx) {
   const { db, schema, fixId } = ctx
   const now = () => new Date().toISOString()
-  // 事件只走实时总线（不落库；events 表 FK 到 reviews）。stage 落库供列表/恢复显示。
+  // 事件走实时总线 + 落 fix_events（供打开任务时回填历史日志，同审核 drawer）。
+  // 'text' 是对话 token 流（高频），只实时不落库，否则一句话几十行垃圾。
   const emit = (kind: string, message?: string) => {
-    cockpitBus.emit({ reviewId: fixId, ts: now(), kind, message })
+    const ts = now()
+    cockpitBus.emit({ reviewId: fixId, ts, kind, message })
+    if (kind !== 'text') {
+      try { db.insert(schema.fixEvents).values({ id: nanoid(), fixId, ts, kind, message: message ?? null }).run() } catch { /* 落库失败不影响主流程 */ }
+    }
   }
   const setStatus = (status: string, extra: Record<string, unknown> = {}) => {
     db.update(schema.fixes).set({ status, updatedAt: now(), ...extra }).where(eq(schema.fixes.id, fixId)).run()
