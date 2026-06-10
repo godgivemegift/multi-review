@@ -27,6 +27,7 @@ const live = ref('') // 仅用于「跑动中」状态行（SSE 进度文案）
 const logLines = ref<string[]>([])
 const showLog = ref(false)
 const busy = ref('')
+const replyMode = ref(false) // 「回复作者」面板开关（在此定义：watch immediate 初始化会用到）
 let es: EventSource | null = null
 
 // 操作的成功/失败统一弹 toast（之前 live 只在 running 时才渲染，静止态点 checkbox 报错完全看不到）
@@ -85,7 +86,7 @@ function openSSE() {
   es.onopen = () => { if (data.value) load() }
 }
 watch(() => [open.value, props.fixId], () => {
-  if (open.value && props.fixId) { logLines.value = []; live.value = ''; diff.value = null; activeTab.value = 'findings'; load(); openSSE() }
+  if (open.value && props.fixId) { logLines.value = []; live.value = ''; diff.value = null; activeTab.value = 'findings'; replyMode.value = false; load(); openSSE() }
   else { es?.close(); es = null }
 }, { immediate: true })
 onBeforeUnmount(() => es?.close())
@@ -153,17 +154,11 @@ async function doPush() {
   } catch (e: any) { notify(e?.data?.statusMessage || t('fix.pushFailed')) }
   finally { busy.value = '' }
 }
-async function doReply() {
-  confirming.value = ''
-  busy.value = 'reply'
-  try {
-    const res = await $fetch<{ replied: number; summaryPosted: boolean; leftoverCount: number }>(`/api/fixes/${props.fixId}/reply`, { method: 'POST' })
-    const base = t('fix.replied', { replied: res.replied })
-    if (res.leftoverCount && !res.summaryPosted) notify(`${base} ⚠ ${t('fix.replyFailed')}`)
-    else notify(base, true)
-    await load()
-  } catch (e: any) { notify(e?.data?.statusMessage || t('common.failed')) }
-  finally { busy.value = '' }
+// 「回复作者」改为打开一个面板（输入补充 → AI 预览 → 发送），FixReplyPanel 自管。
+function doReply() { replyMode.value = true }
+function onReplyDone(refresh: boolean) {
+  replyMode.value = false
+  if (refresh) load()
 }
 
 async function doDiscard() {
@@ -297,6 +292,9 @@ async function copyWorktree() {
 
         <!-- 内容区 -->
         <div class="flex-1 overflow-y-auto px-6 py-5">
+          <!-- 回复作者面板：盖住内容区（写补充 → AI 预览 → 发到 GitHub）-->
+          <FixReplyPanel v-if="replyMode && fixId" :fix-id="fixId" @done="onReplyDone" />
+          <template v-else>
           <!-- 全局：运行日志 + error（任何 tab 都显示进度）-->
           <div v-if="running || live || logLines.length" class="text-xs text-dimmed mb-3">
             <div class="flex items-center gap-2">
@@ -439,6 +437,7 @@ async function copyWorktree() {
                 </FixActionBar>
               </div>
             </div>
+          </template>
           </template>
         </div>
       </div>

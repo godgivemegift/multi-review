@@ -40,13 +40,16 @@ const RepliesSchema = z.object({
   replies: z.array(z.object({ key: z.string(), body: z.string() })).default([]),
 })
 
-export async function buildReplyBodies(model: string, items: ReplyItem[]): Promise<Record<string, string>> {
+export async function buildReplyBodies(model: string, items: ReplyItem[], userNote?: string): Promise<Record<string, string>> {
   if (!items.length) return {}
+  const guidance = userNote?.trim()
+    ? `\nThe PR author wrote this guidance for the replies — follow it (tone, emphasis, extra context, what to promise/decline). It applies to all items:\n"""\n${userNote.trim()}\n"""\n`
+    : ''
   const prompt = `You are the author of a GitHub pull request replying to review comments after addressing them with a fix tool.
 For each item below write ONE short professional English reply body (markdown allowed, no heading):
 - kind "fixed": acknowledge and summarize what was changed, based on "text". Do not mention commit hashes — the engine appends the reference.
 - kind "wontfix": politely explain why this won't be changed, based on "text" (the validation verdict/reason). Be factual, not defensive.
-Translate any non-English content. Output ONLY one JSON object: {"replies":[{"key":"<same key>","body":"..."}]}
+Translate any non-English content.${guidance}Output ONLY one JSON object: {"replies":[{"key":"<same key>","body":"..."}]}
 Inside JSON string values never use unescaped double quotes — use backticks.
 
 ITEMS:

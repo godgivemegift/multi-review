@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // 修复抽屉底部「共享动作条」：合并基础分支 / 回复作者 / 查看改动·评论 / 上传改动。
 // findings tab 和 chat tab 共用同一套（findings 额外在 #lead 放「跑修复」，chat 在 #trail 放「发送」）。
-// 上传与回复彻底分开：各自独立按钮 + 各自就地两步确认。
+// 上传走就地两步确认；回复作者点开后由父级展开 FixReplyPanel（输入 + AI 预览 + 发送）。
 const props = defineProps<{
   data: any
   busy: string
@@ -12,10 +12,6 @@ const confirming = defineModel<string>('confirming', { required: true })
 const emit = defineEmits<{ push: []; reply: []; merge: [] }>()
 const { t } = useI18n()
 
-const replyCounts = computed(() => ({
-  fixed: props.data.findings.filter((f: any) => f.checked && f.fixStatus === 'fixed').length,
-  wontfix: props.data.findings.filter((f: any) => !f.checked && !f.suggestFix).length,
-}))
 // 「最近一次我的对外动作」入口：上传过→看那次 commit；回复过→看 PR 评论（二选一）
 const viewEntry = computed(() => {
   const d = props.data
@@ -34,12 +30,6 @@ const lockMerge = computed(() => anyBusy.value || ['merging', 'conflict'].includ
     <button class="text-highlighted font-medium hover:underline disabled:opacity-40 shrink-0" :disabled="!!busy" @click="emit('push')">{{ t('fix.pushOk') }}</button>
     <button class="text-dimmed hover:text-highlighted shrink-0" @click="confirming = ''">{{ t('common.cancel') }}</button>
   </div>
-  <!-- 回复确认 -->
-  <div v-else-if="confirming === 'reply'" class="flex items-center gap-3 text-xs">
-    <span class="text-dimmed min-w-0 flex-1">{{ t('fix.replyConfirm', { fixed: replyCounts.fixed, wontfix: replyCounts.wontfix }) }}</span>
-    <button class="text-highlighted font-medium hover:underline disabled:opacity-40 shrink-0" :disabled="!!busy" @click="emit('reply')">{{ t('fix.replyOk') }}</button>
-    <button class="text-dimmed hover:text-highlighted shrink-0" @click="confirming = ''">{{ t('common.cancel') }}</button>
-  </div>
   <!-- 正常工具条 -->
   <div v-else class="flex items-center gap-3">
     <slot name="lead" />
@@ -56,9 +46,9 @@ const lockMerge = computed(() => anyBusy.value || ['merging', 'conflict'].includ
       v-if="data.canReply && data.canPush"
       class="text-sm text-dimmed hover:text-highlighted disabled:opacity-40"
       :disabled="anyBusy"
-      @click="confirming = 'reply'"
+      @click="emit('reply')"
     >
-      {{ busy === 'reply' ? t('fix.replying') : t('fix.replyBtn') }}
+      {{ t('fix.replyBtn') }}
     </button>
     <a v-if="viewEntry" :href="viewEntry.url" target="_blank" class="text-sm text-highlighted hover:underline shrink-0">{{ viewEntry.label }} ↗</a>
     <div class="ml-auto flex items-center gap-2">
