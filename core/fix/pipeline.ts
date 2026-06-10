@@ -8,9 +8,24 @@ import { cockpitBus } from '../events'
 import { prepareWorktree, removeWorktree } from '../git/worktree'
 import { fetchTimeline, fetchReviewComments } from '../github/gh'
 import { runValidateAgent } from '../agent/validate'
-import { runFixAgent, type FixItem } from '../agent/fixer'
+import { runFixAgent, runFixChat, type FixItem } from '../agent/fixer'
+import type { ChildProcess } from 'node:child_process'
 
 const pexec = promisify(execFile)
+
+// 正在进行的 chat 子进程（按 fixId）。停止按钮从这里取句柄 kill；同一 fix 同时只允许一个 chat。
+const activeChats = new Map<string, ChildProcess>()
+const stopRequested = new Set<string>() // 用户主动停止的 → job 把那轮标记 stopped（而非 error）
+export function isChatting(fixId: string): boolean {
+  return activeChats.has(fixId)
+}
+export function stopFixChat(fixId: string): boolean {
+  const cp = activeChats.get(fixId)
+  if (!cp) return false
+  stopRequested.add(fixId)
+  cp.kill('SIGTERM') // agent 用 acceptEdits 已落盘的改动会保留，job 收尾时照样 commit
+  return true
+}
 
 // db/schema 由调用方注入（core 不直接依赖运行时 db），同 ReviewJobCtx 的约定。
 export type FixJobCtx = {
@@ -262,6 +277,87 @@ async function runFixPhase(ctx: FixJobCtx) {
     h.emit('done', `修复完成 · ${results.filter((r) => r.status === 'fixed').length}/${checked.length} 条 · ${filesChanged} 文件 +${additions}/-${deletions}`)
   } catch (e) {
     h.setStatus('error', { error: (e as Error).message })
+    h.emit('error', (e as Error).message)
+  }
+}
+
+// ── M2 对话跟进：在 worktree 里 --resume 续聊继续改 ──────────────
+// 不走 reviewQueue（交互式，即时跑）；同一 fix 同时只允许一个 chat（endpoint 用 isChatting 拦）。
+export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<void> {
+  const { db, schema, fixId } = ctx
+  const h = helpers(ctx)
+  const git = (wtPath: string, args: string[]) => pexec('git', ['-C', wtPath, ...args], { maxBuffer: 64 * 1024 * 1024 })
+
+  // append-only 轮次：user 轮 + assistant 占位轮（流式写入）
+  const maxSeq = (db.select().from(schema.fixTurns).where(eq(schema.fixTurns.fixId, fixId)).all() as any[])
+    .reduce((m: number, t: any) => Math.max(m, t.seq), 0)
+  db.insert(schema.fixTurns).values({ id: nanoid(), fixId, seq: maxSeq + 1, role: 'user', content: message, status: 'done', createdAt: h.now() }).run()
+  const asstId = nanoid()
+  db.insert(schema.fixTurns).values({ id: asstId, fixId, seq: maxSeq + 2, role: 'assistant', content: '', status: 'streaming', createdAt: h.now() }).run()
+  h.emit('chat', 'user')
+
+  let acc = ''
+  let lastWrite = 0
+  const flushTurn = (status: string) =>
+    db.update(schema.fixTurns).set({ content: acc, status }).where(eq(schema.fixTurns.id, asstId)).run()
+
+  try {
+    const wt = await ensureWorktree(ctx, h)
+    const fix = h.row()
+    let stopped = false
+    let newSessionId: string | null = fix?.sessionId ?? null
+    try {
+      const r = await runFixChat({
+        cwd: wt.path,
+        model: ctx.model,
+        lang: ctx.lang,
+        sessionId: fix?.sessionId ?? null,
+        message,
+        onSpawn: (cp) => activeChats.set(fixId, cp),
+        onText: (t) => {
+          acc += t
+          const n = new Date().getTime()
+          if (n - lastWrite > 400) { lastWrite = n; flushTurn('streaming') } // 节流写库
+          h.emit('text', t.slice(0, 200))
+        },
+      })
+      acc = r.text || acc
+      newSessionId = r.sessionId ?? newSessionId
+    } catch (e) {
+      if (stopRequested.has(fixId)) stopped = true // 用户停的，不算错误
+      else throw e
+    } finally {
+      activeChats.delete(fixId)
+      stopRequested.delete(fixId)
+    }
+
+    flushTurn(stopped ? 'stopped' : 'done')
+
+    // agent 改的文件（acceptEdits 已落盘，停止也保留）→ Node 侧 commit + 刷新 diff stats
+    const { stdout: porcelain } = await git(wt.path, ['status', '--porcelain'])
+    if (porcelain.trim()) {
+      await git(wt.path, ['add', '-A'])
+      await git(wt.path, ['commit', '-m', 'fix: follow-up from review chat'])
+    }
+    const base = h.row()?.baseHeadSha
+    const { stdout: head } = await git(wt.path, ['rev-parse', 'HEAD'])
+    let filesChanged = 0, additions = 0, deletions = 0
+    if (base) {
+      const { stdout: numstat } = await git(wt.path, ['diff', '--numstat', `${base}..HEAD`])
+      for (const line of numstat.trim().split('\n').filter(Boolean)) {
+        const [a, d] = line.split('\t')
+        filesChanged++; additions += Number(a) || 0; deletions += Number(d) || 0
+      }
+    }
+    db.update(schema.fixes)
+      .set({ fixHeadSha: head.trim(), filesChanged, additions, deletions, sessionId: newSessionId, updatedAt: h.now() })
+      .where(eq(schema.fixes.id, fixId))
+      .run()
+    h.emit('chat', stopped ? 'stopped' : 'done')
+  } catch (e) {
+    activeChats.delete(fixId)
+    stopRequested.delete(fixId)
+    flushTurn('error')
     h.emit('error', (e as Error).message)
   }
 }

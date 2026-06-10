@@ -207,6 +207,20 @@ export const fixFindings = sqliteTable('fix_findings', {
   createdAt: text('created_at').notNull(),
 })
 
+// M2 对话跟进：修复出稿后在 drawer 里继续聊、继续改（claude --resume 续会话）。
+// append-only，按 seq 排序；assistant 轮流式写入。重启恢复 + 展示都靠它。
+export const fixTurns = sqliteTable('fix_turns', {
+  id: text('id').primaryKey(),
+  fixId: text('fix_id')
+    .notNull()
+    .references(() => fixes.id, { onDelete: 'cascade' }),
+  seq: integer('seq').notNull(),
+  role: text('role', { enum: ['user', 'assistant'] }).notNull(),
+  content: text('content').notNull().default(''),
+  status: text('status', { enum: ['streaming', 'done', 'error', 'stopped'] }).notNull().default('done'),
+  createdAt: text('created_at').notNull(),
+})
+
 export type Project = typeof projects.$inferSelect
 export type Skill = typeof skills.$inferSelect
 export type Review = typeof reviews.$inferSelect
@@ -216,3 +230,4 @@ export type Post = typeof posts.$inferSelect
 export type ReviewEvent = typeof events.$inferSelect
 export type Fix = typeof fixes.$inferSelect
 export type FixFinding = typeof fixFindings.$inferSelect
+export type FixTurn = typeof fixTurns.$inferSelect

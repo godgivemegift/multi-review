@@ -14,10 +14,17 @@ export default defineEventHandler(async (event) => {
     .where(eq(schema.fixFindings.fixId, id))
     .orderBy(asc(schema.fixFindings.ord))
     .all()
+  const turns = d
+    .select()
+    .from(schema.fixTurns)
+    .where(eq(schema.fixTurns.fixId, id))
+    .orderBy(asc(schema.fixTurns.seq))
+    .all()
   const me = await getCurrentUserLogin().catch(() => '')
   return {
-    fix,
+    fix, // 含 worktreePath，前端展示「在编辑器打开」用
     findings: findings.map((f: any) => ({ ...f, sourceCommentIds: JSON.parse(f.sourceCommentIds || '[]') })),
+    turns,
     canPush: !!fix.prAuthor && !!me && fix.prAuthor === me,
   }
 })

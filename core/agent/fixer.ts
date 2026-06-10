@@ -115,3 +115,58 @@ Inside JSON string values never use unescaped double quotes — use backticks or
   }
   return { costUsd, sessionId, results }
 }
+
+// M2 对话跟进：在修复出稿后继续聊、继续改。--resume 续上 sessionId 的会话，所以 agent 记得
+// 自己刚才改了什么、为什么。同样不给 Bash；改文件后由 Node 侧 commit。
+// 返回纯文本回复（不解析 JSON —— chat 是自由对话）+ 新 sessionId（resume 后可能轮换）。
+export async function runFixChat(opts: {
+  cwd: string
+  model: string
+  lang: string
+  sessionId: string | null // 有就 --resume；没有就开新会话（agent 缺修复上下文，但仍可用）
+  message: string
+  onSpawn?: (cp: import('node:child_process').ChildProcess) => void
+  onText?: (text: string) => void
+  onTool?: (name: string, info: string) => void
+}): Promise<{ costUsd: number; sessionId: string | null; text: string }> {
+  const args = [
+    '-p',
+    '--verbose',
+    '--output-format', 'stream-json',
+    '--model', opts.model,
+    '--permission-mode', 'acceptEdits',
+    '--allowedTools', ALLOWED.join(','),
+    '--disallowedTools', DISALLOWED.join(','),
+  ]
+  if (opts.sessionId) args.push('--resume', opts.sessionId)
+
+  const prompt = `You are continuing to fix this pull request in the same git worktree. The reviewer is following up after your previous fix.
+
+Reviewer's message:
+${opts.message}
+
+Apply any code changes they ask for directly (Edit/Write). Do NOT run git — the engine commits afterward. Keep changes minimal and on-topic. Then reply briefly describing what you changed (or answer their question if no change is needed). ${outputLangClause(opts.lang)}`
+
+  let text = ''
+  const { costUsd, result, sessionId } = await runClaudeStream(args, {
+    input: prompt,
+    cwd: opts.cwd,
+    onSpawn: opts.onSpawn,
+    onEvent: (msg) => {
+      if (msg?.type !== 'assistant') return
+      const content = msg.message?.content
+      if (!Array.isArray(content)) return
+      for (const b of content) {
+        if (b?.type === 'text' && b.text) {
+          text += String(b.text)
+          opts.onText?.(String(b.text))
+        } else if (b?.type === 'tool_use') {
+          const input = b?.input ?? {}
+          const v = input.command || input.file_path || input.path || input.pattern || ''
+          opts.onTool?.(String(b.name), String(v).slice(0, 100))
+        }
+      }
+    },
+  })
+  return { costUsd, sessionId, text: (result || text).trim() }
+}
