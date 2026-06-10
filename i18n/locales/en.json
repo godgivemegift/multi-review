@@ -395,7 +395,7 @@
     "sending": "Sending…",
     "noAnchor": "no anchor → summary comment",
     "replyNone": "Nothing to reply to.",
-    "kind": { "fixed": "fixed", "wontfix": "won't fix", "pending": "open" },
+    "kind": { "fixed": "fixed", "wontfix": "won't fix", "open": "open" },
     "viewChanges": "View changes",
     "viewComments": "View comments",
     "replyFailed": "Some replies couldn't be posted (threads may be resolved/deleted)",

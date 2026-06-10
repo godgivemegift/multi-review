@@ -30,38 +30,54 @@ async function ghPostJson(path: string, payload: object): Promise<void> {
 // 对外永远专业英文（工作语言 → 英文，一次 claude 调用批量转）。
 export type ReplyItem = {
   key: string // fix_findings.id
-  kind: 'fixed' | 'wontfix' | 'pending' // pending=勾选要修但还没修好 / 其他中间态，按作者补充回应
-  title: string
-  text: string // fixed: fixText；wontfix/pending: verdict + reason（工作语言）
+  severity: string | null // High/Medium/Low（展示用）
+  title: string // 原标题（工作语言）→ 给 AI 参考 + 英文标题兜底
+  text: string // 素材：fixText / verdict + reason（工作语言）
   commentIds: number[]
 }
+export type AssembledReply = { titleEn: string; status: 'fixed' | 'wontfix' | 'open'; body: string }
 
 const RepliesSchema = z.object({
-  replies: z.array(z.object({ key: z.string(), body: z.string() })).default([]),
+  replies: z
+    .array(
+      z.object({
+        key: z.string(),
+        titleEn: z.string().default(''),
+        status: z.enum(['fixed', 'wontfix', 'open']).catch('open'),
+        body: z.string().default(''),
+      }),
+    )
+    .default([]),
 })
 
-export async function buildReplyBodies(model: string, items: ReplyItem[], userNote?: string): Promise<Record<string, string>> {
+// 为每条 finding 生成「英文标题 + 状态 + 回复正文」。状态由 AI 按素材判定（已修/不修/待办），
+// 保证图标与内容一致（不再用 fix_status 字段硬猜）。对外永远英文。
+export async function buildReplies(model: string, items: ReplyItem[], userNote?: string): Promise<Record<string, AssembledReply>> {
   if (!items.length) return {}
   const guidance = userNote?.trim()
-    ? `\nThe PR author wrote this guidance for the replies — follow it (tone, emphasis, extra context, what to promise/decline). It applies to all items:\n"""\n${userNote.trim()}\n"""\n`
+    ? `\nThe PR author wrote this guidance — follow it (tone, emphasis, what to promise/decline). It applies to all items:\n"""\n${userNote.trim()}\n"""\n`
     : ''
-  const prompt = `You are the author of a GitHub pull request replying to review comments after addressing them with a fix tool.
-For each item below write ONE short professional English reply body (markdown allowed, no heading):
-- kind "fixed": acknowledge and summarize what was changed, based on "text". Do not mention commit hashes — the engine appends the reference.
-- kind "wontfix": politely explain why this won't be changed, based on "text" (the validation verdict/reason). Be factual, not defensive.
-- kind "pending": this point is still open (under review / being worked on). Respond per the author's guidance and the finding context — e.g. acknowledge it and say it's being addressed. Don't claim it's already fixed.
-Translate any non-English content.${guidance}Output ONLY one JSON object: {"replies":[{"key":"<same key>","body":"..."}]}
+  const prompt = `You are the author of a GitHub pull request replying to review comments.
+For EACH finding below, in ENGLISH, decide and write:
+- "status": "fixed" (already addressed, or the concern no longer applies), "wontfix" (won't change — kept as-is with rationale, or the point is invalid), or "open" (still being worked on). Infer it from "text".
+- "titleEn": a short English title for the point (max 8 words).
+- "body": ONE short professional reply (markdown allowed, no heading). fixed → summarize what's addressed (no commit hashes, the engine appends the reference). wontfix → explain politely and factually, not defensively. open → acknowledge it's being addressed.
+Translate any non-English content.${guidance}
+Output ONLY one JSON object: {"replies":[{"key":"<same key>","status":"fixed|wontfix|open","titleEn":"...","body":"..."}]}
 Inside JSON string values never use unescaped double quotes — use backticks.
 
 ITEMS:
-${JSON.stringify(items.map(({ key, kind, title, text }) => ({ key, kind, title, text })))}`
+${JSON.stringify(items.map(({ key, title, text }) => ({ key, title, text })))}`
   const out = await runClaude(['--print', '--model', model || 'sonnet'], { input: prompt, timeout: 180_000 })
   const parsed = RepliesSchema.parse(await salvageJson(String(out), model))
-  const map: Record<string, string> = {}
-  for (const r of parsed.replies) map[r.key] = r.body.trim()
-  // 兜底：LLM 漏掉的 key 用英文模板，绝不让源语言（可能中文）原文流到 GitHub
+  const map: Record<string, AssembledReply> = {}
+  for (const r of parsed.replies) {
+    const fallbackTitle = items.find((it) => it.key === r.key)?.title || ''
+    map[r.key] = { titleEn: r.titleEn.trim() || fallbackTitle, status: r.status, body: r.body.trim() }
+  }
+  // 兜底：LLM 漏掉的 key 用中性英文，绝不让源语言（可能中文）原文流到 GitHub
   for (const it of items) {
-    if (!map[it.key]) map[it.key] = it.kind === 'fixed' ? 'Addressed in the latest commit.' : 'After review, this does not need a change.'
+    if (!map[it.key]) map[it.key] = { titleEn: it.title, status: 'open', body: 'Noted — this is being addressed.' }
   }
   return map
 }

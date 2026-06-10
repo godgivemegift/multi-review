@@ -9,16 +9,16 @@ function notify(msg: string, ok = false) {
   toast.add({ title: msg, color: ok ? 'success' : 'error', icon: ok ? 'i-lucide-check' : 'i-lucide-triangle-alert' })
 }
 
-type Kind = 'fixed' | 'wontfix' | 'pending'
-type PreviewItem = { key: string; kind: Kind; title: string; hasAnchor: boolean; body: string; send: boolean }
+type Status = 'fixed' | 'wontfix' | 'open'
+type PreviewItem = { key: string; severity: string | null; status: Status; title: string; hasAnchor: boolean; body: string; send: boolean }
 const note = ref('')
 const preview = ref<PreviewItem[] | null>(null)
 const busy = ref<'' | 'gen' | 'send'>('')
 
-const KIND: Record<Kind, { icon: string; cls: string }> = {
+const STATUS: Record<Status, { icon: string; cls: string }> = {
   fixed: { icon: '✅', cls: 'text-highlighted' },
   wontfix: { icon: '🚫', cls: 'text-dimmed' },
-  pending: { icon: '◷', cls: 'text-toned' },
+  open: { icon: '◷', cls: 'text-toned' },
 }
 const selectedCount = computed(() => preview.value?.filter((it) => it.send).length ?? 0)
 
@@ -29,8 +29,8 @@ async function genPreview() {
       method: 'POST',
       body: { dryRun: true, note: note.value.trim() || undefined },
     })
-    // 默认：已修/不修勾选要发，待处理默认不发（避免误发一堆「正在处理」）
-    preview.value = res.items.map((it) => ({ ...it, send: it.kind !== 'pending' }))
+    // 默认：已修/不修勾选要发，待办默认不发（避免误发一堆「正在处理」）
+    preview.value = res.items.map((it) => ({ ...it, send: it.status !== 'open' }))
   } catch (e: any) {
     notify(e?.data?.statusMessage || t('common.failed'))
   } finally {
@@ -48,8 +48,7 @@ async function send() {
       body: {
         dryRun: false,
         note: note.value.trim() || undefined,
-        keys: picked.map((it) => it.key),
-        bodies: Object.fromEntries(picked.map((it) => [it.key, it.body])),
+        replies: picked.map((it) => ({ key: it.key, titleEn: it.title, status: it.status, body: it.body })),
       },
     })
     const base = t('fix.replied', { replied: res.replied })
@@ -91,9 +90,10 @@ async function send() {
       <div v-for="it in preview" :key="it.key" class="border border-default rounded p-2.5" :class="it.send ? '' : 'opacity-55'">
         <label class="flex items-center gap-2 mb-1.5 text-xs cursor-pointer">
           <input v-model="it.send" type="checkbox" :disabled="busy === 'send'" class="accent-neutral-900 dark:accent-neutral-100" />
-          <span :class="KIND[it.kind].cls">{{ KIND[it.kind].icon }}</span>
+          <span :class="STATUS[it.status].cls">{{ STATUS[it.status].icon }}</span>
+          <span v-if="it.severity" class="text-[10px] text-dimmed shrink-0">[{{ it.severity }}]</span>
           <span class="text-toned font-medium truncate">{{ it.title }}</span>
-          <span class="text-[10px] text-dimmed shrink-0">· {{ t(`fix.kind.${it.kind}`) }}</span>
+          <span class="text-[10px] text-dimmed shrink-0">· {{ t(`fix.kind.${it.status}`) }}</span>
           <span v-if="!it.hasAnchor" class="text-[10px] text-dimmed shrink-0">· {{ t('fix.noAnchor') }}</span>
         </label>
         <textarea

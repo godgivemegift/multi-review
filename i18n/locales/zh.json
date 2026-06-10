@@ -395,7 +395,7 @@
     "sending": "发送中…",
     "noAnchor": "无锚点 → 进总评",
     "replyNone": "没有可回复的内容。",
-    "kind": { "fixed": "已修", "wontfix": "不修", "pending": "待处理" },
+    "kind": { "fixed": "已修", "wontfix": "不修", "open": "待办" },
     "viewChanges": "查看改动",
     "viewComments": "查看评论",
     "replyFailed": "部分回复没挂上（评论可能已被解决/删除）",
