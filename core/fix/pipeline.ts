@@ -356,13 +356,16 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
     let inMerge = false
     try { await git(wt.path, ['rev-parse', '-q', '--verify', 'MERGE_HEAD']); inMerge = true } catch { /* 不在 merge 中 */ }
     if (inMerge) {
-      // 解冲突场景：还有未解决就别 commit（保持 merge 状态让用户继续指挥）；全解决了就完成 merge commit
-      const { stdout: u } = await git(wt.path, ['diff', '--name-only', '--diff-filter=U'])
-      if (u.trim()) {
-        h.emit('stage', `还有 ${u.trim().split('\n').length} 个文件的冲突未解决`)
+      // 解冲突场景：用 `git diff --check`（查工作树里是否还有 <<<<<<< 冲突标记内容）。
+      // 不能用 --diff-filter=U：那是索引 stage 状态，agent 改了文件但没 git add，它永远非空，merge 永远完不成。
+      let markersLeft = false
+      try { await git(wt.path, ['diff', '--check']) } catch { markersLeft = true }
+      if (markersLeft) {
+        h.emit('stage', '文件里还有未解决的冲突标记，请继续在对话里让 AI 解决')
       } else {
         await git(wt.path, ['add', '-A'])
-        await git(wt.path, ['commit', '--no-edit'])
+        await git(wt.path, ['commit', '--no-edit']) // 完成 merge commit
+        if (h.row()?.status === 'conflict') h.setStatus('ready') // 冲突解决完，解锁回 ready
       }
     } else {
       const { stdout: porcelain } = await git(wt.path, ['status', '--porcelain'])

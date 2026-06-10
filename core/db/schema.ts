@@ -164,7 +164,8 @@ export const fixes = sqliteTable('fixes', {
   instruction: text('instruction'), // 建任务时 prompt 框里的针对性指示（可空 = 用系统默认）
   lang: text('lang').notNull().default('en'), // 工作语言 = 建任务时的 UI locale（verdict/反馈用它写）
   status: text('status', {
-    enum: ['queued', 'validating', 'awaiting', 'fixing', 'ready', 'pushing', 'pushed', 'error', 'discarded'],
+    // merging：正在合并 base 分支（临时锁，防并发）；conflict：merge 有冲突待解决（禁上传/重跑，可对话）
+    enum: ['queued', 'validating', 'awaiting', 'fixing', 'ready', 'merging', 'conflict', 'pushing', 'pushed', 'error', 'discarded'],
   })
     .notNull()
     .default('queued'),

@@ -281,6 +281,11 @@ async function copyWorktree() {
             <pre v-if="showLog && logLines.length" class="mt-2 max-h-56 overflow-auto bg-neutral-900 text-neutral-300 rounded p-2 text-[11px] leading-relaxed font-mono whitespace-pre-wrap">{{ logLines.join('\n') }}</pre>
           </div>
           <p v-if="data.fix.error" class="text-xs text-highlighted border border-default rounded p-2 mb-4 whitespace-pre-wrap">{{ data.fix.error }}</p>
+          <!-- merge 冲突待解决：引导去对话 -->
+          <div v-if="data.fix.status === 'conflict'" class="text-xs text-highlighted border border-accented rounded p-2 mb-4 flex items-center gap-2">
+            <span class="flex-1">{{ $t('fix.conflictBanner') }}</span>
+            <button v-if="activeTab !== 'chat'" class="underline hover:text-highlighted shrink-0" @click="activeTab = 'chat'">{{ $t('fix.tabChat') }} →</button>
+          </div>
 
           <!-- ── 意见 & 修复 ── -->
           <template v-if="activeTab === 'findings'">
@@ -338,7 +343,7 @@ async function copyWorktree() {
               <div v-else class="flex items-center gap-3">
                 <button
                   class="text-sm border border-accented px-4 py-1.5 hover:bg-muted disabled:opacity-40"
-                  :disabled="!checkedCount || running || !!busy || data.fix.status === 'pushed'"
+                  :disabled="!checkedCount || running || !!busy || ['pushed', 'merging', 'conflict'].includes(data.fix.status)"
                   :title="data.fix.status === 'pushed' ? $t('fix.runFixAfterPushHint') : ''"
                   @click="runFix"
                 >
@@ -354,7 +359,7 @@ async function copyWorktree() {
                 <button
                   v-if="data.fix.worktreePath"
                   class="text-sm text-dimmed hover:text-highlighted disabled:opacity-40"
-                  :disabled="running || chatting || !!busy"
+                  :disabled="running || chatting || !!busy || ['merging', 'conflict'].includes(data.fix.status)"
                   :title="$t('fix.mergeBaseTitle')"
                   @click="mergeBase"
                 >

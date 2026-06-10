@@ -70,7 +70,9 @@
       "pushing": "Envoi",
       "pushed": "Poussé",
       "error": "Erreur",
-      "discarded": "Abandonné"
+      "discarded": "Abandonné",
+      "merging": "Fusion",
+      "conflict": "Conflits à résoudre"
     }
   },
   "project": {
@@ -408,6 +410,7 @@
     "mergeBaseTitle": "Fusionner la branche cible de la PR pour résoudre les conflits (git exécuté par le moteur)",
     "mergeClean": "{base} fusionné, aucun conflit",
     "mergeConflicts": "{count} fichier(s) en conflit avec {base} — demandez à l'IA de résoudre dans le chat",
-    "mergeChatDraft": "Résous les conflits de fusion dans ces fichiers : {files}. "
+    "mergeChatDraft": "Résous les conflits de fusion dans ces fichiers : {files}. ",
+    "conflictBanner": "Conflits de fusion à résoudre — indiquez à l'IA comment dans le chat"
   }
 }

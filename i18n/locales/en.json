@@ -70,7 +70,9 @@
       "pushing": "Pushing",
       "pushed": "Pushed",
       "error": "Error",
-      "discarded": "Discarded"
+      "discarded": "Discarded",
+      "merging": "Merging",
+      "conflict": "Conflicts to resolve"
     }
   },
   "project": {
@@ -408,6 +410,7 @@
     "mergeBaseTitle": "Merge the PR's target branch to resolve conflicts (git run by the engine)",
     "mergeClean": "Merged {base}, no conflicts",
     "mergeConflicts": "{count} conflicting file(s) with {base} — ask the AI in chat to resolve",
-    "mergeChatDraft": "Resolve the merge conflicts in these files: {files}. "
+    "mergeChatDraft": "Resolve the merge conflicts in these files: {files}. ",
+    "conflictBanner": "Merge conflicts with the base branch need resolving — tell the AI how in chat"
   }
 }
