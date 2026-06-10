@@ -46,13 +46,15 @@ export function runClaude(
 export type StreamMsg = Record<string, any>
 export function runClaudeStream(
   args: string[],
-  opts: { input?: string; cwd?: string; timeout?: number; onEvent?: (msg: StreamMsg) => void } = {},
+  // onSpawn 暴露子进程句柄给调用方（M2 停止按钮要 kill 它）
+  opts: { input?: string; cwd?: string; timeout?: number; onEvent?: (msg: StreamMsg) => void; onSpawn?: (cp: import('node:child_process').ChildProcess) => void } = {},
 ): Promise<{ costUsd: number; result: string; sessionId: string | null }> {
   const timeout = opts.timeout ?? 30 * 60_000 // 修复可能跑很久
   const bin = resolveClaudeExecutable() ?? 'claude'
   const hasInput = typeof opts.input === 'string'
   return new Promise((resolve, reject) => {
     const cp = spawn(bin, args, { cwd: opts.cwd, stdio: [hasInput ? 'pipe' : 'ignore', 'pipe', 'pipe'] })
+    opts.onSpawn?.(cp)
     let buf = ''
     let err = ''
     let costUsd = 0

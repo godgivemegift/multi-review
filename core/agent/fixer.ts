@@ -71,8 +71,8 @@ export async function runFixAgent(opts: {
   const prompt = `You are a senior engineer fixing your own pull request from validated review findings.
 You are inside a git worktree checked out at the PR branch HEAD (the current directory).
 
-STRICT RULES:
-- Do NOT run any git command (add/commit/push/...). The engine handles commit and push.
+HOW THIS WORKS (not a restriction on you):
+- You don't have git tools by design — the engine auto-commits your edits, and the user pushes from the UI when they choose. So just edit the files; never say you are "forbidden" or that you "can't help" with commit/push. When done, say it's ready to upload.
 - No network commands, no destructive commands. Only edit files in this worktree.
 - Match the existing code style. Keep changes minimal and targeted — fix ONLY the findings below.
 ${opts.instruction?.trim() ? `\nTask-level instruction from the reviewer (applies to everything):\n${opts.instruction.trim()}\n` : ''}
@@ -114,4 +114,64 @@ Inside JSON string values never use unescaped double quotes — use backticks or
     results = opts.items.map((it) => ({ idx: it.idx, status: 'failed' as const, text: '（agent 未返回结构化反馈）' }))
   }
   return { costUsd, sessionId, results }
+}
+
+// M2 对话跟进：在修复出稿后继续聊、继续改。--resume 续上 sessionId 的会话，所以 agent 记得
+// 自己刚才改了什么、为什么。同样不给 Bash；改文件后由 Node 侧 commit。
+// 返回纯文本回复（不解析 JSON —— chat 是自由对话）+ 新 sessionId（resume 后可能轮换）。
+export async function runFixChat(opts: {
+  cwd: string
+  model: string
+  lang: string
+  sessionId: string | null // 有就 --resume；没有就开新会话（agent 缺修复上下文，但仍可用）
+  message: string
+  conflictHint?: string // worktree 里有未解决的 merge 冲突时，告诉 agent 去解决（文件列表）
+  onSpawn?: (cp: import('node:child_process').ChildProcess) => void
+  onText?: (text: string) => void
+  onTool?: (name: string, info: string) => void
+}): Promise<{ costUsd: number; sessionId: string | null; text: string }> {
+  const args = [
+    '-p',
+    '--verbose',
+    '--output-format', 'stream-json',
+    '--model', opts.model,
+    '--permission-mode', 'acceptEdits',
+    '--allowedTools', ALLOWED.join(','),
+    '--disallowedTools', DISALLOWED.join(','),
+  ]
+  if (opts.sessionId) args.push('--resume', opts.sessionId)
+
+  // 有 sessionId（resume）才说"接着上次修"；没有就别声称有上下文，让它自己读代码
+  const opening = opts.sessionId
+    ? 'You are continuing to fix this pull request in the same git worktree, following up after your previous fix.'
+    : 'You are working on this pull request in a git worktree. You have no prior context in this session — read the code as needed before changing anything.'
+  const prompt = `${opening}
+${opts.conflictHint ? '\n' + opts.conflictHint + '\n' : ''}
+Reviewer's message:
+${opts.message}
+
+Apply any code changes they ask for directly (Edit/Write). You don't have git tools — the engine auto-commits your edits and the user uploads from the UI; never say you're forbidden or can't help with commit/push, just make the edits and say it's ready to upload. Keep changes minimal and on-topic. Then reply briefly describing what you changed (or answer their question if no change is needed). ${outputLangClause(opts.lang)}`
+
+  let text = ''
+  const { costUsd, result, sessionId } = await runClaudeStream(args, {
+    input: prompt,
+    cwd: opts.cwd,
+    onSpawn: opts.onSpawn,
+    onEvent: (msg) => {
+      if (msg?.type !== 'assistant') return
+      const content = msg.message?.content
+      if (!Array.isArray(content)) return
+      for (const b of content) {
+        if (b?.type === 'text' && b.text) {
+          text += String(b.text)
+          opts.onText?.(String(b.text))
+        } else if (b?.type === 'tool_use') {
+          const input = b?.input ?? {}
+          const v = input.command || input.file_path || input.path || input.pattern || ''
+          opts.onTool?.(String(b.name), String(v).slice(0, 100))
+        }
+      }
+    },
+  })
+  return { costUsd, sessionId, text: (result || text).trim() }
 }

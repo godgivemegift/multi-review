@@ -164,15 +164,19 @@ export const fixes = sqliteTable('fixes', {
   instruction: text('instruction'), // 建任务时 prompt 框里的针对性指示（可空 = 用系统默认）
   lang: text('lang').notNull().default('en'), // 工作语言 = 建任务时的 UI locale（verdict/反馈用它写）
   status: text('status', {
-    enum: ['queued', 'validating', 'awaiting', 'fixing', 'ready', 'pushing', 'pushed', 'error', 'discarded'],
+    // merging：正在合并 base 分支（临时锁，防并发）；conflict：merge 有冲突待解决（禁上传/重跑，可对话）
+    enum: ['queued', 'validating', 'awaiting', 'fixing', 'ready', 'merging', 'conflict', 'pushing', 'pushed', 'error', 'discarded'],
   })
     .notNull()
     .default('queued'),
   stage: text('stage'), // 当前细粒度阶段文案（实时展示）
   summary: text('summary'), // 验证阶段的整体结论
   worktreePath: text('worktree_path'),
+  baseRef: text('base_ref'), // PR 的目标分支名（diff 三点基线 origin/<baseRef>...HEAD + merge 用）
   baseHeadSha: text('base_head_sha'), // 改动前的 PR head（diff 基线）
   fixHeadSha: text('fix_head_sha'), // 本地 commit 后的 head
+  lastPushSha: text('last_push_sha'), // 最近成功 push 上去的 commit；和 fixHeadSha 不等 = 有未上传改动
+  lastActionKind: text('last_action_kind', { enum: ['pushed', 'replied'] }), // 最近一次对外动作 → 决定「查看改动/评论」入口
   filesChanged: integer('files_changed'),
   additions: integer('additions'),
   deletions: integer('deletions'),
@@ -207,6 +211,32 @@ export const fixFindings = sqliteTable('fix_findings', {
   createdAt: text('created_at').notNull(),
 })
 
+// M2 对话跟进：修复出稿后在 drawer 里继续聊、继续改（claude --resume 续会话）。
+// append-only，按 seq 排序；assistant 轮流式写入。重启恢复 + 展示都靠它。
+export const fixTurns = sqliteTable('fix_turns', {
+  id: text('id').primaryKey(),
+  fixId: text('fix_id')
+    .notNull()
+    .references(() => fixes.id, { onDelete: 'cascade' }),
+  seq: integer('seq').notNull(),
+  role: text('role', { enum: ['user', 'assistant'] }).notNull(),
+  content: text('content').notNull().default(''),
+  status: text('status', { enum: ['streaming', 'done', 'error', 'stopped'] }).notNull().default('done'),
+  createdAt: text('created_at').notNull(),
+})
+
+// 修复任务的进度事件（验证/修复/对话中 agent 一行行的动作）。和 events 表对 reviews 同构，
+// 单独建是因为 events FK 到 reviews。落库后打开任务能回填历史日志（同审核 drawer）。
+export const fixEvents = sqliteTable('fix_events', {
+  id: text('id').primaryKey(),
+  fixId: text('fix_id')
+    .notNull()
+    .references(() => fixes.id, { onDelete: 'cascade' }),
+  ts: text('ts').notNull(),
+  kind: text('kind').notNull(),
+  message: text('message'),
+})
+
 export type Project = typeof projects.$inferSelect
 export type Skill = typeof skills.$inferSelect
 export type Review = typeof reviews.$inferSelect
@@ -216,3 +246,5 @@ export type Post = typeof posts.$inferSelect
 export type ReviewEvent = typeof events.$inferSelect
 export type Fix = typeof fixes.$inferSelect
 export type FixFinding = typeof fixFindings.$inferSelect
+export type FixTurn = typeof fixTurns.$inferSelect
+export type FixEvent = typeof fixEvents.$inferSelect

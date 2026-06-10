@@ -8,9 +8,10 @@ const Body = z.object({
   note: z.string().max(4000).optional(),
 })
 
-// 改勾选/note 的前提：所属 fix 还在「等用户操作」的状态（awaiting/ready/error），
-// 跑验证/修复/上传中不让改，避免和正在跑的 agent 抢同一批数据。
-const EDITABLE = ['awaiting', 'ready', 'error']
+// 改勾选/note 的前提：所属 fix 处在「等用户操作」的静止态。跑验证/修复/上传/合并「中」
+// （validating/fixing/pushing/merging）不让改，避免和正在跑的 agent 抢同一批数据。
+// pushed（已上传）也允许——上传后用户还会继续调整勾选再修一轮或改回复范围。
+const EDITABLE = ['awaiting', 'ready', 'error', 'pushed']
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!

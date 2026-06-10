@@ -55,6 +55,10 @@ ${JSON.stringify(items.map(({ key, kind, title, text }) => ({ key, kind, title, 
   const parsed = RepliesSchema.parse(await salvageJson(String(out), model))
   const map: Record<string, string> = {}
   for (const r of parsed.replies) map[r.key] = r.body.trim()
+  // 兜底：LLM 漏掉的 key 用英文模板，绝不让源语言（可能中文）原文流到 GitHub
+  for (const it of items) {
+    if (!map[it.key]) map[it.key] = it.kind === 'fixed' ? 'Addressed in the latest commit.' : 'After review, this does not need a change.'
+  }
   return map
 }
 
