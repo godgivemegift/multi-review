@@ -1,12 +1,15 @@
 import { eq, and, asc, inArray } from 'drizzle-orm'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { z } from 'zod'
 import { schema } from '~core/db/client'
 import { getCurrentUserLogin } from '~core/github/gh'
 import { buildReplyBodies, replyToThread, postSummaryComment, type ReplyItem } from '~core/fix/upload'
 
 const pexec = promisify(execFile)
 const SAFE_REF = /^[A-Za-z0-9._\-/]+$/ // git 分支名白名单（防奇异 refspec）
+// reply=false：只 push 不回复作者（如纯解决冲突的上传）
+const Body = z.object({ reply: z.boolean().default(true) })
 
 function parseIds(raw: string | null): number[] {
   try {
@@ -22,6 +25,7 @@ function parseIds(raw: string | null): number[] {
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
   const cfg = useRuntimeConfig()
+  const { reply } = Body.parse((await readBody(event)) || {})
   const d = db()
   const fix = d.select().from(schema.fixes).where(eq(schema.fixes.id, id)).get()
   if (!fix) throw createError({ statusCode: 404, statusMessage: 'fix 不存在' })
@@ -56,15 +60,17 @@ export default defineEventHandler(async (event) => {
     .all()
 
   // 回复装配：已修的（fixed）+ 验证判不修的（wontfix）。挂 thread 失败/无锚点 → 总评。
-  // 故意只回这两类：suggestFix=true 但用户主动反勾的，视为「先不回应这条」，不发回复
-  // （用户改了主意，可能下轮再处理，此刻不该替他表态）。
+  // 故意只回这两类：suggestFix=true 但用户主动反勾的，视为「先不回应这条」，不发回复。
+  // reply=false（纯 push，如解冲突）→ 不装配任何回复。
   const items: ReplyItem[] = []
-  for (const f of findings as any[]) {
-    const ids = parseIds(f.sourceCommentIds)
-    if (f.checked && f.fixStatus === 'fixed') {
-      items.push({ key: f.id, kind: 'fixed', title: f.title, text: f.fixText || f.title, commentIds: ids })
-    } else if (!f.checked && !f.suggestFix) {
-      items.push({ key: f.id, kind: 'wontfix', title: f.title, text: `${f.verdict}${f.reason ? ` — ${f.reason}` : ''}`, commentIds: ids })
+  if (reply) {
+    for (const f of findings as any[]) {
+      const ids = parseIds(f.sourceCommentIds)
+      if (f.checked && f.fixStatus === 'fixed') {
+        items.push({ key: f.id, kind: 'fixed', title: f.title, text: f.fixText || f.title, commentIds: ids })
+      } else if (!f.checked && !f.suggestFix) {
+        items.push({ key: f.id, kind: 'wontfix', title: f.title, text: `${f.verdict}${f.reason ? ` — ${f.reason}` : ''}`, commentIds: ids })
+      }
     }
   }
 

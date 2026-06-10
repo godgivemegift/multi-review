@@ -133,18 +133,34 @@ watch(activeTab, (tab) => {
   if (tab === 'changes' && diff.value === null && !running.value) loadDiff()
 })
 
-// 上传确认文案的填充值（就地确认行里展示将发生什么）
+// 自动决策：有可回复的（已修 / 验证不修）就回复作者；没有（纯解冲突等）就只 push
+const replyCounts = computed(() => {
+  const d = data.value
+  if (!d) return { fixed: 0, wontfix: 0 }
+  return {
+    fixed: d.findings.filter((f) => f.checked && f.fixStatus === 'fixed').length,
+    wontfix: d.findings.filter((f) => !f.checked && !f.suggestFix).length,
+  }
+})
+const willReply = computed(() => replyCounts.value.fixed + replyCounts.value.wontfix > 0)
 const pushConfirmMsg = computed(() => {
   const d = data.value
   if (!d) return ''
-  const fixed = d.findings.filter((f) => f.checked && f.fixStatus === 'fixed').length
-  const wontfix = d.findings.filter((f) => !f.checked && !f.suggestFix).length
-  return t('fix.pushConfirm', { files: d.fix.filesChanged ?? 0, branch: d.fix.branch, fixed, wontfix })
+  const files = d.fix.filesChanged ?? 0
+  return willReply.value
+    ? t('fix.pushConfirm', { files, branch: d.fix.branch, fixed: replyCounts.value.fixed, wontfix: replyCounts.value.wontfix })
+    : t('fix.pushConfirmNoReply', { files, branch: d.fix.branch })
+})
+// 上传按钮文案随情况变：纯 push / 上传并回复 / 再次上传
+const pushBtnLabel = computed(() => {
+  if (data.value?.fix.status === 'pushed') return t('fix.pushAgain')
+  return willReply.value ? t('fix.pushBtn') : t('fix.pushOnly')
 })
 async function doPush() {
   confirming.value = ''
   busy.value = 'push'
   try {
+    // 不传 reply：后端按有无可回复项自动决策（items 为空就不回复）
     const res = await $fetch<{ sha: string; replied: number; summaryPosted: boolean; leftoverCount: number; prUrl: string }>(`/api/fixes/${props.fixId}/push`, { method: 'POST' })
     const base = t('fix.pushed', { sha: res.sha, replied: res.replied })
     // 回复全失败（thread 被 resolve/删 + 总评也没发出）→ 明确告警，别让用户以为都回复了
@@ -392,7 +408,7 @@ async function copyWorktree() {
                     :disabled="running || !!busy || !data.canPush || (data.fix.filesChanged ?? 0) === 0"
                     @click="confirming = 'push'"
                   >
-                    {{ busy === 'push' ? $t('fix.pushing') : data.fix.status === 'pushed' ? $t('fix.pushAgain') : $t('fix.pushBtn') }}
+                    {{ busy === 'push' ? $t('fix.pushing') : pushBtnLabel }}
                   </button>
                 </div>
               </div>
@@ -451,7 +467,7 @@ async function copyWorktree() {
                     :disabled="running || chatting || !!busy || !data.canPush || (data.fix.filesChanged ?? 0) === 0"
                     @click="confirming = 'push'; activeTab = 'findings'"
                   >
-                    {{ busy === 'push' ? $t('fix.pushing') : data.fix.status === 'pushed' ? $t('fix.pushAgain') : $t('fix.pushBtn') }}
+                    {{ busy === 'push' ? $t('fix.pushing') : pushBtnLabel }}
                   </button>
                   <button v-if="chatting" class="w-28 text-sm border border-accented py-2 hover:bg-muted" @click="stopChat">{{ $t('fix.stop') }}</button>
                   <button v-else class="w-28 text-sm bg-inverted text-inverted py-2 hover:bg-inverted/90 disabled:opacity-40" :disabled="!chatInput.trim() || !!busy" @click="sendChat">{{ $t('fix.send') }}</button>

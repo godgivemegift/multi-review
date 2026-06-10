@@ -382,6 +382,8 @@
     "pushTitle": "Pousser la correction & répondre",
     "pushOk": "Confirmer",
     "pushConfirm": "Poussera les changements de {files} fichier(s) vers {branch} ; et répondra à l'auteur : {fixed} corrigé(s), {wontfix} expliqué(s) comme non corrigé(s).",
+    "pushConfirmNoReply": "Poussera les changements de {files} fichier(s) vers {branch} ; sans réponse à l'auteur (rien à signaler).",
+    "pushOnly": "Pousser les changements",
     "pushed": "Poussé {sha} · {replied} réponses",
     "pushFailed": "Échec de l'envoi",
     "replyFailed": "Certaines réponses n'ont pas pu être postées (fils résolus/supprimés)",

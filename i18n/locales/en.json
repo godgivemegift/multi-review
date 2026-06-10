@@ -382,6 +382,8 @@
     "pushTitle": "Push fix & reply to author",
     "pushOk": "Confirm push",
     "pushConfirm": "Will push changes across {files} file(s) to {branch}; and reply to the author: {fixed} fixed, {wontfix} explained as won't-fix.",
+    "pushConfirmNoReply": "Will push changes across {files} file(s) to {branch}. No author replies (nothing to report).",
+    "pushOnly": "Push changes",
     "pushed": "Pushed {sha} · {replied} replies",
     "pushFailed": "Push failed",
     "replyFailed": "Some replies couldn't be posted (threads may be resolved/deleted)",
