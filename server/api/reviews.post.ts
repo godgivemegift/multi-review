@@ -4,6 +4,7 @@ import { and, eq } from 'drizzle-orm'
 import { schema } from '~core/db/client'
 import { enqueueReview } from '~core/pipeline'
 import { reviewQueue } from '~core/queue'
+import { fetchPrMeta } from '~core/github/gh'
 
 // 从「全部 PR」勾选的条目直接建审核任务（元数据由列表带来，免再调 gh）。
 const Pull = z.object({
@@ -49,20 +50,47 @@ export default defineEventHandler(async (event) => {
       skipped.push({ number: p.number, reason: '已建任务' })
       continue
     }
+
+    // 勾选列表会带齐元数据；但「PR 详情抽屉」只传 { number } → branche manquante.
+    // On complète alors via GitHub (comme fix.post.ts) plutôt que de laisser une branche vide
+    // casser plus loin sur `git rev-parse origin/`.
+    let meta = p
+    if (!p.branch) {
+      try {
+        const m = await fetchPrMeta(project.repo, p.number)
+        meta = {
+          ...p,
+          title: p.title ?? m.title,
+          branch: m.branch,
+          headSha: p.headSha ?? m.headSha,
+          state: p.state ?? m.state,
+          additions: p.additions ?? m.additions,
+          deletions: p.deletions ?? m.deletions,
+        }
+      } catch (e) {
+        skipped.push({ number: p.number, reason: `无法获取 PR 元数据：${(e as Error).message}` })
+        continue
+      }
+    }
+    if (!meta.branch) {
+      skipped.push({ number: p.number, reason: 'PR 无可用分支（可能已删除）' })
+      continue
+    }
+
     const now = new Date().toISOString()
     const row = {
       id: nanoid(),
       projectId,
-      prNumber: p.number,
-      prUrl: `https://github.com/${project.repo}/pull/${p.number}`,
-      title: p.title ?? null,
-      author: p.author ?? null,
-      branch: p.branch ?? null,
-      headSha: p.headSha ?? null,
+      prNumber: meta.number,
+      prUrl: `https://github.com/${project.repo}/pull/${meta.number}`,
+      title: meta.title ?? null,
+      author: meta.author ?? null,
+      branch: meta.branch,
+      headSha: meta.headSha ?? null,
       status: 'queued' as const, // 引擎在批次二接入；本轮先排队
-      prState: p.state ?? 'unknown',
-      additions: p.additions ?? null,
-      deletions: p.deletions ?? null,
+      prState: meta.state ?? 'unknown',
+      additions: meta.additions ?? null,
+      deletions: meta.deletions ?? null,
       createdAt: now,
       updatedAt: now,
     }
@@ -77,7 +105,7 @@ export default defineEventHandler(async (event) => {
         reviewId: row.id,
         repo: project.repo,
         prNumber: row.prNumber,
-        branch: row.branch || '',
+        branch: row.branch,
         defaultBranch: project.defaultBranch,
         localPath: project.localPath,
         methodology: rc.methodology,
