@@ -391,6 +391,9 @@
     "stoppedTag": "stopped",
     "worktreeHint": "Changes in worktree:",
     "copyPath": "Copy path",
-    "pathCopied": "Path copied"
+    "pathCopied": "Path copied",
+    "runFixTitle": "Re-run fix",
+    "runFixResetWarn": "Re-running resets the worktree to the PR base — changes made in chat will be lost. Continue?",
+    "runFixOk": "Re-run (discard chat edits)"
   }
 }

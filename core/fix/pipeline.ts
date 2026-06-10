@@ -13,15 +13,18 @@ import type { ChildProcess } from 'node:child_process'
 
 const pexec = promisify(execFile)
 
-// 正在进行的 chat 子进程（按 fixId）。停止按钮从这里取句柄 kill；同一 fix 同时只允许一个 chat。
+// 并发锁：job 一进来就占（spawn 前就生效），直到整个 job（含 commit/db 收尾）结束才释放。
+// 用它防并发，而不是 activeChats —— 后者要等子进程 spawn 才有、子进程一结束就空，两头都漏窗口。
+const chatLocks = new Set<string>()
+// 真子进程句柄（spawn 后才有），停止按钮 kill 用。
 const activeChats = new Map<string, ChildProcess>()
 const stopRequested = new Set<string>() // 用户主动停止的 → job 把那轮标记 stopped（而非 error）
 export function isChatting(fixId: string): boolean {
-  return activeChats.has(fixId)
+  return chatLocks.has(fixId)
 }
 export function stopFixChat(fixId: string): boolean {
   const cp = activeChats.get(fixId)
-  if (!cp) return false
+  if (!cp) return false // 还在准备 worktree（没 spawn）或没在跑 → 没句柄可 kill
   stopRequested.add(fixId)
   cp.kill('SIGTERM') // agent 用 acceptEdits 已落盘的改动会保留，job 收尾时照样 commit
   return true
@@ -288,6 +291,10 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
   const h = helpers(ctx)
   const git = (wtPath: string, args: string[]) => pexec('git', ['-C', wtPath, ...args], { maxBuffer: 64 * 1024 * 1024 })
 
+  // 并发锁：进函数立即占（endpoint 已用 isChatting 拦一道，这里再兜底防 race）。整个 job 结束才释放。
+  if (chatLocks.has(fixId)) return
+  chatLocks.add(fixId)
+
   // append-only 轮次：user 轮 + assistant 占位轮（流式写入）
   const maxSeq = (db.select().from(schema.fixTurns).where(eq(schema.fixTurns.fixId, fixId)).all() as any[])
     .reduce((m: number, t: any) => Math.max(m, t.seq), 0)
@@ -302,6 +309,7 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
     db.update(schema.fixTurns).set({ content: acc, status }).where(eq(schema.fixTurns.id, asstId)).run()
 
   try {
+   try {
     const wt = await ensureWorktree(ctx, h)
     const fix = h.row()
     let stopped = false
@@ -354,11 +362,17 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
       .where(eq(schema.fixes.id, fixId))
       .run()
     h.emit('chat', stopped ? 'stopped' : 'done')
-  } catch (e) {
+   } catch (e) {
     activeChats.delete(fixId)
     stopRequested.delete(fixId)
     flushTurn('error')
     h.emit('error', (e as Error).message)
+   }
+  } finally {
+    // 并发锁直到这里（整个 job 含 commit/db 收尾都结束）才释放，杜绝第二个 chat 在收尾期间挤进来
+    chatLocks.delete(fixId)
+    activeChats.delete(fixId)
+    stopRequested.delete(fixId)
   }
 }
 

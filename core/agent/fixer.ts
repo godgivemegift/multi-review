@@ -140,7 +140,11 @@ export async function runFixChat(opts: {
   ]
   if (opts.sessionId) args.push('--resume', opts.sessionId)
 
-  const prompt = `You are continuing to fix this pull request in the same git worktree. The reviewer is following up after your previous fix.
+  // 有 sessionId（resume）才说"接着上次修"；没有就别声称有上下文，让它自己读代码
+  const opening = opts.sessionId
+    ? 'You are continuing to fix this pull request in the same git worktree, following up after your previous fix.'
+    : 'You are working on this pull request in a git worktree. You have no prior context in this session — read the code as needed before changing anything.'
+  const prompt = `${opening}
 
 Reviewer's message:
 ${opts.message}

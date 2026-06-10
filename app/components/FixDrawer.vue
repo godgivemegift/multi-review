@@ -52,6 +52,8 @@ function openSSE() {
       if (['validated', 'done', 'status', 'error', 'chat'].includes(e.kind)) load()
     } catch {}
   }
+  // 断连重连后拉一次最新状态，避免 chatting 卡在 true（流式事件在断连期间丢了）
+  es.onopen = () => { if (data.value) load() }
 }
 watch(() => [open.value, props.fixId], () => {
   if (open.value && props.fixId) { logLines.value = []; live.value = ''; diff.value = null; load(); openSSE() }
@@ -81,6 +83,10 @@ function saveNote(f: FixFinding) {
 const checkedCount = computed(() => data.value?.findings.filter((f) => f.checked).length ?? 0)
 
 async function runFix() {
+  // 重跑修复会 reset --hard 回 PR 原始 head，丢掉对话里改的东西 → 有对话就先确认
+  if ((data.value?.turns?.length ?? 0) > 0) {
+    if (!(await ask({ title: t('fix.runFixTitle'), message: t('fix.runFixResetWarn'), okText: t('fix.runFixOk'), danger: true }))) return
+  }
   busy.value = 'fix'; logLines.value = []; showLog.value = true
   try { await $fetch(`/api/fixes/${props.fixId}/run-fix`, { method: 'POST' }); await load() }
   catch (e: any) { live.value = e?.data?.statusMessage || t('common.failed') }
@@ -174,7 +180,7 @@ async function copyWorktree() {
           </div>
           <div class="flex items-center gap-3 text-xs shrink-0">
             <span :class="data.fix.status === 'error' ? 'text-highlighted font-medium' : 'text-toned'">{{ fixStatusLabel(data.fix.status) }}</span>
-            <button class="text-dimmed hover:text-highlighted disabled:opacity-40" :disabled="running || !!busy" @click="discard">{{ $t('fix.discard') }}</button>
+            <button class="text-dimmed hover:text-highlighted disabled:opacity-40" :disabled="running || chatting || !!busy" @click="discard">{{ $t('fix.discard') }}</button>
           </div>
         </div>
 

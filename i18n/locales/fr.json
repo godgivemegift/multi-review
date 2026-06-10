@@ -391,6 +391,9 @@
     "stoppedTag": "arrêté",
     "worktreeHint": "Modifs dans le worktree :",
     "copyPath": "Copier le chemin",
-    "pathCopied": "Chemin copié"
+    "pathCopied": "Chemin copié",
+    "runFixTitle": "Relancer la correction",
+    "runFixResetWarn": "Relancer réinitialise le worktree à la base de la PR — les changements du chat seront perdus. Continuer ?",
+    "runFixOk": "Relancer (abandonner les modifs du chat)"
   }
 }

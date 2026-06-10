@@ -38,7 +38,8 @@ export default defineEventHandler(async (event) => {
     effort: rc.effort,
     lang: fix.lang || 'zh',
   }
-  // fire-and-forget：长任务，进度走 SSE；错误已在 job 内部捕获落库
-  void runFixChatJob(ctx, message).catch(() => {})
+  // fire-and-forget：长任务，进度走 SSE；错误已在 job 内部捕获落库。
+  // 这里再兜底 log，避免 job 收尾自身抛错被静默吞掉。
+  void runFixChatJob(ctx, message).catch((e) => console.error('[fix-chat] job failed', e))
   return { ok: true }
 })
