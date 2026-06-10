@@ -394,6 +394,11 @@
     "pathCopied": "路径已复制",
     "runFixTitle": "重新跑修复",
     "runFixResetWarn": "重跑会把 worktree 重置回 PR 原始状态，对话里改的东西会丢失。继续？",
-    "runFixOk": "重跑（丢弃对话改动）"
+    "runFixOk": "重跑（丢弃对话改动）",
+    "instructionLabel": "修复指示",
+    "tabFindings": "意见与修复",
+    "tabChanges": "改动",
+    "tabChat": "对话",
+    "chatHint": "先跑一轮修复，之后可以在这里继续聊、继续改。"
   }
 }

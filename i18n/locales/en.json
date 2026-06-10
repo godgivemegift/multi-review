@@ -394,6 +394,11 @@
     "pathCopied": "Path copied",
     "runFixTitle": "Re-run fix",
     "runFixResetWarn": "Re-running resets the worktree to the PR base — changes made in chat will be lost. Continue?",
-    "runFixOk": "Re-run (discard chat edits)"
+    "runFixOk": "Re-run (discard chat edits)",
+    "instructionLabel": "Instruction",
+    "tabFindings": "Findings & fix",
+    "tabChanges": "Changes",
+    "tabChat": "Chat",
+    "chatHint": "Run a fix first, then you can keep chatting here to refine it."
   }
 }

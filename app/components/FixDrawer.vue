@@ -15,6 +15,7 @@ type FixData = {
   findings: FixFinding[]
   turns: FixTurn[]
   canPush: boolean
+  prUrl: string | null
 }
 
 const data = ref<FixData | null>(null)
@@ -31,6 +32,8 @@ const chatting = computed(() => {
   const ts = data.value?.turns ?? []
   return ts.length > 0 && ts[ts.length - 1]!.role === 'assistant' && ts[ts.length - 1]!.status === 'streaming'
 })
+// 子 tab：意见&修复 / 改动 / 对话
+const activeTab = ref<'findings' | 'changes' | 'chat'>('findings')
 
 async function load() {
   if (!props.fixId) return
@@ -56,7 +59,7 @@ function openSSE() {
   es.onopen = () => { if (data.value) load() }
 }
 watch(() => [open.value, props.fixId], () => {
-  if (open.value && props.fixId) { logLines.value = []; live.value = ''; diff.value = null; load(); openSSE() }
+  if (open.value && props.fixId) { logLines.value = []; live.value = ''; diff.value = null; activeTab.value = 'findings'; load(); openSSE() }
   else { es?.close(); es = null }
 }, { immediate: true })
 onBeforeUnmount(() => es?.close())
@@ -93,14 +96,18 @@ async function runFix() {
   finally { busy.value = '' }
 }
 
-// diff 预览
+// diff（改动 tab 用 DiffView 渲染）
 const diff = ref<string | null>(null)
 async function loadDiff() {
   busy.value = 'diff'
-  try { diff.value = (await $fetch<{ diff: string }>(`/api/fixes/${props.fixId}/diff`)).diff || t('fix.noDiff') }
+  try { diff.value = (await $fetch<{ diff: string }>(`/api/fixes/${props.fixId}/diff`)).diff || '' }
   catch (e: any) { live.value = e?.data?.statusMessage || t('common.failed') }
   finally { busy.value = '' }
 }
+// 切到「改动」tab 且还没拉过 diff → 自动加载
+watch(activeTab, (tab) => {
+  if (tab === 'changes' && diff.value === null && !running.value) loadDiff()
+})
 
 // 上传修复并回复作者（确认弹窗列明将发生什么）
 const ask = useConfirm()
@@ -169,141 +176,167 @@ async function copyWorktree() {
 </script>
 
 <template>
-  <USlideover v-model:open="open" :ui="{ content: 'w-[60vw] max-w-none min-w-[560px]' }">
+  <USlideover v-model:open="open" :ui="{ content: 'w-[calc(100vw-15rem)] max-w-none min-w-[640px]' }">
     <template #content>
-      <div v-if="data" class="flex-1 overflow-y-auto px-6 py-5">
-        <!-- 头部：状态 + 操作 -->
-        <div class="flex items-center justify-between gap-3 mb-1">
-          <div class="text-sm">
-            <span class="font-medium tabular-nums">#{{ data.fix.prNumber }}</span>
-            <span class="ml-2 text-dimmed">{{ data.fix.title }}</span>
-          </div>
-          <div class="flex items-center gap-3 text-xs shrink-0">
-            <span :class="data.fix.status === 'error' ? 'text-highlighted font-medium' : 'text-toned'">{{ fixStatusLabel(data.fix.status) }}</span>
-            <button class="text-dimmed hover:text-highlighted disabled:opacity-40" :disabled="running || chatting || !!busy" @click="discard">{{ $t('fix.discard') }}</button>
-          </div>
-        </div>
-
-        <!-- 运行日志 -->
-        <div v-if="running || live || logLines.length" class="text-xs text-dimmed mb-3">
-          <div class="flex items-center gap-2">
-            <span class="min-w-0 truncate flex-1">
-              <span v-if="running" class="inline-block w-1.5 h-1.5 rounded-full bg-inverted animate-pulse mr-1.5" />{{ running ? (live || $t('fix.working')) : $t('fix.logLines', { count: logLines.length }) }}
-            </span>
-            <button v-if="logLines.length" class="text-dimmed hover:text-highlighted shrink-0" @click="showLog = !showLog">
-              {{ showLog ? $t('review.collapseLog') : $t('review.expandLog', { count: logLines.length }) }}
-            </button>
-          </div>
-          <pre v-if="showLog && logLines.length" class="mt-2 max-h-48 overflow-auto bg-elevated text-toned rounded p-2 text-[11px] leading-relaxed font-mono whitespace-pre-wrap">{{ logLines.join('\n') }}</pre>
-        </div>
-        <p v-if="data.fix.error" class="text-xs text-highlighted border border-default rounded p-2 mb-4 whitespace-pre-wrap">{{ data.fix.error }}</p>
-
-        <!-- 验证总评 -->
-        <section v-if="data.fix.summary" class="mb-4 border border-default rounded p-3">
-          <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-1">{{ $t('fix.summary') }}</div>
-          <p class="text-sm text-toned whitespace-pre-wrap leading-relaxed">{{ data.fix.summary }}</p>
-        </section>
-
-        <!-- 还在验证：空态 -->
-        <p v-if="!data.findings.length && running" class="text-sm text-dimmed py-8">{{ $t('fix.validating') }}</p>
-        <p v-else-if="!data.findings.length" class="text-sm text-dimmed py-8">{{ $t('fix.noFindings') }}</p>
-
-        <!-- findings：复用审核 drawer 那种一条条排版 -->
-        <template v-if="data.findings.length">
-          <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-2">{{ $t('fix.findings', { count: data.findings.length }) }}</div>
-          <div v-for="f in data.findings" :key="f.id" class="border-t border-default py-3">
-            <div class="flex gap-3 items-start">
-              <input type="checkbox" class="accent-neutral-900 dark:accent-neutral-100 mt-1" :checked="f.checked" @change="toggleFinding(f)" />
-              <div class="min-w-0 flex-1">
-                <div class="text-sm">
-                  <span v-if="f.severity" class="text-xs mr-1 text-dimmed">[{{ f.severity }}]</span>{{ f.title }}
-                </div>
-                <div v-if="f.location" class="text-xs text-dimmed mt-0.5 font-mono">{{ f.location }}</div>
-                <!-- verdict：AI 自由文本判断，suggestFix 加粗提示 -->
-                <p class="text-sm mt-1" :class="f.suggestFix ? 'text-highlighted' : 'text-toned'">
-                  <span class="text-[10px] uppercase tracking-wider mr-1.5 px-1 py-px border border-default rounded">{{ f.suggestFix ? $t('fix.suggestFix') : $t('fix.verdictTag') }}</span>{{ f.verdict }}
-                </p>
-                <p v-if="f.reason" class="text-xs text-dimmed mt-1">{{ f.reason }}</p>
-                <!-- 修复反馈 -->
-                <div v-if="f.fixStatus" class="text-xs mt-2 border-l-2 border-default pl-2">
-                  <span class="font-medium" :class="FIX_CLS[f.fixStatus] || 'text-toned'">🔧 {{ fixStatusLabel(f.fixStatus) }}</span>
-                  <span class="text-muted"> {{ f.fixText }}</span>
-                </div>
-                <textarea
-                  v-model="f.note" rows="1" :placeholder="$t('fix.notePlaceholder')"
-                  class="w-full text-xs bg-muted border border-default rounded px-2 py-1 mt-2 resize-y outline-none focus:border-accented"
-                  @input="saveNote(f)"
-                />
+      <div v-if="data" class="h-full flex flex-col bg-default text-default">
+        <!-- header：对齐 PR 详情抽屉 -->
+        <div class="px-6 py-5 border-b border-default shrink-0">
+          <div class="flex items-start justify-between gap-4">
+            <div class="min-w-0">
+              <div class="flex items-center gap-2 text-xs text-dimmed">
+                <span class="tabular-nums">#{{ data.fix.prNumber }}</span>
+                <span v-if="data.fix.prAuthor">·</span><span v-if="data.fix.prAuthor">{{ data.fix.prAuthor }}</span>
+                <span>·</span><span class="font-mono">{{ data.fix.branch }}</span>
+              </div>
+              <h2 class="text-lg font-medium mt-1 leading-snug">{{ data.fix.title || '—' }}</h2>
+              <div class="text-xs text-dimmed mt-1 tabular-nums">
+                <span :class="data.fix.status === 'error' ? 'text-highlighted font-medium' : 'text-toned'">{{ fixStatusLabel(data.fix.status) }}</span>
+                <template v-if="(data.fix.filesChanged ?? 0) > 0">
+                  · {{ $t('prDrawer.filesCount', { count: data.fix.filesChanged }) }} ·
+                  <span class="text-success">+{{ data.fix.additions }}</span>
+                  <span class="text-error"> −{{ data.fix.deletions }}</span>
+                </template>
               </div>
             </div>
+            <div class="flex items-center gap-3 shrink-0">
+              <a v-if="data.prUrl" :href="data.prUrl" target="_blank" class="text-xs text-muted hover:text-highlighted whitespace-nowrap">{{ $t('prDrawer.openInGithub') }}</a>
+              <button class="text-dimmed hover:text-highlighted disabled:opacity-40 text-xs whitespace-nowrap" :disabled="running || chatting || !!busy" @click="discard">{{ $t('fix.discard') }}</button>
+              <button class="text-dimmed hover:text-highlighted text-lg leading-none" @click="open = false">✕</button>
+            </div>
           </div>
-        </template>
 
-        <!-- 工具条：跑修复 / 看 diff（左）+ 上传修复并回复作者（右，无运行中才可点）-->
-        <section v-if="data.findings.length" class="mt-5 border-t border-default pt-4 flex items-center gap-3">
-          <button
-            class="text-sm border border-accented px-4 py-1.5 hover:bg-muted disabled:opacity-40"
-            :disabled="!checkedCount || running || !!busy"
-            @click="runFix"
-          >
-            {{ busy === 'fix' ? $t('fix.fixing') : $t('fix.runFix', { count: checkedCount }) }}
-          </button>
-          <button
-            v-if="data.fix.status === 'ready'"
-            class="text-sm text-dimmed hover:text-highlighted disabled:opacity-40"
-            :disabled="!!busy"
-            @click="loadDiff"
-          >
-            {{ busy === 'diff' ? $t('common.loading') : $t('fix.viewDiff') }}
-          </button>
-
-          <!-- 上传：水平居右 -->
-          <div class="ml-auto flex items-center gap-2">
-            <span v-if="data.fix.status === 'ready' && !data.canPush" class="text-[10px] text-dimmed">{{ $t('fix.pushOthersHint') }}</span>
-            <button
-              v-if="data.fix.status === 'ready' || data.fix.status === 'pushed'"
-              class="text-sm bg-inverted text-inverted px-4 py-1.5 hover:bg-inverted/90 disabled:opacity-40"
-              :disabled="running || !!busy || !data.canPush || (data.fix.filesChanged ?? 0) === 0 || data.fix.status === 'pushed'"
-              @click="pushFix"
-            >
-              {{ data.fix.status === 'pushed' ? $t('fix.pushedBadge') : busy === 'push' ? $t('fix.pushing') : $t('fix.pushBtn') }}
-            </button>
+          <!-- 最初的修复指示 -->
+          <div v-if="data.fix.instruction" class="mt-3 text-xs text-toned bg-muted border border-default rounded px-2.5 py-1.5">
+            <span class="text-[10px] uppercase tracking-wider text-dimmed mr-1.5">{{ $t('fix.instructionLabel') }}</span>{{ data.fix.instruction }}
           </div>
-        </section>
 
-        <!-- worktree 路径：方便在 IDE 里 review 这次修复的改动 -->
-        <div v-if="data.fix.worktreePath" class="mt-3 text-[11px] text-dimmed flex items-center gap-2">
-          <span class="shrink-0">{{ $t('fix.worktreeHint') }}</span>
-          <code class="font-mono text-toned truncate flex-1">{{ data.fix.worktreePath }}</code>
-          <button class="hover:text-highlighted shrink-0 underline" @click="copyWorktree">{{ $t('fix.copyPath') }}</button>
+          <!-- 子 tab -->
+          <div class="flex gap-6 mt-4 text-sm">
+            <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'findings' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'findings'">{{ $t('fix.tabFindings') }} <span v-if="data.findings.length" class="text-dimmed">{{ data.findings.length }}</span></button>
+            <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'changes' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'changes'">{{ $t('fix.tabChanges') }} <span v-if="(data.fix.filesChanged ?? 0) > 0" class="text-dimmed">{{ data.fix.filesChanged }}</span></button>
+            <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'chat' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'chat'">{{ $t('fix.tabChat') }} <span v-if="data.turns.length" class="text-dimmed">{{ data.turns.filter((tt) => tt.role === 'user').length }}</span></button>
+          </div>
         </div>
 
-        <!-- diff 预览 -->
-        <pre v-if="diff" class="mt-3 text-[11px] text-toned whitespace-pre-wrap font-mono bg-elevated rounded p-3 max-h-80 overflow-auto">{{ diff }}</pre>
+        <!-- 内容区 -->
+        <div class="flex-1 overflow-y-auto px-6 py-5">
+          <!-- 全局：运行日志 + error（任何 tab 都显示进度）-->
+          <div v-if="running || live || logLines.length" class="text-xs text-dimmed mb-3">
+            <div class="flex items-center gap-2">
+              <span class="min-w-0 truncate flex-1">
+                <span v-if="running" class="inline-block w-1.5 h-1.5 rounded-full bg-inverted animate-pulse mr-1.5" />{{ running ? (live || $t('fix.working')) : $t('fix.logLines', { count: logLines.length }) }}
+              </span>
+              <button v-if="logLines.length" class="text-dimmed hover:text-highlighted shrink-0" @click="showLog = !showLog">
+                {{ showLog ? $t('review.collapseLog') : $t('review.expandLog', { count: logLines.length }) }}
+              </button>
+            </div>
+            <pre v-if="showLog && logLines.length" class="mt-2 max-h-48 overflow-auto bg-elevated text-toned rounded p-2 text-[11px] leading-relaxed font-mono whitespace-pre-wrap">{{ logLines.join('\n') }}</pre>
+          </div>
+          <p v-if="data.fix.error" class="text-xs text-highlighted border border-default rounded p-2 mb-4 whitespace-pre-wrap">{{ data.fix.error }}</p>
 
-        <!-- M2 对话跟进：修复出稿后继续聊、继续改（append-only，不清空）-->
-        <section v-if="data.turns.length || ['ready', 'error'].includes(data.fix.status)" class="mt-5 border-t border-default pt-4">
-          <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-3">{{ $t('fix.chatTitle') }}</div>
-          <div v-for="turn in data.turns" :key="turn.id" class="mb-3 text-sm">
-            <div v-if="turn.role === 'user'" class="text-highlighted">
-              <span class="text-[10px] uppercase tracking-wider text-dimmed mr-1.5">{{ $t('fix.you') }}</span>{{ turn.content }}
+          <!-- ── 意见 & 修复 ── -->
+          <template v-if="activeTab === 'findings'">
+            <section v-if="data.fix.summary" class="mb-4 border border-default rounded p-3">
+              <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-1">{{ $t('fix.summary') }}</div>
+              <p class="text-sm text-toned whitespace-pre-wrap leading-relaxed">{{ data.fix.summary }}</p>
+            </section>
+
+            <p v-if="!data.findings.length && running" class="text-sm text-dimmed py-8">{{ $t('fix.validating') }}</p>
+            <p v-else-if="!data.findings.length" class="text-sm text-dimmed py-8">{{ $t('fix.noFindings') }}</p>
+
+            <template v-if="data.findings.length">
+              <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-2">{{ $t('fix.findings', { count: data.findings.length }) }}</div>
+              <div v-for="f in data.findings" :key="f.id" class="border-t border-default py-3">
+                <div class="flex gap-3 items-start">
+                  <input type="checkbox" class="accent-neutral-900 dark:accent-neutral-100 mt-1" :checked="f.checked" @change="toggleFinding(f)" />
+                  <div class="min-w-0 flex-1">
+                    <div class="text-sm">
+                      <span v-if="f.severity" class="text-xs mr-1 text-dimmed">[{{ f.severity }}]</span>{{ f.title }}
+                    </div>
+                    <div v-if="f.location" class="text-xs text-dimmed mt-0.5 font-mono">{{ f.location }}</div>
+                    <p class="text-sm mt-1" :class="f.suggestFix ? 'text-highlighted' : 'text-toned'">
+                      <span class="text-[10px] uppercase tracking-wider mr-1.5 px-1 py-px border border-default rounded">{{ f.suggestFix ? $t('fix.suggestFix') : $t('fix.verdictTag') }}</span>{{ f.verdict }}
+                    </p>
+                    <p v-if="f.reason" class="text-xs text-dimmed mt-1">{{ f.reason }}</p>
+                    <div v-if="f.fixStatus" class="text-xs mt-2 border-l-2 border-default pl-2">
+                      <span class="font-medium" :class="FIX_CLS[f.fixStatus] || 'text-toned'">🔧 {{ fixStatusLabel(f.fixStatus) }}</span>
+                      <span class="text-muted"> {{ f.fixText }}</span>
+                    </div>
+                    <textarea
+                      v-model="f.note" rows="1" :placeholder="$t('fix.notePlaceholder')"
+                      class="w-full text-xs bg-muted border border-default rounded px-2 py-1 mt-2 resize-y outline-none focus:border-accented"
+                      @input="saveNote(f)"
+                    />
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- 工具条：跑修复（左）+ 上传修复并回复作者（右）-->
+            <section v-if="data.findings.length" class="mt-5 border-t border-default pt-4 flex items-center gap-3">
+              <button
+                class="text-sm border border-accented px-4 py-1.5 hover:bg-muted disabled:opacity-40"
+                :disabled="!checkedCount || running || !!busy"
+                @click="runFix"
+              >
+                {{ busy === 'fix' ? $t('fix.fixing') : $t('fix.runFix', { count: checkedCount }) }}
+              </button>
+              <button
+                v-if="(data.fix.filesChanged ?? 0) > 0"
+                class="text-sm text-dimmed hover:text-highlighted disabled:opacity-40"
+                @click="activeTab = 'changes'"
+              >
+                {{ $t('fix.viewDiff') }}
+              </button>
+              <div class="ml-auto flex items-center gap-2">
+                <span v-if="data.fix.status === 'ready' && !data.canPush" class="text-[10px] text-dimmed">{{ $t('fix.pushOthersHint') }}</span>
+                <button
+                  v-if="data.fix.status === 'ready' || data.fix.status === 'pushed'"
+                  class="text-sm bg-inverted text-inverted px-4 py-1.5 hover:bg-inverted/90 disabled:opacity-40"
+                  :disabled="running || !!busy || !data.canPush || (data.fix.filesChanged ?? 0) === 0 || data.fix.status === 'pushed'"
+                  @click="pushFix"
+                >
+                  {{ data.fix.status === 'pushed' ? $t('fix.pushedBadge') : busy === 'push' ? $t('fix.pushing') : $t('fix.pushBtn') }}
+                </button>
+              </div>
+            </section>
+          </template>
+
+          <!-- ── 改动（GitHub 式左右对比）── -->
+          <template v-else-if="activeTab === 'changes'">
+            <div v-if="data.fix.worktreePath" class="mb-3 text-[11px] text-dimmed flex items-center gap-2">
+              <span class="shrink-0">{{ $t('fix.worktreeHint') }}</span>
+              <code class="font-mono text-toned truncate flex-1">{{ data.fix.worktreePath }}</code>
+              <button class="hover:text-highlighted shrink-0 underline" @click="copyWorktree">{{ $t('fix.copyPath') }}</button>
             </div>
-            <div v-else class="text-toned whitespace-pre-wrap leading-relaxed">
-              {{ turn.content }}<span v-if="turn.status === 'streaming'" class="animate-pulse">▍</span>
-              <span v-if="turn.status === 'stopped'" class="text-[10px] text-dimmed ml-1">· {{ $t('fix.stoppedTag') }}</span>
-              <span v-else-if="turn.status === 'error'" class="text-[10px] text-dimmed ml-1">· {{ $t('common.failed') }}</span>
+            <p v-if="busy === 'diff'" class="py-6 text-sm text-dimmed">{{ $t('common.loading') }}</p>
+            <DiffView v-else :diff="diff || ''" />
+          </template>
+
+          <!-- ── 对话跟进 ── -->
+          <template v-else-if="activeTab === 'chat'">
+            <p v-if="!data.turns.length && !['ready', 'error'].includes(data.fix.status)" class="text-sm text-dimmed py-8">{{ $t('fix.chatHint') }}</p>
+            <div v-for="turn in data.turns" :key="turn.id" class="mb-3 text-sm">
+              <div v-if="turn.role === 'user'" class="text-highlighted">
+                <span class="text-[10px] uppercase tracking-wider text-dimmed mr-1.5">{{ $t('fix.you') }}</span>{{ turn.content }}
+              </div>
+              <div v-else class="text-toned whitespace-pre-wrap leading-relaxed">
+                {{ turn.content }}<span v-if="turn.status === 'streaming'" class="animate-pulse">▍</span>
+                <span v-if="turn.status === 'stopped'" class="text-[10px] text-dimmed ml-1">· {{ $t('fix.stoppedTag') }}</span>
+                <span v-else-if="turn.status === 'error'" class="text-[10px] text-dimmed ml-1">· {{ $t('common.failed') }}</span>
+              </div>
             </div>
-          </div>
-          <div v-if="['ready', 'error'].includes(data.fix.status)" class="flex items-end gap-2 mt-2">
-            <textarea
-              v-model="chatInput" rows="2" :placeholder="$t('fix.chatPlaceholder')" :disabled="chatting"
-              class="flex-1 text-sm bg-muted border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-accented disabled:opacity-50"
-              @keydown.enter.exact.prevent="sendChat"
-            />
-            <button v-if="chatting" class="text-sm border border-accented px-4 py-2 hover:bg-muted shrink-0" @click="stopChat">{{ $t('fix.stop') }}</button>
-            <button v-else class="text-sm bg-inverted text-inverted px-4 py-2 hover:bg-inverted/90 disabled:opacity-40 shrink-0" :disabled="!chatInput.trim() || !!busy" @click="sendChat">{{ $t('fix.send') }}</button>
-          </div>
-        </section>
+            <div v-if="['ready', 'error'].includes(data.fix.status)" class="flex items-end gap-2 mt-2 sticky bottom-0 bg-default py-2">
+              <textarea
+                v-model="chatInput" rows="2" :placeholder="$t('fix.chatPlaceholder')" :disabled="chatting"
+                class="flex-1 text-sm bg-muted border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-accented disabled:opacity-50"
+                @keydown.enter.exact.prevent="sendChat"
+              />
+              <button v-if="chatting" class="text-sm border border-accented px-4 py-2 hover:bg-muted shrink-0" @click="stopChat">{{ $t('fix.stop') }}</button>
+              <button v-else class="text-sm bg-inverted text-inverted px-4 py-2 hover:bg-inverted/90 disabled:opacity-40 shrink-0" :disabled="!chatInput.trim() || !!busy" @click="sendChat">{{ $t('fix.send') }}</button>
+            </div>
+          </template>
+        </div>
       </div>
       <p v-else class="p-8 text-sm text-dimmed">{{ $t('common.loading') }}</p>
     </template>

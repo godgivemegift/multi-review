@@ -394,6 +394,11 @@
     "pathCopied": "Chemin copié",
     "runFixTitle": "Relancer la correction",
     "runFixResetWarn": "Relancer réinitialise le worktree à la base de la PR — les changements du chat seront perdus. Continuer ?",
-    "runFixOk": "Relancer (abandonner les modifs du chat)"
+    "runFixOk": "Relancer (abandonner les modifs du chat)",
+    "instructionLabel": "Consigne",
+    "tabFindings": "Points & correction",
+    "tabChanges": "Modifications",
+    "tabChat": "Chat",
+    "chatHint": "Lancez d'abord une correction, puis affinez-la ici par chat."
   }
 }

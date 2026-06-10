@@ -8,6 +8,7 @@ export default defineEventHandler(async (event) => {
   const d = db()
   const fix = d.select().from(schema.fixes).where(eq(schema.fixes.id, id)).get()
   if (!fix) throw createError({ statusCode: 404, statusMessage: 'fix 不存在' })
+  const project = d.select().from(schema.projects).where(eq(schema.projects.id, fix.projectId)).get()
   const findings = d
     .select()
     .from(schema.fixFindings)
@@ -26,5 +27,6 @@ export default defineEventHandler(async (event) => {
     findings: findings.map((f: any) => ({ ...f, sourceCommentIds: JSON.parse(f.sourceCommentIds || '[]') })),
     turns,
     canPush: !!fix.prAuthor && !!me && fix.prAuthor === me,
+    prUrl: project ? `https://github.com/${project.repo}/pull/${fix.prNumber}` : null,
   }
 })

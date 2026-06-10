@@ -133,7 +133,7 @@ const lineCls: Record<DiffLine['t'], string> = {
 </script>
 
 <template>
-  <USlideover v-model:open="open" :ui="{ content: 'w-[67vw] max-w-none min-w-[640px]' }">
+  <USlideover v-model:open="open" :ui="{ content: 'w-[calc(100vw-15rem)] max-w-none min-w-[640px]' }">
     <template #content>
       <div class="h-full flex flex-col bg-default text-default">
         <!-- header -->
@@ -244,12 +244,9 @@ const lineCls: Record<DiffLine['t'], string> = {
               </span>
             </div>
           </section>
-          <section class="py-2">
-            <p v-if="diffPending" class="px-6 py-6 text-sm text-dimmed">{{ $t('prDrawer.loadingDiff') }}</p>
-            <div v-else class="font-mono text-xs leading-relaxed overflow-x-auto">
-              <div v-for="(l, i) in diffLines" :key="i" :class="lineCls[l.t]" class="whitespace-pre">{{ l.text || ' ' }}</div>
-            </div>
-            <p v-if="diffTruncated" class="px-6 py-3 text-xs text-dimmed">{{ $t('prDrawer.diffTruncated') }}</p>
+          <section class="px-6 py-3">
+            <p v-if="diffPending" class="py-6 text-sm text-dimmed">{{ $t('prDrawer.loadingDiff') }}</p>
+            <DiffView v-else :diff="diff || ''" :truncated="diffTruncated" />
           </section>
         </div>
       </div>
