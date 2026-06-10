@@ -149,6 +149,53 @@ function ensureSchema(sqlite: Database.Database) {
       message TEXT
     );
     CREATE INDEX IF NOT EXISTS events_review_idx ON events(review_id);
+
+    CREATE TABLE IF NOT EXISTS fixes (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      pr_number INTEGER NOT NULL,
+      branch TEXT NOT NULL,
+      pr_author TEXT,
+      title TEXT,
+      instruction TEXT,
+      lang TEXT NOT NULL DEFAULT 'en',
+      status TEXT NOT NULL DEFAULT 'queued',
+      stage TEXT,
+      summary TEXT,
+      worktree_path TEXT,
+      base_head_sha TEXT,
+      fix_head_sha TEXT,
+      files_changed INTEGER,
+      additions INTEGER,
+      deletions INTEGER,
+      session_id TEXT,
+      last_upload_at TEXT,
+      cost_usd REAL,
+      error TEXT,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      pushed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS fixes_project_pr_idx ON fixes(project_id, pr_number);
+
+    CREATE TABLE IF NOT EXISTS fix_findings (
+      id TEXT PRIMARY KEY,
+      fix_id TEXT NOT NULL REFERENCES fixes(id) ON DELETE CASCADE,
+      ord INTEGER NOT NULL DEFAULT 0,
+      severity TEXT,
+      title TEXT NOT NULL,
+      location TEXT,
+      verdict TEXT NOT NULL,
+      suggest_fix INTEGER NOT NULL DEFAULT 0,
+      reason TEXT,
+      source_comment_ids TEXT,
+      checked INTEGER NOT NULL DEFAULT 0,
+      note TEXT,
+      fix_status TEXT,
+      fix_text TEXT,
+      created_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS fix_findings_fix_idx ON fix_findings(fix_id);
   `)
 }
 
