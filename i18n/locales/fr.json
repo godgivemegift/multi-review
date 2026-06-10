@@ -407,7 +407,7 @@
     "tabFindings": "Points & correction",
     "tabChanges": "Modifications",
     "tabChat": "Chat",
-    "chatHint": "Lancez d'abord une correction, puis affinez-la ici par chat.",
+    "chatHint": "Discutez ici pour travailler sur la PR — demandez à l'IA de lire le code et de le modifier. Pas besoin de lancer une correction par lot d'abord.",
     "runFixAfterPushHint": "Déjà poussé ; utilisez le chat ci-dessous pour continuer",
     "mergeBase": "Fusionner la base",
     "merging": "Fusion…",

@@ -407,7 +407,7 @@
     "tabFindings": "Findings & fix",
     "tabChanges": "Changes",
     "tabChat": "Chat",
-    "chatHint": "Run a fix first, then you can keep chatting here to refine it.",
+    "chatHint": "Chat here to work on the PR — ask the AI to read the code and make changes. No need to run a batch fix first.",
     "runFixAfterPushHint": "Already pushed; use the chat below to keep changing",
     "mergeBase": "Merge base",
     "merging": "Merging…",

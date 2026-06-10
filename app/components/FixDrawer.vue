@@ -396,7 +396,7 @@ async function copyWorktree() {
 
           <!-- ── 对话跟进 ── -->
           <template v-else-if="activeTab === 'chat'">
-            <p v-if="!data.turns.length && !['ready', 'error', 'pushed'].includes(data.fix.status)" class="text-sm text-dimmed py-8">{{ $t('fix.chatHint') }}</p>
+            <p v-if="!data.turns.length && ['awaiting', 'ready', 'error', 'pushed', 'conflict'].includes(data.fix.status)" class="text-sm text-dimmed py-8">{{ $t('fix.chatHint') }}</p>
             <div v-for="(turn, ti) in data.turns" :key="turn.id" class="mb-3 text-sm">
               <div v-if="turn.role === 'user'" class="text-highlighted">
                 <span class="text-[10px] uppercase tracking-wider text-dimmed mr-1.5">{{ $t('fix.you') }}</span>{{ turn.content }}
@@ -421,7 +421,7 @@ async function copyWorktree() {
             </div>
 
             <!-- 输入区：4 行文本框；下方共享动作条，最右边是 chat 专属的发送/停止 -->
-            <div v-if="['ready', 'error', 'pushed', 'conflict'].includes(data.fix.status)" class="sticky bottom-0 bg-default pt-2 pb-1">
+            <div v-if="['awaiting', 'ready', 'error', 'pushed', 'conflict'].includes(data.fix.status)" class="sticky bottom-0 bg-default pt-2 pb-1">
               <textarea
                 v-model="chatInput" rows="4" :placeholder="$t('fix.chatPlaceholder')" :disabled="chatting"
                 class="w-full text-sm bg-muted border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-accented disabled:opacity-50"
