@@ -89,8 +89,15 @@
       "review": "审核",
       "severity": "严重度",
       "fix": "修复",
-      "findings": "意见"
+      "findings": "意见",
+      "prStatus": "PR 状态",
+      "reviewStatus": "审核",
+      "fixStatus": "修复"
     },
+    "reviewNone": "未审核",
+    "fixNone": "未修复",
+    "reviewerUpdated": "审核已更新",
+    "reviewerUpdatedTitle": "你 push 修复后又有人提交了审核",
     "selectAllReviewable": "全选可审",
     "reviewSelected": "审核选中 ({count})",
     "creatingTasks": "建任务中…",
