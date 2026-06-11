@@ -67,12 +67,21 @@ const pullsPending = ref(false)
 const page = ref(0)
 const cursors = ref<(string | null)[]>([null])
 
+// PR status 是后端分页维度：只在 open/draft 范围内时让后端拉 open（默认进行中，不会被一堆 merged 淹没）；
+// 一旦勾了 merged/closed 就拉 all，再前端按 fPr 细分。其它三维（作者/审核/修复）纯前端过滤当前页。
+const fPr = ref<string[]>(['open', 'draft'])
+const backendState = computed(() => {
+  const f = fPr.value
+  if (!f.length) return 'all'
+  return f.every((k) => k === 'open' || k === 'draft') ? 'open' : 'all'
+})
+
 async function loadPulls() {
   pullsPending.value = true
   try {
     const after = cursors.value[page.value]
     pullsResp.value = await $fetch<PullsResp>(`/api/projects/${projectId.value}/pulls`, {
-      query: { state: 'all', first: PER_PAGE, ...(after ? { after } : {}) },
+      query: { state: backendState.value, first: PER_PAGE, ...(after ? { after } : {}) },
     })
     if (pullsResp.value.hasNextPage) cursors.value[page.value + 1] = pullsResp.value.endCursor
   } catch (e: any) {
@@ -87,6 +96,7 @@ function resetAndLoad() {
   loadPulls()
 }
 onMounted(resetAndLoad)
+watch(backendState, resetAndLoad) // 切到/离开「进行中」范围 → 重新从第一页拉
 async function refreshPulls() {
   await loadPulls()
 }
@@ -110,7 +120,6 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
 
 // ── 多维 filter（作者 / PR / 审核 / 修复，都多选，前端过滤）──
 const fAuthors = ref<string[]>([])
-const fPr = ref<string[]>([])
 const fReview = ref<string[]>([])
 const fFix = ref<string[]>([])
 const authors = computed(() => {
