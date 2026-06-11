@@ -35,7 +35,7 @@ async function createProject() {
 </script>
 
 <template>
-  <UApp>
+  <UApp :toaster="{ position: 'top-right' }">
     <div class="h-screen flex flex-col bg-default text-default antialiased">
       <!-- 顶部 header：左 logo / 右 控件簇（语言切换 + 深浅色） -->
       <header class="h-16 shrink-0 border-b border-default flex items-center justify-between px-6">

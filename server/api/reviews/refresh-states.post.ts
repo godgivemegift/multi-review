@@ -31,11 +31,12 @@ export default defineEventHandler(async (event) => {
       const project = getProject(review.projectId)
       if (!project) continue
       try {
-        const { state, headSha: liveHead, reviewDecision } = await fetchPrState(project.repo, review.prNumber)
+        const { state, headSha: liveHead, reviewDecision, author } = await fetchPrState(project.repo, review.prNumber)
         // 基线同单条 refresh：比"上次审/复审看的 sha"，不是"上次发评论的 sha"
         const authorUpdated = !!review.lastPostSha && !!liveHead && !!review.headSha && liveHead !== review.headSha
         d.update(schema.reviews)
-          .set({ prState: state, reviewDecision: reviewDecision || null, authorUpdated, updatedAt: new Date().toISOString() })
+          // 顺便回填空的 author（老记录建任务时漏存 → 列表显示「-」）
+          .set({ prState: state, reviewDecision: reviewDecision || null, authorUpdated, updatedAt: new Date().toISOString(), ...(review.author ? {} : { author: author || null }) })
           .where(eq(schema.reviews.id, review.id))
           .run()
         refreshed++

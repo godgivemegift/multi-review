@@ -61,6 +61,7 @@ export default defineEventHandler(async (event) => {
         meta = {
           ...p,
           title: p.title ?? m.title,
+          author: p.author ?? m.author, // 只传 {number} 时这里曾漏掉 → 列表作者显示「-」
           branch: m.branch,
           headSha: p.headSha ?? m.headSha,
           state: p.state ?? m.state,
