@@ -177,6 +177,7 @@ export const fixes = sqliteTable('fixes', {
   fixHeadSha: text('fix_head_sha'), // 本地 commit 后的 head
   lastPushSha: text('last_push_sha'), // 最近成功 push 上去的 commit；和 fixHeadSha 不等 = 有未上传改动
   lastActionKind: text('last_action_kind', { enum: ['pushed', 'replied'] }), // 最近一次对外动作 → 决定「查看改动/评论」入口
+  reviewsAtPush: integer('reviews_at_push'), // push 修复时 PR 的 review 数；之后变多 = reviewer 又审了（「审核已更新」基线）
   filesChanged: integer('files_changed'),
   additions: integer('additions'),
   deletions: integer('deletions'),

@@ -105,6 +105,14 @@ export async function fetchPrState(
   return { state: normState(j.state, !!j.isDraft), headSha: j.headRefOid ?? '', reviewDecision: j.reviewDecision ?? '', author: j.author?.login ?? '' }
 }
 
+// PR 当前已提交的 review 总数（「审核已更新」基线：push 时记一份，之后变多 = reviewer 又审了）
+export async function fetchReviewsCount(repo: string, prNumber: number): Promise<number> {
+  const [owner, name] = repo.split('/')
+  const q = `query($owner:String!,$name:String!,$pr:Int!){ repository(owner:$owner,name:$name){ pullRequest(number:$pr){ reviews{ totalCount } } } }`
+  const out = await gh(['api', 'graphql', '-f', `query=${q}`, '-f', `owner=${owner}`, '-f', `name=${name}`, '-F', `pr=${prNumber}`])
+  return JSON.parse(out)?.data?.repository?.pullRequest?.reviews?.totalCount ?? 0
+}
+
 export type PrDetail = {
   number: number
   title: string

@@ -3,7 +3,7 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { existsSync } from 'node:fs'
 import { schema } from '~core/db/client'
-import { getCurrentUserLogin } from '~core/github/gh'
+import { getCurrentUserLogin, fetchReviewsCount } from '~core/github/gh'
 
 const pexec = promisify(execFile)
 // 首字符必须字母数字（禁前导 `-`/`.`，防被当 git flag 或路径穿越）；和 diff/merge-base 保持一致
@@ -48,12 +48,15 @@ export default defineEventHandler(async (event) => {
   }
 
   const shortSha = (fix.fixHeadSha || '').slice(0, 7)
+  // push 时记一份当前 review 数作基线：之后变多 = reviewer 又审了（「审核已更新」）。失败不致命，记 null。
+  const reviewsAtPush = await fetchReviewsCount(project.repo, fix.prNumber).catch(() => null)
   // 保留 worktree → 用户可继续在对话里改、再次上传增量。lastPushSha = 这次推上去的 head。
   d.update(schema.fixes)
     .set({
       status: 'pushed',
       lastPushSha: fix.fixHeadSha,
       lastActionKind: 'pushed',
+      reviewsAtPush,
       pushedAt: now(),
       lastUploadAt: now(),
       updatedAt: now(),
