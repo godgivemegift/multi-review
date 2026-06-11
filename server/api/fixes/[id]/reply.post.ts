@@ -10,9 +10,9 @@ import { buildReplies, replyToThread, postSummaryComment, type ReplyItem } from 
 // 只允许自己的 PR。真发后记录 lastActionKind='replied'。
 const ReplyIn = z.object({
   key: z.string(),
-  titleEn: z.string().default(''),
+  titleEn: z.string().max(200).default(''),
   status: z.enum(['fixed', 'wontfix', 'open']).catch('open'),
-  body: z.string().default(''),
+  body: z.string().max(65536).default(''), // GitHub 评论上限 ~65k，挡住超大 body
 })
 const Body = z.object({
   dryRun: z.boolean().default(true),
@@ -104,7 +104,7 @@ export default defineEventHandler(async (event) => {
       const body = r.status === 'fixed' && shortSha ? `${base}\n\n_Fixed in ${shortSha}._` : base
       const target = parseIds(f.sourceCommentIds)[0]
       if (target && (await replyToThread(project.repo, fix.prNumber, target, body))) replied++
-      else leftovers.push({ status: r.status, severity: f.severity, title: r.titleEn.trim() || f.title, body })
+      else leftovers.push({ status: r.status, severity: f.severity, title: r.titleEn.trim() || 'Review comment', body })
     }
     let summaryPosted = false
     if (leftovers.length) {

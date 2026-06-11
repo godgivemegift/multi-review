@@ -54,8 +54,10 @@ const RepliesSchema = z.object({
 // 保证图标与内容一致（不再用 fix_status 字段硬猜）。对外永远英文。
 export async function buildReplies(model: string, items: ReplyItem[], userNote?: string): Promise<Record<string, AssembledReply>> {
   if (!items.length) return {}
-  const guidance = userNote?.trim()
-    ? `\nThe PR author wrote this guidance — follow it (tone, emphasis, what to promise/decline). It applies to all items:\n"""\n${userNote.trim()}\n"""\n`
+  // 转义 `"""`，防作者补充里用三引号「闯出」分隔块改写提示词（作者=本人，影响有限，便宜防一手）
+  const safeNote = userNote?.trim().replace(/"""/g, '" " "') || ''
+  const guidance = safeNote
+    ? `\nThe PR author wrote this guidance — follow it (tone, emphasis, what to promise/decline). It applies to all items:\n"""\n${safeNote}\n"""\n`
     : ''
   const prompt = `You are the author of a GitHub pull request replying to review comments.
 For EACH finding below, in ENGLISH, decide and write:
@@ -70,14 +72,13 @@ ITEMS:
 ${JSON.stringify(items.map(({ key, title, text }) => ({ key, title, text })))}`
   const out = await runClaude(['--print', '--model', model || 'sonnet'], { input: prompt, timeout: 180_000 })
   const parsed = RepliesSchema.parse(await salvageJson(String(out), model))
+  // 标题兜底永远用英文占位，绝不回落到源语言（可能中文）的原 title，避免非英文流到 GitHub
   const map: Record<string, AssembledReply> = {}
   for (const r of parsed.replies) {
-    const fallbackTitle = items.find((it) => it.key === r.key)?.title || ''
-    map[r.key] = { titleEn: r.titleEn.trim() || fallbackTitle, status: r.status, body: r.body.trim() }
+    map[r.key] = { titleEn: r.titleEn.trim() || 'Review comment', status: r.status, body: r.body.trim() }
   }
-  // 兜底：LLM 漏掉的 key 用中性英文，绝不让源语言（可能中文）原文流到 GitHub
   for (const it of items) {
-    if (!map[it.key]) map[it.key] = { titleEn: it.title, status: 'open', body: 'Noted — this is being addressed.' }
+    if (!map[it.key]) map[it.key] = { titleEn: 'Review comment', status: 'open', body: 'Noted — this is being addressed.' }
   }
   return map
 }
