@@ -133,7 +133,6 @@ function toggleFilter(key: 'author' | 'pr' | 'review' | 'fix', v: string) {
   arr.value = arr.value.includes(v) ? arr.value.filter((x) => x !== v) : [...arr.value, v]
 }
 const anyFilter = computed(() => fAuthors.value.length || fPr.value.length || fReview.value.length || fFix.value.length)
-const filterCount = computed(() => fAuthors.value.length + fPr.value.length + fReview.value.length + fFix.value.length)
 function clearFilters() {
   fAuthors.value = []; fPr.value = []; fReview.value = []; fFix.value = []
 }
@@ -258,33 +257,31 @@ const filterDims = computed(() => [
 
     <!-- ── 全部 PR ── -->
     <div v-show="tab === 'pulls'" class="mt-8">
-      <!-- 多维 filter：一个按钮，点开下拉里是 4 组多选 checkbox -->
-      <div class="flex items-center gap-3">
-        <UPopover :content="{ align: 'start' }">
-          <UButton variant="outline" size="xs" icon="i-lucide-list-filter">
-            {{ $t('project.filterBtn') }}<span v-if="filterCount" class="ml-1 text-dimmed">({{ filterCount }})</span>
+      <!-- 多维 filter：每个维度一个独立下拉（点开是 multi-checkbox） -->
+      <div class="flex items-center gap-2 flex-wrap">
+        <UPopover v-for="dim in filterDims" :key="dim.key" :content="{ align: 'start' }">
+          <UButton variant="outline" color="neutral" size="sm" trailing-icon="i-lucide-chevron-down" class="w-36 justify-between">
+            <span class="truncate">{{ dim.label }}<span v-if="dim.sel.length" class="ml-1 text-dimmed">({{ dim.sel.length }})</span></span>
           </UButton>
           <template #content>
-            <div class="p-3 w-72 max-h-[28rem] overflow-auto space-y-4">
-              <div v-for="dim in filterDims" :key="dim.key">
-                <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-1.5">{{ dim.label }}</div>
-                <div class="space-y-1">
-                  <label v-for="o in dim.opts" :key="o" class="flex items-center gap-2 cursor-pointer text-sm py-0.5">
-                    <input type="checkbox" class="accent-neutral-900 dark:accent-neutral-100" :checked="dim.sel.includes(o)" @change="toggleFilter(dim.key, o)" />
-                    <span :class="dim.sel.includes(o) ? 'text-highlighted' : 'text-toned'">{{ dim.fmt(o) }}</span>
-                  </label>
-                </div>
-              </div>
+            <div class="p-2 w-52 max-h-80 overflow-auto">
+              <label
+                v-for="o in dim.opts" :key="o"
+                class="flex items-center gap-2 cursor-pointer text-sm py-1 px-1.5 rounded hover:bg-elevated/50"
+              >
+                <input type="checkbox" class="accent-neutral-900 dark:accent-neutral-100" :checked="dim.sel.includes(o)" @change="toggleFilter(dim.key, o)" />
+                <span :class="dim.sel.includes(o) ? 'text-highlighted' : 'text-toned'">{{ dim.fmt(o) }}</span>
+              </label>
             </div>
           </template>
         </UPopover>
-        <button v-if="anyFilter" class="text-xs text-dimmed hover:text-highlighted" @click="clearFilters">{{ $t('project.clearFilter') }}</button>
-        <UButton class="ml-auto" variant="ghost" size="xs" :loading="pullsPending" icon="i-lucide-refresh-cw" @click="refreshPulls()">{{ $t('project.refreshList') }}</UButton>
+        <button v-if="anyFilter" class="text-xs text-dimmed hover:text-highlighted ml-1" @click="clearFilters">{{ $t('project.clearFilter') }}</button>
+        <UButton class="ml-auto" variant="ghost" color="neutral" size="sm" :loading="pullsPending" icon="i-lucide-refresh-cw" @click="refreshPulls()">{{ $t('project.refreshList') }}</UButton>
       </div>
 
       <!-- PR 列表：PR | 标题(固定宽·换行) | 作者 | PR状态 | 审核 | 修复 -->
       <div class="mt-3">
-        <div class="grid grid-cols-[3.5rem_24rem_7rem_5.5rem_7rem_7rem] gap-x-4 px-1 pb-3 text-[10px] uppercase tracking-[0.15em] text-dimmed border-b border-inverted">
+        <div class="grid grid-cols-[3.5rem_minmax(20rem,1fr)_8rem_6rem_7rem_7rem] gap-x-4 px-1 pb-3 text-[10px] uppercase tracking-[0.15em] text-dimmed border-b border-inverted">
           <span>PR</span>
           <span>{{ $t('project.col.title') }}</span>
           <span>{{ $t('project.col.author') }}</span>
@@ -295,34 +292,35 @@ const filterDims = computed(() => [
         <div
           v-for="p in visiblePulls"
           :key="p.number"
-          class="grid grid-cols-[3.5rem_24rem_7rem_5.5rem_7rem_7rem] gap-x-4 items-start px-1 py-3 border-b border-default text-sm"
+          class="grid grid-cols-[3.5rem_minmax(20rem,1fr)_8rem_6rem_7rem_7rem] gap-x-4 items-center px-1 h-16 border-b border-default text-sm cursor-pointer hover:bg-elevated/40 transition-colors"
+          @click="openDetail(p.number, p.taskId)"
         >
-          <button class="font-medium tabular-nums hover:underline underline-offset-4 text-left pt-0.5" @click="openDetail(p.number, p.taskId)">#{{ p.number }}</button>
-          <button class="text-default text-left hover:text-highlighted break-words leading-snug" @click="openDetail(p.number, p.taskId)">{{ p.title }}</button>
-          <button class="text-xs text-muted hover:text-highlighted truncate text-left pt-0.5" @click="toggleFilter('author', p.author)">{{ p.author }}</button>
+          <span class="font-medium tabular-nums">#{{ p.number }}</span>
+          <span class="text-default break-words leading-snug line-clamp-2">{{ p.title }}</span>
+          <button class="text-xs text-muted hover:text-highlighted truncate text-left" @click.stop="toggleFilter('author', p.author)">{{ p.author }}</button>
           <!-- PR status -->
-          <span class="text-center pt-0.5">
+          <span class="text-center">
             <span class="inline-block whitespace-nowrap text-[10px] uppercase tracking-wider px-2 py-0.5 border rounded-full" :class="pullBadge(p).cls">{{ $t(pullBadge(p).label) }}</span>
           </span>
           <!-- Review status + 作者已更新 -->
-          <span class="text-center text-xs flex flex-col items-center gap-0.5 pt-1 leading-tight">
+          <span class="text-center text-xs flex flex-col items-center justify-center gap-0.5 leading-tight">
             <span v-if="reviewCell(p)" :class="reviewCell(p)!.cls">{{ reviewCell(p)!.label }}</span>
             <span v-else class="text-dimmed">—</span>
-            <span v-if="p.authorUpdated" class="text-[10px] text-highlighted font-medium" :title="$t('project.authorUpdatedTitle')">● {{ $t('project.authorUpdated') }}</span>
+            <span v-if="p.authorUpdated" class="text-[9px] text-highlighted font-medium" :title="$t('project.authorUpdatedTitle')">● {{ $t('project.authorUpdated') }}</span>
           </span>
           <!-- Fix status + 审核已更新 -->
-          <span class="text-center text-xs flex flex-col items-center gap-0.5 pt-1 leading-tight">
-            <button v-if="fixCell(p)" :class="fixCell(p)!.cls" class="hover:text-highlighted" @click="p.fixId && openFix(p.fixId)">{{ fixCell(p)!.label }}</button>
+          <span class="text-center text-xs flex flex-col items-center justify-center gap-0.5 leading-tight">
+            <button v-if="fixCell(p)" :class="fixCell(p)!.cls" class="hover:text-highlighted" @click.stop="p.fixId && openFix(p.fixId)">{{ fixCell(p)!.label }}</button>
             <span v-else class="text-dimmed">—</span>
-            <span v-if="p.reviewerUpdated" class="text-[10px] text-highlighted font-medium" :title="$t('project.reviewerUpdatedTitle')">● {{ $t('project.reviewerUpdated') }}</span>
+            <span v-if="p.reviewerUpdated" class="text-[9px] text-highlighted font-medium" :title="$t('project.reviewerUpdatedTitle')">● {{ $t('project.reviewerUpdated') }}</span>
           </span>
         </div>
         <p v-if="!visiblePulls.length" class="py-16 text-center text-xs text-dimmed">
           {{ pullsPending ? $t('common.loading') : $t('project.noPulls') }}
         </p>
 
-        <!-- 分页 -->
-        <div v-if="pullsResp && (pullsResp.totalCount > PER_PAGE)" class="flex items-center justify-between mt-5 text-xs text-dimmed">
+        <!-- 分页：始终显示总数 + 翻页（按钮按 hasNextPage/page 启用） -->
+        <div v-if="pullsResp && pullsResp.pulls.length" class="flex items-center justify-between mt-5 text-xs text-dimmed">
           <span>{{ $t('project.pagination.summary', { total: pullsResp.totalCount, page: page + 1 }) }}</span>
           <div class="flex gap-4">
             <button class="hover:text-highlighted disabled:opacity-30" :disabled="page === 0 || pullsPending" @click="prevPage">{{ $t('project.pagination.prev') }}</button>
