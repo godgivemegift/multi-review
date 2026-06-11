@@ -157,7 +157,8 @@
     "noneFixable": "All selected PRs already have an active fix task",
     "fixSelected": "Fix selected ({count})",
     "noFixes": "No fix tasks yet. Pick PRs in \"All PRs\" and click \"Fix selected\".",
-    "fixCountsTitle": "checked / total items · fixed"
+    "fixCountsTitle": "checked / total items · fixed",
+    "filterBtn": "Filter"
   },
   "prDrawer": {
     "loadFailed": "Load failed",
@@ -402,7 +403,11 @@
     "sending": "Sending…",
     "noAnchor": "no anchor → summary comment",
     "replyNone": "Nothing to reply to.",
-    "kind": { "fixed": "fixed", "wontfix": "won't fix", "open": "open" },
+    "kind": {
+      "fixed": "fixed",
+      "wontfix": "won't fix",
+      "open": "open"
+    },
     "viewChanges": "View changes",
     "viewComments": "View comments",
     "replyFailed": "Some replies couldn't be posted (threads may be resolved/deleted)",

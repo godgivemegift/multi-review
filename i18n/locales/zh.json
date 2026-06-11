@@ -157,7 +157,8 @@
     "noneFixable": "所选 PR 都有进行中的修复任务",
     "fixSelected": "修复选中 ({count})",
     "noFixes": "还没有修复任务。去「全部 PR」勾选 PR 点「修复选中」。",
-    "fixCountsTitle": "已勾选 / 总意见数 · 已修复"
+    "fixCountsTitle": "已勾选 / 总意见数 · 已修复",
+    "filterBtn": "筛选"
   },
   "prDrawer": {
     "loadFailed": "加载失败",
@@ -402,7 +403,11 @@
     "sending": "发送中…",
     "noAnchor": "无锚点 → 进总评",
     "replyNone": "没有可回复的内容。",
-    "kind": { "fixed": "已修", "wontfix": "不修", "open": "待办" },
+    "kind": {
+      "fixed": "已修",
+      "wontfix": "不修",
+      "open": "待办"
+    },
     "viewChanges": "查看改动",
     "viewComments": "查看评论",
     "replyFailed": "部分回复没挂上（评论可能已被解决/删除）",

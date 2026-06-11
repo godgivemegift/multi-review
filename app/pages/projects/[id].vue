@@ -133,6 +133,7 @@ function toggleFilter(key: 'author' | 'pr' | 'review' | 'fix', v: string) {
   arr.value = arr.value.includes(v) ? arr.value.filter((x) => x !== v) : [...arr.value, v]
 }
 const anyFilter = computed(() => fAuthors.value.length || fPr.value.length || fReview.value.length || fFix.value.length)
+const filterCount = computed(() => fAuthors.value.length + fPr.value.length + fReview.value.length + fFix.value.length)
 function clearFilters() {
   fAuthors.value = []; fPr.value = []; fReview.value = []; fFix.value = []
 }
@@ -257,20 +258,26 @@ const filterDims = computed(() => [
 
     <!-- ── 全部 PR ── -->
     <div v-show="tab === 'pulls'" class="mt-8">
-      <!-- 多维 filter：每行一维，点击多选 -->
-      <div class="space-y-1.5">
-        <div v-for="dim in filterDims" :key="dim.key" class="flex flex-wrap gap-x-3 gap-y-1 items-baseline text-sm">
-          <span class="text-[10px] uppercase tracking-wider text-dimmed w-20 shrink-0">{{ dim.label }}</span>
-          <button
-            v-for="o in dim.opts" :key="o"
-            class="transition-colors"
-            :class="dim.sel.includes(o) ? 'text-highlighted font-medium underline underline-offset-4' : 'text-dimmed hover:text-default'"
-            @click="toggleFilter(dim.key, o)"
-          >{{ dim.fmt(o) }}</button>
-        </div>
-      </div>
-
-      <div class="mt-5 flex items-center gap-4 h-8">
+      <!-- 多维 filter：一个按钮，点开下拉里是 4 组多选 checkbox -->
+      <div class="flex items-center gap-3">
+        <UPopover :content="{ align: 'start' }">
+          <UButton variant="outline" size="xs" icon="i-lucide-list-filter">
+            {{ $t('project.filterBtn') }}<span v-if="filterCount" class="ml-1 text-dimmed">({{ filterCount }})</span>
+          </UButton>
+          <template #content>
+            <div class="p-3 w-72 max-h-[28rem] overflow-auto space-y-4">
+              <div v-for="dim in filterDims" :key="dim.key">
+                <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-1.5">{{ dim.label }}</div>
+                <div class="space-y-1">
+                  <label v-for="o in dim.opts" :key="o" class="flex items-center gap-2 cursor-pointer text-sm py-0.5">
+                    <input type="checkbox" class="accent-neutral-900 dark:accent-neutral-100" :checked="dim.sel.includes(o)" @change="toggleFilter(dim.key, o)" />
+                    <span :class="dim.sel.includes(o) ? 'text-highlighted' : 'text-toned'">{{ dim.fmt(o) }}</span>
+                  </label>
+                </div>
+              </div>
+            </div>
+          </template>
+        </UPopover>
         <button v-if="anyFilter" class="text-xs text-dimmed hover:text-highlighted" @click="clearFilters">{{ $t('project.clearFilter') }}</button>
         <UButton class="ml-auto" variant="ghost" size="xs" :loading="pullsPending" icon="i-lucide-refresh-cw" @click="refreshPulls()">{{ $t('project.refreshList') }}</UButton>
       </div>

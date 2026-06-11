@@ -157,7 +157,8 @@
     "noneFixable": "Toutes les PR sélectionnées ont déjà une tâche de correction active",
     "fixSelected": "Corriger la sélection ({count})",
     "noFixes": "Aucune tâche de correction. Cochez des PR dans « Toutes les PR » puis « Corriger la sélection ».",
-    "fixCountsTitle": "cochés / total · corrigés"
+    "fixCountsTitle": "cochés / total · corrigés",
+    "filterBtn": "Filtrer"
   },
   "prDrawer": {
     "loadFailed": "Échec du chargement",
@@ -402,7 +403,11 @@
     "sending": "Envoi…",
     "noAnchor": "sans ancrage → commentaire récapitulatif",
     "replyNone": "Rien à quoi répondre.",
-    "kind": { "fixed": "corrigé", "wontfix": "non corrigé", "open": "en cours" },
+    "kind": {
+      "fixed": "corrigé",
+      "wontfix": "non corrigé",
+      "open": "en cours"
+    },
     "viewChanges": "Voir les changements",
     "viewComments": "Voir les commentaires",
     "replyFailed": "Certaines réponses n'ont pas pu être postées (fils résolus/supprimés)",
