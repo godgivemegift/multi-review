@@ -27,6 +27,7 @@ const live = ref('') // 仅用于「跑动中」状态行（SSE 进度文案）
 const logLines = ref<string[]>([])
 const showLog = ref(false)
 const busy = ref('')
+const replyMode = ref(false) // 「回复作者」面板开关（在此定义：watch immediate 初始化会用到）
 let es: EventSource | null = null
 
 // 操作的成功/失败统一弹 toast（之前 live 只在 running 时才渲染，静止态点 checkbox 报错完全看不到）
@@ -85,7 +86,7 @@ function openSSE() {
   es.onopen = () => { if (data.value) load() }
 }
 watch(() => [open.value, props.fixId], () => {
-  if (open.value && props.fixId) { logLines.value = []; live.value = ''; diff.value = null; activeTab.value = 'findings'; load(); openSSE() }
+  if (open.value && props.fixId) { logLines.value = []; live.value = ''; diff.value = null; activeTab.value = 'findings'; replyMode.value = false; load(); openSSE() }
   else { es?.close(); es = null }
 }, { immediate: true })
 onBeforeUnmount(() => es?.close())
@@ -153,17 +154,11 @@ async function doPush() {
   } catch (e: any) { notify(e?.data?.statusMessage || t('fix.pushFailed')) }
   finally { busy.value = '' }
 }
-async function doReply() {
-  confirming.value = ''
-  busy.value = 'reply'
-  try {
-    const res = await $fetch<{ replied: number; summaryPosted: boolean; leftoverCount: number }>(`/api/fixes/${props.fixId}/reply`, { method: 'POST' })
-    const base = t('fix.replied', { replied: res.replied })
-    if (res.leftoverCount && !res.summaryPosted) notify(`${base} ⚠ ${t('fix.replyFailed')}`)
-    else notify(base, true)
-    await load()
-  } catch (e: any) { notify(e?.data?.statusMessage || t('common.failed')) }
-  finally { busy.value = '' }
+// 「回复作者」就地在 findings 下面展开（输入补充 → AI 预览 → 发送）。任意 tab 点都切到 findings。
+function doReply() { activeTab.value = 'findings'; replyMode.value = true }
+function onReplyDone(refresh: boolean) {
+  replyMode.value = false
+  if (refresh) load()
 }
 
 async function doDiscard() {
@@ -381,6 +376,11 @@ async function copyWorktree() {
                 </template>
               </FixActionBar>
             </section>
+
+            <!-- 回复作者：就地在 findings 下面展开（不另开面板）-->
+            <section v-if="replyMode" class="mt-5 border-t border-default pt-4">
+              <FixReplyPanel v-if="fixId" :fix-id="fixId" @done="onReplyDone" />
+            </section>
           </template>
 
           <!-- ── 改动（GitHub 式左右对比）── -->
@@ -396,7 +396,7 @@ async function copyWorktree() {
 
           <!-- ── 对话跟进 ── -->
           <template v-else-if="activeTab === 'chat'">
-            <p v-if="!data.turns.length && !['ready', 'error', 'pushed'].includes(data.fix.status)" class="text-sm text-dimmed py-8">{{ $t('fix.chatHint') }}</p>
+            <p v-if="!data.turns.length && ['awaiting', 'ready', 'error', 'pushed', 'conflict'].includes(data.fix.status)" class="text-sm text-dimmed py-8">{{ $t('fix.chatHint') }}</p>
             <div v-for="(turn, ti) in data.turns" :key="turn.id" class="mb-3 text-sm">
               <div v-if="turn.role === 'user'" class="text-highlighted">
                 <span class="text-[10px] uppercase tracking-wider text-dimmed mr-1.5">{{ $t('fix.you') }}</span>{{ turn.content }}
@@ -421,7 +421,7 @@ async function copyWorktree() {
             </div>
 
             <!-- 输入区：4 行文本框；下方共享动作条，最右边是 chat 专属的发送/停止 -->
-            <div v-if="['ready', 'error', 'pushed', 'conflict'].includes(data.fix.status)" class="sticky bottom-0 bg-default pt-2 pb-1">
+            <div v-if="['awaiting', 'ready', 'error', 'pushed', 'conflict'].includes(data.fix.status)" class="sticky bottom-0 bg-default pt-2 pb-1">
               <textarea
                 v-model="chatInput" rows="4" :placeholder="$t('fix.chatPlaceholder')" :disabled="chatting"
                 class="w-full text-sm bg-muted border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-accented disabled:opacity-50"

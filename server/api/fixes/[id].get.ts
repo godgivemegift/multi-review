@@ -28,10 +28,8 @@ export default defineEventHandler(async (event) => {
     .orderBy(asc(schema.fixEvents.ts))
     .all()
   const me = await getCurrentUserLogin().catch(() => '')
-  // 有可回复内容：已修（fixed 且勾选）或 验证判不修（未勾且不建议修）
-  const canReply = (findings as any[]).some(
-    (f) => (f.checked && f.fixStatus === 'fixed') || (!f.checked && !f.suggestFix),
-  )
+  // 放宽：只要有 finding 就能回复作者（面板里 AI 按每条现状 + 作者补充生成，作者再挑发哪些）
+  const canReply = findings.length > 0
   // 有本地 commit 还没 push（上传按钮的显示条件）
   const hasUnpushed = !!fix.fixHeadSha && fix.fixHeadSha !== fix.lastPushSha
   const prUrl = project ? `https://github.com/${project.repo}/pull/${fix.prNumber}` : null

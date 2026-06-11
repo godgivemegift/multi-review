@@ -388,6 +388,8 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
       .set({ fixHeadSha: head.trim(), filesChanged, additions, deletions, sessionId: newSessionId, updatedAt: h.now() })
       .where(eq(schema.fixes.id, fixId))
       .run()
+    // 验证后直接对话改了代码（还没跑过批量修复，停在 awaiting）→ 有改动就推到 ready，让上传按钮出来
+    if (h.row()?.status === 'awaiting' && base && head.trim() !== base) h.setStatus('ready')
     h.emit('chat', stopped ? 'stopped' : 'done')
    } catch (e) {
     activeChats.delete(fixId)
