@@ -207,7 +207,8 @@
       "unassigned": "a désassigné",
       "deployed": "a déployé",
       "milestoned": "a ajouté à un jalon"
-    }
+    },
+    "tabFix": "Corriger"
   },
   "config": {
     "projectInfo": "Informations du projet",
@@ -435,6 +436,8 @@
     "mergeClean": "{base} fusionné, aucun conflit",
     "mergeConflicts": "{count} fichier(s) en conflit avec {base} — demandez à l'IA de résoudre dans le chat",
     "mergeChatDraft": "Résous les conflits de fusion dans ces fichiers : {files}. ",
-    "conflictBanner": "Conflits de fusion à résoudre — indiquez à l'IA comment dans le chat"
+    "conflictBanner": "Conflits de fusion à résoudre — indiquez à l'IA comment dans le chat",
+    "startHint": "Saisissez des instructions ; l'IA s'exécute une fois et vérifie si chaque commentaire de revue est un vrai problème. Vous choisissez ensuite quoi corriger.",
+    "startValidate": "Lancer la validation"
   }
 }

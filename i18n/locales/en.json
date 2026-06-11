@@ -207,7 +207,8 @@
       "unassigned": "unassigned",
       "deployed": "deployed",
       "milestoned": "added to a milestone"
-    }
+    },
+    "tabFix": "Fix PR"
   },
   "config": {
     "projectInfo": "Project info",
@@ -435,6 +436,8 @@
     "mergeClean": "Merged {base}, no conflicts",
     "mergeConflicts": "{count} conflicting file(s) with {base} — ask the AI in chat to resolve",
     "mergeChatDraft": "Resolve the merge conflicts in these files: {files}. ",
-    "conflictBanner": "Merge conflicts with the base branch need resolving — tell the AI how in chat"
+    "conflictBanner": "Merge conflicts with the base branch need resolving — tell the AI how in chat",
+    "startHint": "Enter any instructions; the AI runs once and validates whether each review comment is a real issue. Then you pick what to fix.",
+    "startValidate": "Start validation"
   }
 }

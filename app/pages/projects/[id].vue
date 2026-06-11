@@ -43,20 +43,17 @@ async function onProjectDeleted() {
 const drawerOpen = ref(false)
 const drawerPr = ref<number | null>(null)
 const drawerReviewId = ref<string | null>(null)
-function openDetail(prNumber: number, reviewId: string | null = null) {
+const drawerFixId = ref<string | null>(null)
+const drawerTab = ref<string | undefined>(undefined)
+function openDetail(prNumber: number, reviewId: string | null = null, fixId: string | null = null, tab?: string) {
   drawerPr.value = prNumber
   drawerReviewId.value = reviewId
+  drawerFixId.value = fixId
+  drawerTab.value = tab
   drawerOpen.value = true
 }
 async function onTaskCreated() {
   await refreshPulls()
-}
-// 修复 drawer（独立入口，阶段2 会整合进 PrDetailDrawer）
-const fixDrawerOpen = ref(false)
-const fixDrawerId = ref<string | null>(null)
-function openFix(id: string) {
-  fixDrawerId.value = id
-  fixDrawerOpen.value = true
 }
 
 // ── 全部 PR（state=all 拉全，前端多维过滤；GraphQL cursor 分页，每页 20）──
@@ -293,7 +290,7 @@ const filterDims = computed(() => [
           v-for="p in visiblePulls"
           :key="p.number"
           class="grid grid-cols-[3.5rem_minmax(20rem,1fr)_8rem_6rem_7rem_7rem] gap-x-4 items-center px-1 h-16 border-b border-default text-sm cursor-pointer hover:bg-elevated/40 transition-colors"
-          @click="openDetail(p.number, p.taskId)"
+          @click="openDetail(p.number, p.taskId, p.fixId)"
         >
           <span class="font-medium tabular-nums">#{{ p.number }}</span>
           <span class="text-default break-words leading-snug line-clamp-2">{{ p.title }}</span>
@@ -310,7 +307,7 @@ const filterDims = computed(() => [
           </span>
           <!-- Fix status + 审核已更新 -->
           <span class="text-center text-xs flex flex-col items-center justify-center gap-0.5 leading-tight">
-            <button v-if="fixCell(p)" :class="fixCell(p)!.cls" class="hover:text-highlighted" @click.stop="p.fixId && openFix(p.fixId)">{{ fixCell(p)!.label }}</button>
+            <button v-if="fixCell(p)" :class="fixCell(p)!.cls" class="hover:text-highlighted" @click.stop="openDetail(p.number, p.taskId, p.fixId, 'fix')">{{ fixCell(p)!.label }}</button>
             <span v-else class="text-dimmed">—</span>
             <span v-if="p.reviewerUpdated" class="text-[9px] text-highlighted font-medium" :title="$t('project.reviewerUpdatedTitle')">● {{ $t('project.reviewerUpdated') }}</span>
           </span>
@@ -330,7 +327,6 @@ const filterDims = computed(() => [
       </div>
     </div>
 
-    <PrDetailDrawer v-model:open="drawerOpen" :project-id="projectId" :pr-number="drawerPr" :review-id="drawerReviewId" @task-created="onTaskCreated" />
-    <FixDrawer v-model:open="fixDrawerOpen" :fix-id="fixDrawerId" @changed="refreshPulls()" />
+    <PrDetailDrawer v-model:open="drawerOpen" :project-id="projectId" :pr-number="drawerPr" :review-id="drawerReviewId" :fix-id="drawerFixId" :initial-tab="drawerTab" @task-created="onTaskCreated" />
   </div>
 </template>
