@@ -91,7 +91,7 @@ export async function fetchPrMeta(repo: string, prNumber: number): Promise<PrMet
 export async function fetchPrState(
   repo: string,
   prNumber: number,
-): Promise<{ state: PrMeta['state']; headSha: string; reviewDecision: string }> {
+): Promise<{ state: PrMeta['state']; headSha: string; reviewDecision: string; author: string }> {
   const out = await gh([
     'pr',
     'view',
@@ -99,10 +99,10 @@ export async function fetchPrState(
     '--repo',
     repo,
     '--json',
-    'state,isDraft,headRefOid,reviewDecision',
+    'state,isDraft,headRefOid,reviewDecision,author',
   ])
   const j = JSON.parse(out)
-  return { state: normState(j.state, !!j.isDraft), headSha: j.headRefOid ?? '', reviewDecision: j.reviewDecision ?? '' }
+  return { state: normState(j.state, !!j.isDraft), headSha: j.headRefOid ?? '', reviewDecision: j.reviewDecision ?? '', author: j.author?.login ?? '' }
 }
 
 export type PrDetail = {

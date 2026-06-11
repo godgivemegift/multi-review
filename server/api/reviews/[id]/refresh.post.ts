@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
     .get()
   if (!project) throw createError({ statusCode: 404, statusMessage: '项目不存在' })
 
-  const { state, headSha: liveHead, reviewDecision } = await fetchPrState(project.repo, review.prNumber)
+  const { state, headSha: liveHead, reviewDecision, author } = await fetchPrState(project.repo, review.prNumber)
 
   // 「作者已更新」基线 = 你上次审/复审看的那个 sha(review.headSha)，不是上次发评论的 sha——
   // 否则复审后(headSha 前进、lastPostSha 没动)会被误判成又更新。仅在已发过评论后才提示。
@@ -25,7 +25,8 @@ export default defineEventHandler(async (event) => {
   const authorUpdated = !!review.lastPostSha && !!liveHead && !!review.headSha && liveHead !== review.headSha
 
   d.update(schema.reviews)
-    .set({ prState: state, reviewDecision: reviewDecision || null, authorUpdated, updatedAt: new Date().toISOString() })
+    // 顺便回填空的 author（老记录建任务时漏存 → 列表显示「-」）
+    .set({ prState: state, reviewDecision: reviewDecision || null, authorUpdated, updatedAt: new Date().toISOString(), ...(review.author ? {} : { author: author || null }) })
     .where(eq(schema.reviews.id, id))
     .run()
 
