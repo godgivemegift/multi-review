@@ -251,11 +251,11 @@ async function copyWorktree() {
 <template>
   <div>
     <!-- 无 fix 任务：验证表单（输入指示 → AI 按指示跑一次，验证 review 评论是否成立） -->
-    <div v-if="!currentFixId" class="max-w-2xl">
+    <div v-if="!currentFixId">
       <p class="text-sm text-toned mb-3">{{ $t('fix.startHint') }}</p>
       <textarea
-        v-model="instruction" rows="4" :placeholder="$t('fix.instructionPlaceholder')" :disabled="validating"
-        class="w-full text-sm bg-muted border border-default rounded px-3 py-2 resize-y outline-none focus:border-accented disabled:opacity-50"
+        v-model="instruction" rows="8" :placeholder="$t('fix.instructionPlaceholder')" :disabled="validating"
+        class="w-full text-sm bg-muted border border-default rounded px-3 py-2.5 resize-y outline-none focus:border-accented disabled:opacity-50"
       />
       <div class="flex justify-end mt-3">
         <button
