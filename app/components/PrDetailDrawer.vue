@@ -34,7 +34,13 @@ async function getRenderer() {
   const [{ marked }, dp] = await Promise.all([import('marked'), import('dompurify')])
   marked.setOptions({ gfm: true, breaks: true })
   const DOMPurify = (dp as any).default
-  _render = (s: string) => DOMPurify.sanitize(marked.parse(s ?? '', { async: false }) as string)
+  // 渲染后把 GitHub 私有图片（user-attachments / githubusercontent）的 src 改走后端代理，
+  // 否则浏览器直连这些 URL 会 404（需 GitHub 登录态）。
+  const PROXY = /(<img[^>]+\bsrc=")(https:\/\/(?:github\.com\/user-attachments\/|[a-z0-9-]+\.githubusercontent\.com\/)[^"]+)(")/gi
+  _render = (s: string) => {
+    const html = DOMPurify.sanitize(marked.parse(s ?? '', { async: false }) as string)
+    return html.replace(PROXY, (_m: string, pre: string, url: string, post: string) => `${pre}/api/img?u=${encodeURIComponent(url)}${post}`)
+  }
   return _render
 }
 
