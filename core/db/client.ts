@@ -47,6 +47,7 @@ function ensureColumns(sqlite: Database.Database) {
     ['fixes', 'base_ref', 'TEXT'],
     ['fixes', 'last_push_sha', 'TEXT'],
     ['fixes', 'last_action_kind', 'TEXT'],
+    ['fixes', 'reviews_at_push', 'INTEGER'],
   ]
   for (const [table, col, type] of adds) {
     const cols = sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
@@ -184,6 +185,7 @@ function ensureSchema(sqlite: Database.Database) {
       fix_head_sha TEXT,
       last_push_sha TEXT,
       last_action_kind TEXT,
+      reviews_at_push INTEGER,
       files_changed INTEGER,
       additions INTEGER,
       deletions INTEGER,

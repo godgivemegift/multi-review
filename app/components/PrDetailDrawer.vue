@@ -1,5 +1,5 @@
 <script setup lang="ts">
-const props = defineProps<{ projectId: string; prNumber: number | null; reviewId: string | null }>()
+const props = defineProps<{ projectId: string; prNumber: number | null; reviewId: string | null; fixId: string | null; initialTab?: string }>()
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ taskCreated: [] }>()
 const { t, locale } = useI18n()
@@ -22,7 +22,7 @@ const nodes = ref<Node[]>([])
 const pending = ref(false)
 const error = ref('')
 
-const activeTab = ref<'review' | 'timeline' | 'changes'>('timeline')
+const activeTab = ref<'review' | 'fix' | 'timeline' | 'changes'>('timeline')
 const diff = ref<string | null>(null)
 const diffTruncated = ref(false)
 const diffPending = ref(false)
@@ -44,7 +44,7 @@ watch(
     if (!isOpen || !num) return
     if (detail.value?.number === num) return
     detail.value = null; nodes.value = []; openingHtml.value = ''; diff.value = null
-    activeTab.value = props.reviewId ? 'review' : 'timeline'; error.value = ''; pending.value = true
+    activeTab.value = (props.initialTab as any) || (props.reviewId ? 'review' : 'timeline'); error.value = ''; pending.value = true
     try {
       const res = await $fetch<{ detail: Detail; nodes: Node[] }>(
         `/api/projects/${props.projectId}/pulls/${num}/timeline`,
@@ -165,6 +165,7 @@ const lineCls: Record<DiffLine['t'], string> = {
           <!-- 子 tab -->
           <div v-if="detail" class="flex gap-6 mt-4 text-sm">
             <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'review' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'review'">{{ $t('prDrawer.tabReview') }}</button>
+            <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'fix' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'fix'">{{ $t('prDrawer.tabFix') }}</button>
             <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'timeline' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'timeline'">{{ $t('prDrawer.tabTimeline') }}</button>
             <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'changes' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'changes'">{{ $t('prDrawer.tabChanges') }} <span class="text-dimmed">{{ detail.changedFiles }}</span></button>
           </div>
@@ -179,6 +180,11 @@ const lineCls: Record<DiffLine['t'], string> = {
           @created="emit('taskCreated')"
           @changed="emit('taskCreated')"
         />
+
+        <!-- ── 修复 PR ── -->
+        <div v-if="detail && activeTab === 'fix' && prNumber" class="flex-1 overflow-y-auto px-6 py-5">
+          <FixPanel :project-id="projectId" :pr-number="prNumber" :fix-id="fixId" :active="activeTab === 'fix'" @changed="emit('taskCreated')" />
+        </div>
 
         <!-- ── 时间线 ── -->
         <div v-if="detail && activeTab === 'timeline'" class="flex-1 overflow-y-auto px-6 py-5">

@@ -24,33 +24,54 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 502, statusMessage: (e as Error).message })
   }
 
+  // 审核任务：带上「审核时看的 head」「发评论时的 head」→ 算「作者已更新」
   const tasks = d
-    .select({ id: schema.reviews.id, prNumber: schema.reviews.prNumber, status: schema.reviews.status })
+    .select({
+      id: schema.reviews.id,
+      prNumber: schema.reviews.prNumber,
+      status: schema.reviews.status,
+      headSha: schema.reviews.headSha,
+      lastPostSha: schema.reviews.lastPostSha,
+    })
     .from(schema.reviews)
     .where(eq(schema.reviews.projectId, id))
     .all()
   const taskByPr = new Map(tasks.map((t) => [t.prNumber, t]))
 
-  // 修复任务：每个 PR 取最新一个未废弃的（tags 显示「修复中/待上传」用）
+  // 修复任务：每个 PR 取最新一个未废弃的；带 pushedAt + reviewsAtPush → 算「审核已更新」
   const fixRows = d
-    .select({ id: schema.fixes.id, prNumber: schema.fixes.prNumber, status: schema.fixes.status, createdAt: schema.fixes.createdAt })
+    .select({
+      id: schema.fixes.id,
+      prNumber: schema.fixes.prNumber,
+      status: schema.fixes.status,
+      createdAt: schema.fixes.createdAt,
+      pushedAt: schema.fixes.pushedAt,
+      reviewsAtPush: schema.fixes.reviewsAtPush,
+    })
     .from(schema.fixes)
     .where(eq(schema.fixes.projectId, id))
     .all()
-  const fixByPr = new Map<number, { id: string; status: string }>()
+  const fixByPr = new Map<number, (typeof fixRows)[number]>()
   for (const f of fixRows.sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
     if (f.status === 'discarded') continue
-    fixByPr.set(f.prNumber, { id: f.id, status: f.status }) // 后写覆盖 → 留下最新
+    fixByPr.set(f.prNumber, f) // 后写覆盖 → 留下最新
   }
 
   return {
     pulls: page.pulls.map((p) => {
       const task = taskByPr.get(p.number)
       const fix = fixByPr.get(p.number)
+      // 作者已更新：我发评论后 PR head 又变了。基线用「发评论时的 sha」(lastPostSha)，
+      // 不是「审核创建时的 sha」——否则我发评论之前作者就 push 过，会误报成评论后更新。
+      const authorUpdated = !!task?.lastPostSha && !!p.headSha && p.headSha !== task.lastPostSha
+      // 审核已更新：我 push 修复后 PR 的 review 计数变多 = 又有人提交了 review。
+      // 注：reviewsCount 含 bot/CI 的 review，所以 push 后若有 CI 自动 review 也会算（本地单用户工具可接受）。
+      const reviewerUpdated = !!fix?.pushedAt && fix.reviewsAtPush != null && p.reviewsCount > fix.reviewsAtPush
       return {
         ...p,
         hasTask: !!task, taskId: task?.id ?? null, taskStatus: task?.status ?? null,
         fixId: fix?.id ?? null, fixStatus: fix?.status ?? null,
+        authorUpdated, reviewerUpdated,
       }
     }),
     totalCount: page.totalCount,

@@ -89,8 +89,15 @@
       "review": "审核",
       "severity": "严重度",
       "fix": "修复",
-      "findings": "意见"
+      "findings": "意见",
+      "prStatus": "PR 状态",
+      "reviewStatus": "审核",
+      "fixStatus": "修复"
     },
+    "reviewNone": "未审核",
+    "fixNone": "未修复",
+    "reviewerUpdated": "审核已更新",
+    "reviewerUpdatedTitle": "你 push 修复后又有人提交了审核",
     "selectAllReviewable": "全选可审",
     "reviewSelected": "审核选中 ({count})",
     "creatingTasks": "建任务中…",
@@ -150,7 +157,8 @@
     "noneFixable": "所选 PR 都有进行中的修复任务",
     "fixSelected": "修复选中 ({count})",
     "noFixes": "还没有修复任务。去「全部 PR」勾选 PR 点「修复选中」。",
-    "fixCountsTitle": "已勾选 / 总意见数 · 已修复"
+    "fixCountsTitle": "已勾选 / 总意见数 · 已修复",
+    "filterBtn": "筛选"
   },
   "prDrawer": {
     "loadFailed": "加载失败",
@@ -199,7 +207,8 @@
       "unassigned": "取消指派",
       "deployed": "部署了",
       "milestoned": "加入里程碑"
-    }
+    },
+    "tabFix": "修复 PR"
   },
   "config": {
     "projectInfo": "项目信息",
@@ -395,7 +404,11 @@
     "sending": "发送中…",
     "noAnchor": "无锚点 → 进总评",
     "replyNone": "没有可回复的内容。",
-    "kind": { "fixed": "已修", "wontfix": "不修", "open": "待办" },
+    "kind": {
+      "fixed": "已修",
+      "wontfix": "不修",
+      "open": "待办"
+    },
     "viewChanges": "查看改动",
     "viewComments": "查看评论",
     "replyFailed": "部分回复没挂上（评论可能已被解决/删除）",
@@ -423,6 +436,8 @@
     "mergeClean": "已合并 {base}，无冲突",
     "mergeConflicts": "与 {base} 有 {count} 个冲突文件，去对话里让 AI 解决",
     "mergeChatDraft": "解决这些文件的合并冲突：{files}。",
-    "conflictBanner": "与基础分支有合并冲突待解决——在对话里告诉 AI 按什么方向解决"
+    "conflictBanner": "与基础分支有合并冲突待解决——在对话里告诉 AI 按什么方向解决",
+    "startHint": "写下指示（可留空），AI 会按指示跑一次、验证这些 review 评论是否成立；之后你再挑要修的。",
+    "startValidate": "开始验证问题成立性"
   }
 }

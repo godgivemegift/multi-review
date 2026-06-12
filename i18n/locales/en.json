@@ -89,8 +89,15 @@
       "review": "Review",
       "severity": "Severity",
       "fix": "Fix",
-      "findings": "Items"
+      "findings": "Items",
+      "prStatus": "PR",
+      "reviewStatus": "Review",
+      "fixStatus": "Fix"
     },
+    "reviewNone": "not reviewed",
+    "fixNone": "no fix",
+    "reviewerUpdated": "Re-reviewed",
+    "reviewerUpdatedTitle": "A new review was submitted after you pushed the fix",
     "selectAllReviewable": "Select all reviewable",
     "reviewSelected": "Review selected ({count})",
     "creatingTasks": "Creating tasks…",
@@ -150,7 +157,8 @@
     "noneFixable": "All selected PRs already have an active fix task",
     "fixSelected": "Fix selected ({count})",
     "noFixes": "No fix tasks yet. Pick PRs in \"All PRs\" and click \"Fix selected\".",
-    "fixCountsTitle": "checked / total items · fixed"
+    "fixCountsTitle": "checked / total items · fixed",
+    "filterBtn": "Filter"
   },
   "prDrawer": {
     "loadFailed": "Load failed",
@@ -199,7 +207,8 @@
       "unassigned": "unassigned",
       "deployed": "deployed",
       "milestoned": "added to a milestone"
-    }
+    },
+    "tabFix": "Fix PR"
   },
   "config": {
     "projectInfo": "Project info",
@@ -395,7 +404,11 @@
     "sending": "Sending…",
     "noAnchor": "no anchor → summary comment",
     "replyNone": "Nothing to reply to.",
-    "kind": { "fixed": "fixed", "wontfix": "won't fix", "open": "open" },
+    "kind": {
+      "fixed": "fixed",
+      "wontfix": "won't fix",
+      "open": "open"
+    },
     "viewChanges": "View changes",
     "viewComments": "View comments",
     "replyFailed": "Some replies couldn't be posted (threads may be resolved/deleted)",
@@ -423,6 +436,8 @@
     "mergeClean": "Merged {base}, no conflicts",
     "mergeConflicts": "{count} conflicting file(s) with {base} — ask the AI in chat to resolve",
     "mergeChatDraft": "Resolve the merge conflicts in these files: {files}. ",
-    "conflictBanner": "Merge conflicts with the base branch need resolving — tell the AI how in chat"
+    "conflictBanner": "Merge conflicts with the base branch need resolving — tell the AI how in chat",
+    "startHint": "Enter any instructions; the AI runs once and validates whether each review comment is a real issue. Then you pick what to fix.",
+    "startValidate": "Start validation"
   }
 }
