@@ -105,6 +105,14 @@ export async function fetchPrState(
   return { state: normState(j.state, !!j.isDraft), headSha: j.headRefOid ?? '', reviewDecision: j.reviewDecision ?? '', author: j.author?.login ?? '' }
 }
 
+// 当前 gh 登录 token（给后端图片代理用：私有仓库评论的图片需带 token 才能取）
+let _ghToken: string | null = null
+export async function ghToken(): Promise<string> {
+  if (_ghToken != null) return _ghToken
+  try { _ghToken = (await gh(['auth', 'token'])).trim() } catch { _ghToken = '' }
+  return _ghToken
+}
+
 // PR 当前已提交的 review 总数（「审核已更新」基线：push 时记一份，之后变多 = reviewer 又审了）
 export async function fetchReviewsCount(repo: string, prNumber: number): Promise<number> {
   const [owner, name] = repo.split('/')
