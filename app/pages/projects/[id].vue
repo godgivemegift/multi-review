@@ -54,6 +54,11 @@ function openDetail(prNumber: number, reviewId: string | null = null, fixId: str
 }
 async function onTaskCreated() {
   await refreshPulls()
+  // drawer 开着时，把这个 PR 最新的 fixId 同步回来（验证表单刚建的 fix，重开 drawer 时别丢成空表单）
+  if (drawerPr.value != null) {
+    const fresh = pullsResp.value?.pulls.find((p) => p.number === drawerPr.value)
+    if (fresh?.fixId) drawerFixId.value = fresh.fixId
+  }
 }
 
 // ── 全部 PR（state=all 拉全，前端多维过滤；GraphQL cursor 分页，每页 20）──

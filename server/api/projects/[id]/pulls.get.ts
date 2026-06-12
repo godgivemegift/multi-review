@@ -61,9 +61,11 @@ export default defineEventHandler(async (event) => {
     pulls: page.pulls.map((p) => {
       const task = taskByPr.get(p.number)
       const fix = fixByPr.get(p.number)
-      // 作者已更新：审核发过评论后，PR 当前 head ≠ 我审核时看的 head（唯一事实依据：head sha 变了）
-      const authorUpdated = !!task?.lastPostSha && !!p.headSha && !!task.headSha && p.headSha !== task.headSha
-      // 审核已更新：我 push 修复后，PR 的 review 计数比 push 时多（唯一事实依据：reviewer 又提交了 review）
+      // 作者已更新：我发评论后 PR head 又变了。基线用「发评论时的 sha」(lastPostSha)，
+      // 不是「审核创建时的 sha」——否则我发评论之前作者就 push 过，会误报成评论后更新。
+      const authorUpdated = !!task?.lastPostSha && !!p.headSha && p.headSha !== task.lastPostSha
+      // 审核已更新：我 push 修复后 PR 的 review 计数变多 = 又有人提交了 review。
+      // 注：reviewsCount 含 bot/CI 的 review，所以 push 后若有 CI 自动 review 也会算（本地单用户工具可接受）。
       const reviewerUpdated = !!fix?.pushedAt && fix.reviewsAtPush != null && p.reviewsCount > fix.reviewsAtPush
       return {
         ...p,

@@ -203,10 +203,10 @@ watch(chatting, (on) => {
   if (chatTimer) { clearInterval(chatTimer); chatTimer = null }
   if (on) { chatElapsed.value = 0; chatTimer = setInterval(() => { chatElapsed.value++ }, 1000) }
 })
-watch([running, chatting], ([r, c]) => {
-  const isActive = r || c
-  if (isActive && !pollTimer) pollTimer = setInterval(() => load(), 2500)
-  else if (!isActive && pollTimer) { clearInterval(pollTimer); pollTimer = null }
+watch([running, chatting, () => props.active], ([r, c, on]) => {
+  const busyActive = (r || c) && on // 该 tab 激活 + 在跑/对话中才轮询（防 v-show 重构后泄漏）
+  if (busyActive && !pollTimer) pollTimer = setInterval(() => load(), 2500)
+  else if (!busyActive && pollTimer) { clearInterval(pollTimer); pollTimer = null }
 })
 async function sendChat() {
   const msg = chatInput.value.trim()
