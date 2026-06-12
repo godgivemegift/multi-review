@@ -10,7 +10,7 @@ export default defineEventHandler(async (event) => {
   const validState = (['open', 'closed', 'merged', 'all'] as const).includes(state as any)
     ? (state as 'open' | 'closed' | 'merged' | 'all')
     : 'open'
-  const first = Math.min(Number(query.first) || 20, 50)
+  const first = Math.min(Number(query.first) || 20, 100) // 前端一次拉够做本地过滤+分页（GraphQL 上限 100）
   const after = (query.after as string) || null
 
   const d = db()

@@ -360,7 +360,10 @@
     "skipReason": {
       "repliedNoNote": "仅回复·未写回应 note",
       "retracted": "已撤回"
-    }
+    },
+    "deleteBtn": "删除任务",
+    "deleteTitle": "删除审核任务（仅本地，GitHub 评论保留）",
+    "deleteConfirm": "删除这条审核任务？仅本地，已发到 GitHub 的评论保留。"
   },
   "fix": {
     "modalTitle": "修复 {count} 个 PR",

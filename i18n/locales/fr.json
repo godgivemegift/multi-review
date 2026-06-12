@@ -360,7 +360,10 @@
     "skipReason": {
       "repliedNoNote": "réponse seule · pas de note",
       "retracted": "retiré"
-    }
+    },
+    "deleteBtn": "Supprimer",
+    "deleteTitle": "Supprimer cette tâche de revue (local ; commentaires GitHub conservés)",
+    "deleteConfirm": "Supprimer cette tâche de revue ? Local uniquement — les commentaires déjà publiés restent."
   },
   "fix": {
     "modalTitle": "Corriger {count} PR",

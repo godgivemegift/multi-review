@@ -360,7 +360,10 @@
     "skipReason": {
       "repliedNoNote": "reply only · no response note",
       "retracted": "retracted"
-    }
+    },
+    "deleteBtn": "Delete task",
+    "deleteTitle": "Delete this review task (local only; GitHub comments stay)",
+    "deleteConfirm": "Delete this review task? Local only — comments already posted to GitHub stay."
   },
   "fix": {
     "modalTitle": "Fix {count} PR(s)",

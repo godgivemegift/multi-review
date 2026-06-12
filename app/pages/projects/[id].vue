@@ -61,13 +61,13 @@ async function onTaskCreated() {
   }
 }
 
-// ── 全部 PR（state=all 拉全，前端多维过滤；GraphQL cursor 分页，每页 20）──
-const PER_PAGE = 20
+// ── 全部 PR：一次拉够（FETCH_LIMIT），所有维度前端过滤 + 前端分页（总数/翻页都跟着 filter 走）──
+const PER_PAGE = 10
+const FETCH_LIMIT = 100 // 后端单次上限；「进行中」一般全拉得到，「全部」范围拉最近 100
 type PullsResp = { pulls: Pull[]; totalCount: number; hasNextPage: boolean; endCursor: string | null }
 const pullsResp = ref<PullsResp | null>(null)
 const pullsPending = ref(false)
 const page = ref(0)
-const cursors = ref<(string | null)[]>([null])
 
 // PR status 是后端分页维度：只在 open/draft 范围内时让后端拉 open（默认进行中，不会被一堆 merged 淹没）；
 // 一旦勾了 merged/closed 就拉 all，再前端按 fPr 细分。其它三维（作者/审核/修复）纯前端过滤当前页。
@@ -81,33 +81,21 @@ const backendState = computed(() => {
 async function loadPulls() {
   pullsPending.value = true
   try {
-    const after = cursors.value[page.value]
     pullsResp.value = await $fetch<PullsResp>(`/api/projects/${projectId.value}/pulls`, {
-      query: { state: backendState.value, first: PER_PAGE, ...(after ? { after } : {}) },
+      query: { state: backendState.value, first: FETCH_LIMIT },
     })
-    if (pullsResp.value.hasNextPage) cursors.value[page.value + 1] = pullsResp.value.endCursor
   } catch (e: any) {
     msg.value = e?.data?.statusMessage || e?.message || t('project.msg.fetchFailed')
   } finally {
     pullsPending.value = false
   }
 }
-function resetAndLoad() {
-  page.value = 0
-  cursors.value = [null]
-  loadPulls()
-}
+function resetAndLoad() { page.value = 0; loadPulls() }
 onMounted(resetAndLoad)
-watch(backendState, resetAndLoad) // 切到/离开「进行中」范围 → 重新从第一页拉
-async function refreshPulls() {
-  await loadPulls()
-}
-function nextPage() {
-  if (pullsResp.value?.hasNextPage) { page.value++; loadPulls() }
-}
-function prevPage() {
-  if (page.value > 0) { page.value--; loadPulls() }
-}
+watch(backendState, resetAndLoad) // 切「进行中 ↔ 全部」范围 → 重新拉
+async function refreshPulls() { await loadPulls() }
+function nextPage() { if (page.value < pageCount.value - 1) page.value++ }
+function prevPage() { if (page.value > 0) page.value-- }
 
 // 自动刷新：页面可见时每 8s 拉一次 PR 列表。两个「已更新」标识在后端实时算（head sha / review 计数），
 // 不需要后台 refresh-states，任何状态变化都会随列表刷新冒出来。
@@ -169,6 +157,10 @@ const visiblePulls = computed(() => {
   if (fFix.value.length) list = list.filter((p) => fFix.value.includes(fixKey(p)))
   return list
 })
+// 前端分页：总数/翻页都基于过滤后的结果
+const pageCount = computed(() => Math.max(1, Math.ceil(visiblePulls.value.length / PER_PAGE)))
+const pagedPulls = computed(() => visiblePulls.value.slice(page.value * PER_PAGE, page.value * PER_PAGE + PER_PAGE))
+watch([fAuthors, fReview, fFix], () => { page.value = 0 }) // 改 filter → 回第一页（fPr 走 backendState 的 reset）
 
 // filter 可选项
 const PR_OPTS = ['open', 'draft', 'merged', 'closed']
@@ -292,7 +284,7 @@ const filterDims = computed(() => [
           <span class="text-center">{{ $t('project.col.fixStatus') }}</span>
         </div>
         <div
-          v-for="p in visiblePulls"
+          v-for="p in pagedPulls"
           :key="p.number"
           class="grid grid-cols-[3.5rem_minmax(20rem,1fr)_8rem_6rem_7rem_7rem] gap-x-4 items-center px-1 h-16 border-b border-default text-sm cursor-pointer hover:bg-elevated/40 transition-colors"
           @click="openDetail(p.number, p.taskId, p.fixId)"
@@ -321,12 +313,12 @@ const filterDims = computed(() => [
           {{ pullsPending ? $t('common.loading') : $t('project.noPulls') }}
         </p>
 
-        <!-- 分页：始终显示总数 + 翻页（按钮按 hasNextPage/page 启用） -->
-        <div v-if="pullsResp && pullsResp.pulls.length" class="flex items-center justify-between mt-5 text-xs text-dimmed">
-          <span>{{ $t('project.pagination.summary', { total: pullsResp.totalCount, page: page + 1 }) }}</span>
-          <div class="flex gap-4">
+        <!-- 分页：总数 = 过滤后数量；只有多页才出翻页按钮 -->
+        <div v-if="visiblePulls.length" class="flex items-center justify-between mt-5 text-xs text-dimmed">
+          <span>{{ $t('project.pagination.summaryPages', { total: visiblePulls.length, page: page + 1, pages: pageCount }) }}</span>
+          <div v-if="pageCount > 1" class="flex gap-4">
             <button class="hover:text-highlighted disabled:opacity-30" :disabled="page === 0 || pullsPending" @click="prevPage">{{ $t('project.pagination.prev') }}</button>
-            <button class="hover:text-highlighted disabled:opacity-30" :disabled="!pullsResp.hasNextPage || pullsPending" @click="nextPage">{{ $t('project.pagination.next') }}</button>
+            <button class="hover:text-highlighted disabled:opacity-30" :disabled="page >= pageCount - 1 || pullsPending" @click="nextPage">{{ $t('project.pagination.next') }}</button>
           </div>
         </div>
       </div>
