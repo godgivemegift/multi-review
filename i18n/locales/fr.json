@@ -110,6 +110,8 @@
     "hasTaskTitle": "Tâche de revue déjà créée",
     "hasTaskTag": "tâche créée",
     "clearFilter": "Retirer le filtre",
+    "selectAll": "Tout sélectionner",
+    "deselectAll": "Tout désélectionner",
     "filterByStatus": "Filtrer par ce statut",
     "noPulls": "Aucune PR correspondante",
     "noTasks": "Aucune tâche de revue. Allez dans « Toutes les PR » et cochez des PR pour commencer.",

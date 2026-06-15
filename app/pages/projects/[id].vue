@@ -119,10 +119,16 @@ const authors = computed(() => {
   for (const p of pullsResp.value?.pulls ?? []) s.add(p.author)
   return [...s].sort()
 })
-function toggleFilter(key: 'author' | 'pr' | 'review' | 'fix' | 'worktree', v: string) {
-  const m = { author: fAuthors, pr: fPr, review: fReview, fix: fFix, worktree: fWorktree }
-  const arr = m[key]
+type FilterKey = 'author' | 'pr' | 'review' | 'fix' | 'worktree'
+const filterRefs = { author: fAuthors, pr: fPr, review: fReview, fix: fFix, worktree: fWorktree }
+function toggleFilter(key: FilterKey, v: string) {
+  const arr = filterRefs[key]
   arr.value = arr.value.includes(v) ? arr.value.filter((x) => x !== v) : [...arr.value, v]
+}
+// 一键全选 / 全不选该维度（已全选则清空，否则选满）
+function toggleAll(key: FilterKey, opts: string[]) {
+  const arr = filterRefs[key]
+  arr.value = arr.value.length === opts.length ? [] : [...opts]
 }
 const anyFilter = computed(() => fAuthors.value.length || fPr.value.length || fReview.value.length || fFix.value.length || fWorktree.value.length)
 function clearFilters() {
@@ -269,14 +275,21 @@ const filterDims = computed(() => [
             <span class="truncate">{{ dim.label }}<span v-if="dim.sel.length" class="ml-1 text-dimmed">({{ dim.sel.length }})</span></span>
           </UButton>
           <template #content>
-            <div class="p-2 w-52 max-h-80 overflow-auto">
-              <label
-                v-for="o in dim.opts" :key="o"
-                class="flex items-center gap-2 cursor-pointer text-sm py-1 px-1.5 rounded hover:bg-elevated/50"
-              >
-                <input type="checkbox" class="accent-neutral-900 dark:accent-neutral-100" :checked="dim.sel.includes(o)" @change="toggleFilter(dim.key, o)" />
-                <span :class="dim.sel.includes(o) ? 'text-highlighted' : 'text-toned'">{{ dim.fmt(o) }}</span>
-              </label>
+            <div class="w-52">
+              <div v-if="dim.opts.length" class="flex items-center px-2.5 pt-2 pb-1.5 border-b border-default">
+                <button class="text-xs text-dimmed hover:text-highlighted" @click="toggleAll(dim.key, dim.opts)">
+                  {{ dim.sel.length === dim.opts.length ? $t('project.deselectAll') : $t('project.selectAll') }}
+                </button>
+              </div>
+              <div class="p-2 max-h-80 overflow-auto">
+                <label
+                  v-for="o in dim.opts" :key="o"
+                  class="flex items-center gap-2 cursor-pointer text-sm py-1 px-1.5 rounded hover:bg-elevated/50"
+                >
+                  <input type="checkbox" class="accent-neutral-900 dark:accent-neutral-100" :checked="dim.sel.includes(o)" @change="toggleFilter(dim.key, o)" />
+                  <span :class="dim.sel.includes(o) ? 'text-highlighted' : 'text-toned'">{{ dim.fmt(o) }}</span>
+                </label>
+              </div>
             </div>
           </template>
         </UPopover>

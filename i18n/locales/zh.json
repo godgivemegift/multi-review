@@ -98,7 +98,7 @@
     "reviewNone": "未审核",
     "fixNone": "未修复",
     "worktree": {
-      "has": "有残留",
+      "has": "存在",
       "none": "无"
     },
     "reviewerUpdated": "审核已更新",
@@ -110,6 +110,8 @@
     "hasTaskTitle": "已建审核任务",
     "hasTaskTag": "已建任务",
     "clearFilter": "取消筛选",
+    "selectAll": "全选",
+    "deselectAll": "全不选",
     "filterByStatus": "按此状态筛选",
     "noPulls": "没有符合条件的 PR",
     "noTasks": "还没有审核任务。去「全部 PR」勾选 PR 开始。",

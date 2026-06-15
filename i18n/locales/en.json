@@ -110,6 +110,8 @@
     "hasTaskTitle": "Review task already created",
     "hasTaskTag": "task created",
     "clearFilter": "Clear filter",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all",
     "filterByStatus": "Filter by this status",
     "noPulls": "No matching PRs",
     "noTasks": "No review tasks yet. Go to “All PRs” and check some PRs to start.",
