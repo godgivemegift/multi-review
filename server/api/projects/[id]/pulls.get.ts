@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs'
 import { eq } from 'drizzle-orm'
 import { schema } from '~core/db/client'
 import { listPulls } from '~core/github/gh'
@@ -47,6 +48,7 @@ export default defineEventHandler(async (event) => {
       createdAt: schema.fixes.createdAt,
       pushedAt: schema.fixes.pushedAt,
       reviewsAtPush: schema.fixes.reviewsAtPush,
+      worktreePath: schema.fixes.worktreePath,
     })
     .from(schema.fixes)
     .where(eq(schema.fixes.projectId, id))
@@ -67,11 +69,14 @@ export default defineEventHandler(async (event) => {
       // 审核已更新：我 push 修复后 PR 的 review 计数变多 = 又有人提交了 review。
       // 注：reviewsCount 含 bot/CI 的 review，所以 push 后若有 CI 自动 review 也会算（本地单用户工具可接受）。
       const reviewerUpdated = !!fix?.pushedAt && fix.reviewsAtPush != null && p.reviewsCount > fix.reviewsAtPush
+      // 本地 fix worktree 是否还在磁盘上（review worktree 用完即弃，不会残留；只有 fix 保留到 push/discard）。
+      // 合并后想找残留清理就靠它。检查实际目录，不是只看 DB 字段（DB 有路径但目录可能已被手动删）。
+      const hasWorktree = !!fix?.worktreePath && existsSync(fix.worktreePath)
       return {
         ...p,
         hasTask: !!task, taskId: task?.id ?? null, taskStatus: task?.status ?? null,
         fixId: fix?.id ?? null, fixStatus: fix?.status ?? null,
-        authorUpdated, reviewerUpdated,
+        authorUpdated, reviewerUpdated, hasWorktree,
       }
     }),
     totalCount: page.totalCount,

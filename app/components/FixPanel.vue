@@ -246,6 +246,20 @@ async function copyWorktree() {
   if (!p) return
   try { await navigator.clipboard.writeText(p); notify(t('fix.pathCopied'), true) } catch { /* 忽略 */ }
 }
+
+// 只删本地 worktree 目录（释放磁盘），保留 fix 记录——区别于 discard（连记录一起删）。
+const rmwtConfirm = ref(false)
+async function doDeleteWorktree() {
+  busy.value = 'rmwt'
+  try {
+    await $fetch(`/api/fixes/${currentFixId.value}/worktree`, { method: 'DELETE' })
+    rmwtConfirm.value = false
+    notify(t('fix.worktreeDeleted'), true)
+    await load()
+  } catch (e: any) {
+    notify(e?.data?.statusMessage || t('common.failed'))
+  } finally { busy.value = '' }
+}
 </script>
 
 <template>
@@ -385,10 +399,18 @@ async function copyWorktree() {
 
       <!-- ── 改动 ── -->
       <template v-else-if="activeTab === 'changes'">
-        <div v-if="data.fix.worktreePath" class="mb-3 text-[11px] text-dimmed flex items-center gap-2">
-          <span class="shrink-0">{{ $t('fix.worktreeHint') }}</span>
-          <code class="font-mono text-toned truncate flex-1">{{ data.fix.worktreePath }}</code>
-          <button class="hover:text-highlighted shrink-0 underline" @click="copyWorktree">{{ $t('fix.copyPath') }}</button>
+        <div v-if="data.fix.worktreePath" class="mb-3 text-[11px]">
+          <div v-if="rmwtConfirm" class="flex items-center gap-2 text-toned">
+            <span class="flex-1">{{ data.hasUnpushed ? $t('fix.deleteWorktreeConfirmUnpushed') : $t('fix.deleteWorktreeConfirm') }}</span>
+            <button class="text-error font-medium hover:underline shrink-0 disabled:opacity-40" :disabled="!!busy || chatting" @click="doDeleteWorktree">{{ busy === 'rmwt' ? $t('fix.deleting') : $t('common.delete') }}</button>
+            <button class="text-dimmed hover:text-highlighted shrink-0" @click="rmwtConfirm = false">{{ $t('common.cancel') }}</button>
+          </div>
+          <div v-else class="flex items-center gap-2 text-dimmed">
+            <span class="shrink-0">{{ $t('fix.worktreeHint') }}</span>
+            <code class="font-mono text-toned truncate flex-1">{{ data.fix.worktreePath }}</code>
+            <button class="hover:text-highlighted shrink-0 underline" @click="copyWorktree">{{ $t('fix.copyPath') }}</button>
+            <button class="hover:text-highlighted shrink-0 underline disabled:opacity-40" :disabled="running || chatting || !!busy" @click="rmwtConfirm = true">{{ $t('fix.deleteWorktree') }}</button>
+          </div>
         </div>
         <p v-if="busy === 'diff'" class="py-6 text-sm text-dimmed">{{ $t('common.loading') }}</p>
         <DiffView v-else :diff="diff || ''" />

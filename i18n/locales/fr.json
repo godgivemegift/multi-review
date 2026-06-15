@@ -92,10 +92,15 @@
       "findings": "Points",
       "prStatus": "PR",
       "reviewStatus": "Revue",
-      "fixStatus": "Correction"
+      "fixStatus": "Correction",
+      "worktree": "Worktree"
     },
     "reviewNone": "non revu",
     "fixNone": "pas de correction",
+    "worktree": {
+      "has": "Présent",
+      "none": "Aucun"
+    },
     "reviewerUpdated": "Ré-examiné",
     "reviewerUpdatedTitle": "Une nouvelle revue a été soumise après votre correction",
     "selectAllReviewable": "Tout sélectionner",
@@ -424,6 +429,11 @@
     "worktreeHint": "Modifs dans le worktree :",
     "copyPath": "Copier le chemin",
     "pathCopied": "Chemin copié",
+    "deleteWorktree": "Supprimer l'espace",
+    "deleteWorktreeConfirm": "Supprimer le dossier local pour libérer de l'espace ? L'historique de correction est conservé et les changements poussés ne sont pas affectés.",
+    "deleteWorktreeConfirmUnpushed": "Des changements locaux non poussés seront perdus. Supprimer quand même l'espace de travail ?",
+    "deleting": "Suppression…",
+    "worktreeDeleted": "Espace de travail local supprimé",
     "runFixTitle": "Relancer la correction",
     "runFixResetWarn": "Relancer réinitialise le worktree à la base de la PR — les changements du chat seront perdus. Continuer ?",
     "runFixOk": "Relancer (abandonner les modifs du chat)",

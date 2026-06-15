@@ -21,6 +21,7 @@ type Pull = {
   fixStatus: string | null
   authorUpdated: boolean
   reviewerUpdated: boolean
+  hasWorktree: boolean
 }
 
 const { t, te } = useI18n()
@@ -112,19 +113,20 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
 const fAuthors = ref<string[]>([])
 const fReview = ref<string[]>([])
 const fFix = ref<string[]>([])
+const fWorktree = ref<string[]>([])
 const authors = computed(() => {
   const s = new Set<string>()
   for (const p of pullsResp.value?.pulls ?? []) s.add(p.author)
   return [...s].sort()
 })
-function toggleFilter(key: 'author' | 'pr' | 'review' | 'fix', v: string) {
-  const m = { author: fAuthors, pr: fPr, review: fReview, fix: fFix }
+function toggleFilter(key: 'author' | 'pr' | 'review' | 'fix' | 'worktree', v: string) {
+  const m = { author: fAuthors, pr: fPr, review: fReview, fix: fFix, worktree: fWorktree }
   const arr = m[key]
   arr.value = arr.value.includes(v) ? arr.value.filter((x) => x !== v) : [...arr.value, v]
 }
-const anyFilter = computed(() => fAuthors.value.length || fPr.value.length || fReview.value.length || fFix.value.length)
+const anyFilter = computed(() => fAuthors.value.length || fPr.value.length || fReview.value.length || fFix.value.length || fWorktree.value.length)
 function clearFilters() {
-  fAuthors.value = []; fPr.value = []; fReview.value = []; fFix.value = []
+  fAuthors.value = []; fPr.value = []; fReview.value = []; fFix.value = []; fWorktree.value = []
 }
 
 const INFLIGHT = ['queued', 'cloning', 'reviewing', 'recheck_requested', 'rechecking']
@@ -148,6 +150,9 @@ function reviewKey(p: Pull) {
 function fixKey(p: Pull) {
   return p.fixStatus ?? 'none'
 }
+function worktreeKey(p: Pull) {
+  return p.hasWorktree ? 'has' : 'none'
+}
 
 const visiblePulls = computed(() => {
   let list = pullsResp.value?.pulls ?? []
@@ -155,17 +160,19 @@ const visiblePulls = computed(() => {
   if (fPr.value.length) list = list.filter((p) => fPr.value.includes(pullKey(p)))
   if (fReview.value.length) list = list.filter((p) => fReview.value.includes(reviewKey(p)))
   if (fFix.value.length) list = list.filter((p) => fFix.value.includes(fixKey(p)))
+  if (fWorktree.value.length) list = list.filter((p) => fWorktree.value.includes(worktreeKey(p)))
   return list
 })
 // 前端分页：总数/翻页都基于过滤后的结果
 const pageCount = computed(() => Math.max(1, Math.ceil(visiblePulls.value.length / PER_PAGE)))
 const pagedPulls = computed(() => visiblePulls.value.slice(page.value * PER_PAGE, page.value * PER_PAGE + PER_PAGE))
-watch([fAuthors, fReview, fFix], () => { page.value = 0 }) // 改 filter → 回第一页（fPr 走 backendState 的 reset）
+watch([fAuthors, fReview, fFix, fWorktree], () => { page.value = 0 }) // 改 filter → 回第一页（fPr 走 backendState 的 reset）
 
 // filter 可选项
 const PR_OPTS = ['open', 'draft', 'merged', 'closed']
 const REVIEW_OPTS = ['none', 'reviewing', 'reviewed', 'posted', 'approved', 'changes']
 const FIX_OPTS = ['none', 'queued', 'validating', 'awaiting', 'fixing', 'ready', 'pushed', 'error', 'conflict']
+const WT_OPTS = ['has', 'none']
 
 // ── 三列状态显示 ──
 const PR_STATE: Record<string, { label: string; cls: string }> = {
@@ -213,12 +220,16 @@ function reviewOptLabel(k: string) {
 function fixOptLabel(k: string) {
   return k === 'none' ? t('project.fixNone') : fixStatusLabel(k)
 }
+function worktreeOptLabel(k: string) {
+  return t(k === 'has' ? 'project.worktree.has' : 'project.worktree.none')
+}
 // filter 维度（sel 取 unref 数组用于显示 includes；toggle 走 toggleFilter）
 const filterDims = computed(() => [
   { key: 'author' as const, label: t('project.col.author'), sel: fAuthors.value, opts: authors.value, fmt: (k: string) => k },
   { key: 'pr' as const, label: t('project.col.prStatus'), sel: fPr.value, opts: PR_OPTS, fmt: (k: string) => t('status.pr.' + k) },
   { key: 'review' as const, label: t('project.col.reviewStatus'), sel: fReview.value, opts: REVIEW_OPTS, fmt: reviewOptLabel },
   { key: 'fix' as const, label: t('project.col.fixStatus'), sel: fFix.value, opts: FIX_OPTS, fmt: fixOptLabel },
+  { key: 'worktree' as const, label: t('project.col.worktree'), sel: fWorktree.value, opts: WT_OPTS, fmt: worktreeOptLabel },
 ])
 </script>
 
