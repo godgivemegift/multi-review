@@ -6,13 +6,13 @@ import { outputLangClause } from './lang'
 // 「修复」第二阶段：写模式 agent。子进程跑 headless claude（不是 SDK）：
 // ① 要 Edit/Write + acceptEdits ② stream-json 自带 session_id，后续 --resume 续聊（M2）。
 //
-// 安全（关键）：**完全不给 Bash**。原因：node/npx/pnpm/sed 这类命令能当二级 shell 绕过
-// 任何 git/网络 deny —— `node -e "child_process.execSync('git push')"`、`sed -i` 改 worktree
-// 外的绝对路径文件、pnpm run 触发 package.json 里的 postinstall 跑 git。前缀级 deny 拦不住
-// 子进程里跑的东西。修复只需改文件，Read/Grep/Glob/Edit/Write 足够；commit/push 全由 Node 做。
-// DISALLOWED 里再把 Bash 和网络工具整个钉死，纵深防御。
-const ALLOWED = ['Read', 'Grep', 'Glob', 'Edit', 'Write']
-const DISALLOWED = ['Bash', 'WebFetch', 'WebSearch', 'Task', 'KillShell', 'NotebookEdit']
+// 工具：**完全放开**（用户决定），像 CLI 里的 claude 一样——给全套工具含 Bash + 网络，
+// 让 agent 能自己 `gh pr view` 看 codex 最新 review、跑测试、做 git 操作，真正自主干活。
+// ⚠️ 取舍：这意味着 agent 能自己 git push（绕过 Node 的上传门控）、能改 worktree 外的文件。
+// 仅适用于本地单用户、操作自己 PR 的场景，风险由用户自担。Node 侧仍会在收尾兜底 commit
+// （agent 没自己 commit 时）。ALLOWED 列出的工具在 headless 下自动放行、无需人工确认。
+const ALLOWED = ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'WebFetch', 'WebSearch', 'TodoWrite']
+const DISALLOWED: string[] = []
 
 // 喂给修复 agent 的条目（已勾选的 fix_findings）
 export type FixItem = {
@@ -52,7 +52,7 @@ export async function runFixAgent(opts: {
     '--model', opts.model,
     '--permission-mode', 'acceptEdits',
     '--allowedTools', ALLOWED.join(','),
-    '--disallowedTools', DISALLOWED.join(','),
+    ...(DISALLOWED.length ? ['--disallowedTools', DISALLOWED.join(',')] : []),
   ]
 
   const itemsBlock = opts.items
@@ -71,9 +71,8 @@ export async function runFixAgent(opts: {
   const prompt = `You are a senior engineer fixing your own pull request from validated review findings.
 You are inside a git worktree checked out at the PR branch HEAD (the current directory).
 
-HOW THIS WORKS (not a restriction on you):
-- You don't have git tools by design — the engine auto-commits your edits, and the user pushes from the UI when they choose. So just edit the files; never say you are "forbidden" or that you "can't help" with commit/push. When done, say it's ready to upload.
-- No network commands, no destructive commands. Only edit files in this worktree.
+TOOLS: You have the full toolset — Bash, gh, network (WebFetch/WebSearch), and file edits. Work like you would in a terminal: run gh / tests / git as needed.
+- The engine also auto-commits your edits at the end and the user uploads from the UI, so you don't have to commit/push yourself (you may, but you don't need to). When done, say it's ready to upload.
 - Match the existing code style. Keep changes minimal and targeted — fix ONLY the findings below.
 ${opts.instruction?.trim() ? `\nTask-level instruction from the reviewer (applies to everything):\n${opts.instruction.trim()}\n` : ''}
 ## Findings to fix
@@ -137,7 +136,7 @@ export async function runFixChat(opts: {
     '--model', opts.model,
     '--permission-mode', 'acceptEdits',
     '--allowedTools', ALLOWED.join(','),
-    '--disallowedTools', DISALLOWED.join(','),
+    ...(DISALLOWED.length ? ['--disallowedTools', DISALLOWED.join(',')] : []),
   ]
   if (opts.sessionId) args.push('--resume', opts.sessionId)
 
@@ -150,7 +149,7 @@ ${opts.conflictHint ? '\n' + opts.conflictHint + '\n' : ''}
 Reviewer's message:
 ${opts.message}
 
-Apply any code changes they ask for directly (Edit/Write). You don't have git tools — the engine auto-commits your edits and the user uploads from the UI; never say you're forbidden or can't help with commit/push, just make the edits and say it's ready to upload. Keep changes minimal and on-topic. Then reply briefly describing what you changed (or answer their question if no change is needed). ${outputLangClause(opts.lang)}`
+You have the full toolset — Bash, gh, network, and file edits — so work like you would in a terminal. This worktree is checked out on the PR's branch, so \`gh pr view --json reviews,comments\` (or \`gh api\`) reads the latest codex/reviewer feedback for THIS PR; you can also run tests and inspect git. Apply any code changes they ask for directly (Edit/Write). The engine also auto-commits your edits at the end and the user uploads from the UI, so you don't have to commit/push yourself (you may, but don't need to). Keep changes minimal and on-topic. Then reply briefly describing what you changed (or answer their question if no change is needed). ${outputLangClause(opts.lang)}`
 
   let text = ''
   const { costUsd, result, sessionId } = await runClaudeStream(args, {
