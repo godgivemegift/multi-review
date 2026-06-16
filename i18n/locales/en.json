@@ -92,10 +92,15 @@
       "findings": "Items",
       "prStatus": "PR",
       "reviewStatus": "Review",
-      "fixStatus": "Fix"
+      "fixStatus": "Fix",
+      "worktree": "Worktree"
     },
     "reviewNone": "not reviewed",
     "fixNone": "no fix",
+    "worktree": {
+      "has": "Present",
+      "none": "None"
+    },
     "reviewerUpdated": "Re-reviewed",
     "reviewerUpdatedTitle": "A new review was submitted after you pushed the fix",
     "selectAllReviewable": "Select all reviewable",
@@ -105,6 +110,8 @@
     "hasTaskTitle": "Review task already created",
     "hasTaskTag": "task created",
     "clearFilter": "Clear filter",
+    "selectAll": "Select all",
+    "deselectAll": "Deselect all",
     "filterByStatus": "Filter by this status",
     "noPulls": "No matching PRs",
     "noTasks": "No review tasks yet. Go to “All PRs” and check some PRs to start.",
@@ -424,6 +431,11 @@
     "worktreeHint": "Changes in worktree:",
     "copyPath": "Copy path",
     "pathCopied": "Path copied",
+    "deleteWorktree": "Delete worktree",
+    "deleteWorktreeConfirm": "Delete the local folder to free disk? The fix record stays and pushed changes are unaffected.",
+    "deleteWorktreeConfirmUnpushed": "There are unpushed local changes that will be lost. Still delete the worktree?",
+    "deleting": "Deleting…",
+    "worktreeDeleted": "Local worktree deleted",
     "runFixTitle": "Re-run fix",
     "runFixResetWarn": "Re-running resets the worktree to the PR base — changes made in chat will be lost. Continue?",
     "runFixOk": "Re-run (discard chat edits)",

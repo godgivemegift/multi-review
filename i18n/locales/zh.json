@@ -92,10 +92,15 @@
       "findings": "意见",
       "prStatus": "PR 状态",
       "reviewStatus": "审核",
-      "fixStatus": "修复"
+      "fixStatus": "修复",
+      "worktree": "工作区"
     },
     "reviewNone": "未审核",
     "fixNone": "未修复",
+    "worktree": {
+      "has": "存在",
+      "none": "无"
+    },
     "reviewerUpdated": "审核已更新",
     "reviewerUpdatedTitle": "你 push 修复后又有人提交了审核",
     "selectAllReviewable": "全选可审",
@@ -105,6 +110,8 @@
     "hasTaskTitle": "已建审核任务",
     "hasTaskTag": "已建任务",
     "clearFilter": "取消筛选",
+    "selectAll": "全选",
+    "deselectAll": "全不选",
     "filterByStatus": "按此状态筛选",
     "noPulls": "没有符合条件的 PR",
     "noTasks": "还没有审核任务。去「全部 PR」勾选 PR 开始。",
@@ -424,6 +431,11 @@
     "worktreeHint": "改动在 worktree：",
     "copyPath": "复制路径",
     "pathCopied": "路径已复制",
+    "deleteWorktree": "删除工作区",
+    "deleteWorktreeConfirm": "删除本地目录释放磁盘？修复记录保留，已上传的改动不受影响。",
+    "deleteWorktreeConfirmUnpushed": "本地有未上传的改动，删了会丢失。仍要删除工作区？",
+    "deleting": "删除中…",
+    "worktreeDeleted": "本地工作区已删除",
     "runFixTitle": "重新跑修复",
     "runFixResetWarn": "重跑会把 worktree 重置回 PR 原始状态，对话里改的东西会丢失。继续？",
     "runFixOk": "重跑（丢弃对话改动）",
