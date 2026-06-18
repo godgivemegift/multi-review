@@ -395,7 +395,6 @@
     "noDiff": "(no changes)",
     "pushing": "Pushing…",
     "pushedBadge": "Pushed",
-    "pushOthersHint": "Can only push your own PR",
     "pushTitle": "Push changes",
     "pushOk": "Confirm push",
     "pushConfirm": "Will push the changes across {files} file(s) to {branch}.",

@@ -159,7 +159,7 @@ export const fixes = sqliteTable('fixes', {
     .references(() => projects.id, { onDelete: 'cascade' }),
   prNumber: integer('pr_number').notNull(),
   branch: text('branch').notNull(),
-  prAuthor: text('pr_author'), // PR 作者；push 只允许 == 当前 gh 用户（#16 决策 A）
+  prAuthor: text('pr_author'), // PR 作者（展示 / reviewer-updated 用；push 不再限制只能自己的 PR）
   title: text('title'),
   instruction: text('instruction'), // 建任务时 prompt 框里的针对性指示（可空 = 用系统默认）
   lang: text('lang').notNull().default('en'), // 工作语言 = 建任务时的 UI locale（verdict/反馈用它写）

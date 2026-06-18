@@ -1,8 +1,10 @@
 import { asc, eq } from 'drizzle-orm'
+import { existsSync } from 'node:fs'
 import { schema } from '~core/db/client'
-import { getCurrentUserLogin } from '~core/github/gh'
+import { fixChangesStat } from '~core/fix/changes'
 
-// 修复任务详情：fix + 全部 findings + 是否允许 push（自己的 PR 才行，#16 决策 A）
+// 修复任务详情：fix + 全部 findings。push/reply 对任何 PR 开放（仍手动 + 二次确认）。
+const ACTIVE = ['queued', 'validating', 'fixing', 'pushing', 'merging'] // 跑着的时候别去算 last-changes（和 agent 抢 worktree）
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
   const d = db()
@@ -27,18 +29,21 @@ export default defineEventHandler(async (event) => {
     .where(eq(schema.fixEvents.fixId, id))
     .orderBy(asc(schema.fixEvents.ts))
     .all()
-  const me = await getCurrentUserLogin().catch(() => '')
   // 放宽：只要有 finding 就能回复作者（面板里 AI 按每条现状 + 作者补充生成，作者再挑发哪些）
   const canReply = findings.length > 0
   // 有本地 commit 还没 push（上传按钮的显示条件）
   const hasUnpushed = !!fix.fixHeadSha && fix.fixHeadSha !== fix.lastPushSha
   const prUrl = project ? `https://github.com/${project.repo}/pull/${fix.prNumber}` : null
+  // 「修复改动」用 last-changes 口径实时算，覆盖 DB 里按旧口径（baseHeadSha..HEAD）存的统计
+  let stat = { filesChanged: fix.filesChanged ?? 0, additions: fix.additions ?? 0, deletions: fix.deletions ?? 0 }
+  if (!ACTIVE.includes(fix.status) && fix.worktreePath && existsSync(fix.worktreePath)) {
+    stat = await fixChangesStat(fix.worktreePath).catch(() => stat)
+  }
   return {
-    fix, // 含 worktreePath / baseRef / lastPushSha / lastActionKind
+    fix: { ...fix, ...stat }, // 含 worktreePath / baseRef / lastPushSha / lastActionKind；统计已换 last-changes 口径
     findings: findings.map((f: any) => ({ ...f, sourceCommentIds: JSON.parse(f.sourceCommentIds || '[]') })),
     turns,
     events,
-    canPush: !!fix.prAuthor && !!me && fix.prAuthor === me,
     hasUnpushed,
     canReply,
     prUrl,

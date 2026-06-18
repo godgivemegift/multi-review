@@ -17,7 +17,6 @@ type FixData = {
   findings: FixFinding[]
   turns: FixTurn[]
   events: { ts: string; kind: string; message: string | null }[]
-  canPush: boolean
   hasUnpushed: boolean
   canReply: boolean
   prUrl: string | null
@@ -194,6 +193,22 @@ const FIX_CLS: Record<string, string> = { fixed: 'text-highlighted', failed: 'te
 const chatInput = ref('')
 const chatSteps = ref<string[]>([])
 const liveAssistant = ref('')
+
+// 进对话 / 来新消息时自动滚到最底（看最新一条），而不是停在最上面
+const chatAnchor = ref<HTMLElement | null>(null)
+function scrollChatToBottom() {
+  nextTick(() => {
+    let p = chatAnchor.value?.parentElement ?? null
+    while (p) {
+      const oy = getComputedStyle(p).overflowY
+      if (oy === 'auto' || oy === 'scroll') { p.scrollTop = p.scrollHeight; return }
+      p = p.parentElement
+    }
+  })
+}
+watch([activeTab, () => data.value?.turns.length], ([tab]) => {
+  if (tab === 'chat') scrollChatToBottom()
+})
 const chatElapsed = ref(0)
 const VERBS = ['Thinking', 'Working', 'Reading', 'Editing', 'Reasoning', 'Crunching', 'Resolving']
 const chatVerb = computed(() => VERBS[Math.floor(chatElapsed.value / 3) % VERBS.length])
@@ -458,6 +473,7 @@ async function doDeleteWorktree() {
             </FixActionBar>
           </div>
         </div>
+        <div ref="chatAnchor" />
       </template>
     </div>
   </div>

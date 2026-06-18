@@ -292,8 +292,8 @@ export async function fetchReviewComments(repo: string, prNumber: number): Promi
   }))
 }
 
-// 当前登录用户（修复只允许 push 自己的 PR、「审核已更新」排除自己的评论）。
-// 进程级缓存：gh auth switch 后需重启服务才会刷新（push 门控依赖它，单用户本地工具可接受）。
+// 当前登录用户（/api/me 展示、「审核已更新」排除自己的评论等）。
+// 进程级缓存：gh auth switch 后需重启服务才会刷新（单用户本地工具可接受）。
 let _login: string | null = null
 export async function getCurrentUserLogin(): Promise<string> {
   if (_login) return _login

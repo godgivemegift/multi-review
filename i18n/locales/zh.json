@@ -395,7 +395,6 @@
     "noDiff": "（无改动）",
     "pushing": "上传中…",
     "pushedBadge": "已上传",
-    "pushOthersHint": "只能上传自己的 PR",
     "pushTitle": "上传改动",
     "pushOk": "确认上传",
     "pushConfirm": "将向分支 {branch} push {files} 个文件的改动。",
