@@ -395,7 +395,6 @@
     "noDiff": "(aucun changement)",
     "pushing": "Envoi…",
     "pushedBadge": "Poussé",
-    "pushOthersHint": "Seules vos propres PR",
     "pushTitle": "Pousser les changements",
     "pushOk": "Confirmer",
     "pushConfirm": "Poussera les changements de {files} fichier(s) vers {branch}.",

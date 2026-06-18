@@ -1,13 +1,12 @@
 import { eq, asc } from 'drizzle-orm'
 import { z } from 'zod'
 import { schema } from '~core/db/client'
-import { getCurrentUserLogin } from '~core/github/gh'
 import { buildReplies, replyToThread, postSummaryComment, type ReplyItem } from '~core/fix/upload'
 
 // 「回复作者」（#16）：独立于上传，只回复不 push。两步（复用 review 的 dryRun 模式）：
 //   dryRun=true  → AI 按每条 finding 的素材 + 作者补充判定状态(已修/不修/待办) + 生成英文标题 + 正文，返回预览，不发。
 //   dryRun=false → 用作者在预览里确认/编辑的 replies（含 status/titleEn/body）逐条发；commentIds/severity 以服务端 finding 为准。
-// 只允许自己的 PR。真发后记录 lastActionKind='replied'。
+// 任何 PR（含别人的）都可回复（dryRun 预览本身就是二次确认）。真发后记录 lastActionKind='replied'。
 const ReplyIn = z.object({
   key: z.string(),
   titleEn: z.string().max(200).default(''),
@@ -43,10 +42,6 @@ export default defineEventHandler(async (event) => {
   if (!fix) throw createError({ statusCode: 404, statusMessage: 'fix 不存在' })
   if (!['awaiting', 'ready', 'error', 'pushed', 'conflict'].includes(fix.status)) {
     throw createError({ statusCode: 409, statusMessage: '当前状态不能回复作者' })
-  }
-  const me = await getCurrentUserLogin().catch(() => '')
-  if (!me || !fix.prAuthor || fix.prAuthor !== me) {
-    throw createError({ statusCode: 403, statusMessage: `只允许回复自己的 PR（作者 ${fix.prAuthor || '?'}，当前 ${me || '?'}）` })
   }
   const project = d.select().from(schema.projects).where(eq(schema.projects.id, fix.projectId)).get()
   if (!project) throw createError({ statusCode: 404, statusMessage: '项目不存在' })

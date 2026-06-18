@@ -7,7 +7,7 @@ import { enqueueValidate } from '~core/fix/pipeline'
 import { reviewQueue } from '~core/queue'
 
 // 建一个「修复 PR」任务并入队验证阶段（#16）。
-// 验证对任何 PR 开放（只读）；push 门控在 push endpoint（只允许自己的 PR）。
+// 验证 / push / reply 对任何 PR 都开放（push 与 reply 仍走手动 + 二次确认）。
 const Body = z.object({ instruction: z.string().max(4000).optional() })
 
 export default defineEventHandler(async (event) => {

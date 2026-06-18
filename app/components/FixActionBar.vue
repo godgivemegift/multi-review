@@ -43,7 +43,7 @@ const lockMerge = computed(() => anyBusy.value || ['merging', 'conflict'].includ
       {{ busy === 'merge' ? t('fix.merging') : t('fix.mergeBase') }}
     </button>
     <button
-      v-if="data.canReply && data.canPush"
+      v-if="data.canReply"
       class="text-sm text-dimmed hover:text-highlighted disabled:opacity-40"
       :disabled="anyBusy"
       @click="emit('reply')"
@@ -52,9 +52,8 @@ const lockMerge = computed(() => anyBusy.value || ['merging', 'conflict'].includ
     </button>
     <a v-if="viewEntry" :href="viewEntry.url" target="_blank" class="text-sm text-highlighted hover:underline shrink-0">{{ viewEntry.label }} ↗</a>
     <div class="ml-auto flex items-center gap-2">
-      <span v-if="['ready', 'pushed'].includes(data.fix.status) && !data.canPush" class="text-[10px] text-dimmed">{{ t('fix.pushOthersHint') }}</span>
       <button
-        v-if="data.hasUnpushed && data.canPush"
+        v-if="data.hasUnpushed"
         class="text-sm bg-inverted text-inverted px-4 py-1.5 hover:bg-inverted/90 disabled:opacity-40"
         :disabled="anyBusy"
         @click="confirming = 'push'"

@@ -140,16 +140,26 @@ export async function runFixChat(opts: {
   ]
   if (opts.sessionId) args.push('--resume', opts.sessionId)
 
-  // 有 sessionId（resume）才说"接着上次修"；没有就别声称有上下文，让它自己读代码
+  // 有 sessionId（resume）才说"接着上次"；没有就别声称有上下文
   const opening = opts.sessionId
-    ? 'You are continuing to fix this pull request in the same git worktree, following up after your previous fix.'
-    : 'You are working on this pull request in a git worktree. You have no prior context in this session — read the code as needed before changing anything.'
+    ? 'You are continuing a conversation about this pull request in the same git worktree, following up after your previous turn.'
+    : 'You are in a conversation about this pull request, checked out in a git worktree. You have no prior context in this session.'
+  // 这是「对话」不是重新评审：默认就事论事地答用户这一条，别每次都先把整个 PR/代码重扫一遍来「验证问题成立性」。
+  // 只有当用户这条消息本身要求核查/复查/确认时，才去读代码、跑 git/gh/测试做验证；否则纯聊就好。
   const prompt = `${opening}
 ${opts.conflictHint ? '\n' + opts.conflictHint + '\n' : ''}
+This is a CONVERSATION, not a fresh review. Treat the reviewer's message below as the primary instruction and respond to exactly what they asked — don't expand the scope.
+
+- If they're asking a question or discussing the change (its impact, design, trade-offs, details), just answer from context. Do NOT proactively re-scan the PR, re-read everything, or re-verify findings/completeness. They may already know it's fine and just want to talk it through.
+- Only investigate — read code, run git/gh/tests, verify whether an issue still holds — when their message actually calls for it (they ask you to check, re-verify, confirm, or look into something).
+- If they ask for a code change, make it directly (Edit/Write); keep it minimal and on-topic.
+
+You have the full toolset — Bash, gh, network, and file edits — available IF the message needs it. This worktree is on the PR's branch, so \`gh pr view --json reviews,comments\` (or \`gh api\`) reads the latest reviewer/codex feedback for THIS PR when you do need to look; you can also run tests and inspect git. The engine auto-commits your edits at the end and the user uploads from the UI, so you don't have to commit/push yourself.
+
 Reviewer's message:
 ${opts.message}
 
-You have the full toolset — Bash, gh, network, and file edits — so work like you would in a terminal. This worktree is checked out on the PR's branch, so \`gh pr view --json reviews,comments\` (or \`gh api\`) reads the latest codex/reviewer feedback for THIS PR; you can also run tests and inspect git. Apply any code changes they ask for directly (Edit/Write). The engine also auto-commits your edits at the end and the user uploads from the UI, so you don't have to commit/push yourself (you may, but don't need to). Keep changes minimal and on-topic. Then reply briefly describing what you changed (or answer their question if no change is needed). ${outputLangClause(opts.lang)}`
+Reply briefly: answer their question, or describe what you changed. ${outputLangClause(opts.lang)}`
 
   let text = ''
   const { costUsd, result, sessionId } = await runClaudeStream(args, {

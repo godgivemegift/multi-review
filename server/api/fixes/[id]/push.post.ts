@@ -3,14 +3,14 @@ import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
 import { existsSync } from 'node:fs'
 import { schema } from '~core/db/client'
-import { getCurrentUserLogin, fetchReviewsCount } from '~core/github/gh'
+import { fetchReviewsCount } from '~core/github/gh'
 
 const pexec = promisify(execFile)
 // 首字符必须字母数字（禁前导 `-`/`.`，防被当 git flag 或路径穿越）；和 diff/merge-base 保持一致
 const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._\-/]*$/
 
 // 「上传改动」（#16）：只把本地 commit push 到 PR 分支，**不回复作者**（回复是独立按钮）。
-// 永远手动触发；只允许自己的 PR（决策 A）。push 完记录 lastPushSha → 前端据此判断「还有没有未上传改动」。
+// 永远手动触发 + 前端二次确认；任何 PR（含别人的）都可上传。push 完记录 lastPushSha → 前端据此判断「还有没有未上传改动」。
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
   const d = db()
@@ -20,12 +20,6 @@ export default defineEventHandler(async (event) => {
   if (!fix.worktreePath || !existsSync(fix.worktreePath) || !fix.fixHeadSha) throw createError({ statusCode: 400, statusMessage: '缺少本地提交或 worktree 不在了' })
   if (fix.fixHeadSha === fix.lastPushSha) throw createError({ statusCode: 400, statusMessage: '没有未上传的改动' })
   if (!SAFE_REF.test(fix.branch)) throw createError({ statusCode: 400, statusMessage: `分支名不合法: ${fix.branch}` })
-
-  // push 红线：只允许自己的 PR 分支
-  const me = await getCurrentUserLogin().catch(() => '')
-  if (!me || !fix.prAuthor || fix.prAuthor !== me) {
-    throw createError({ statusCode: 403, statusMessage: `只允许 push 自己的 PR（作者 ${fix.prAuthor || '?'}，当前 ${me || '?'}）。别人的 PR 请导出 patch（后续支持）` })
-  }
 
   const project = d.select().from(schema.projects).where(eq(schema.projects.id, fix.projectId)).get()
   if (!project) throw createError({ statusCode: 404, statusMessage: '项目不存在' })
