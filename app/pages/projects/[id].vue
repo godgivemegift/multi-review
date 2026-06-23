@@ -19,6 +19,7 @@ type Pull = {
   taskStatus: string | null
   fixId: string | null
   fixStatus: string | null
+  fixChatting: boolean
   authorUpdated: boolean
   reviewerUpdated: boolean
   hasWorktree: boolean
@@ -177,7 +178,7 @@ watch([fAuthors, fReview, fFix, fWorktree], () => { page.value = 0 }) // 改 fil
 // filter 可选项
 const PR_OPTS = ['open', 'draft', 'merged', 'closed']
 const REVIEW_OPTS = ['none', 'reviewing', 'reviewed', 'posted', 'approved', 'changes']
-const FIX_OPTS = ['none', 'queued', 'validating', 'awaiting', 'fixing', 'ready', 'pushed', 'error', 'conflict']
+const FIX_OPTS = ['none', 'queued', 'validating', 'awaiting', 'fixing', 'ready', 'merging', 'conflict', 'pushing', 'pushed', 'error']
 const WT_OPTS = ['has', 'none']
 
 // ── 三列状态显示 ──
@@ -211,7 +212,7 @@ function reviewCell(p: Pull): { label: string; cls: string } | null {
   return null
 }
 function fixCell(p: Pull): { label: string; cls: string } | null {
-  if (p.fixStatus) return { label: fixStatusLabel(p.fixStatus), cls: 'text-toned' }
+  if (p.fixStatus) return { label: fixStatusLabel(p.fixStatus), cls: p.fixStatus === 'error' ? 'text-error font-medium' : 'text-toned' }
   return null
 }
 // filter 选项文案
@@ -330,6 +331,7 @@ const filterDims = computed(() => [
           <span class="text-center text-xs flex flex-col items-center justify-center gap-0.5 leading-tight">
             <button v-if="fixCell(p)" :class="fixCell(p)!.cls" class="hover:text-highlighted" @click.stop="openDetail(p.number, p.taskId, p.fixId, 'fix')">{{ fixCell(p)!.label }}</button>
             <span v-else class="text-dimmed">—</span>
+            <span v-if="p.fixChatting" class="text-[9px] text-highlighted font-medium flex items-center gap-1" :title="$t('project.chattingTitle')"><span class="inline-block w-1.5 h-1.5 rounded-full bg-inverted animate-pulse" />{{ $t('project.chatting') }}</span>
             <span v-if="p.reviewerUpdated" class="text-[9px] text-highlighted font-medium" :title="$t('project.reviewerUpdatedTitle')">● {{ $t('project.reviewerUpdated') }}</span>
           </span>
         </div>

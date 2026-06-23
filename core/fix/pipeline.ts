@@ -388,8 +388,13 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
       .set({ fixHeadSha: head.trim(), filesChanged, additions, deletions, sessionId: newSessionId, updatedAt: h.now() })
       .where(eq(schema.fixes.id, fixId))
       .run()
-    // 验证后直接对话改了代码（还没跑过批量修复，停在 awaiting）→ 有改动就推到 ready，让上传按钮出来
-    if (h.row()?.status === 'awaiting' && base && head.trim() !== base) h.setStatus('ready')
+    // 对话改了代码后把状态推到 ready，让上传按钮出来：
+    //  - awaiting（验证后直接对话、还没跑过批量修复）：相对 PR 原始 head 有改动就推
+    //  - pushed（上传后又在对话里改）：相对上次 push 的 sha 有新改动 → 推回「待上传」（保留 lastPushSha/pushedAt，
+    //    所以「审核已更新」信号和 hasUnpushed 仍正常工作）
+    const r2 = h.row()
+    if (r2?.status === 'awaiting' && base && head.trim() !== base) h.setStatus('ready')
+    else if (r2?.status === 'pushed' && r2.lastPushSha && head.trim() !== r2.lastPushSha) h.setStatus('ready')
     h.emit('chat', stopped ? 'stopped' : 'done')
    } catch (e) {
     activeChats.delete(fixId)

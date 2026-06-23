@@ -17,7 +17,11 @@ export default defineEventHandler(async (event) => {
   if (parsed.data.checked !== undefined) patch.checked = parsed.data.checked
   if (parsed.data.notes !== undefined) patch.notes = parsed.data.notes
   if (Object.keys(patch).length) {
-    db().update(schema.findings).set(patch).where(eq(schema.findings.id, id)).run()
+    const d = db()
+    const row = d.select().from(schema.findings).where(eq(schema.findings.id, id)).get()
+    d.update(schema.findings).set(patch).where(eq(schema.findings.id, id)).run()
+    // 勾选 / note 变了会改变发评论的内容 → 让预览缓存失效（previewSig 置空，下次重新生成），并 bump review.updatedAt
+    if (row) d.update(schema.reviews).set({ previewSig: null, updatedAt: new Date().toISOString() }).where(eq(schema.reviews.id, (row as any).reviewId)).run()
   }
   return { ok: true }
 })
