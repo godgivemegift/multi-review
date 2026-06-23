@@ -45,7 +45,7 @@ function serializeTimeline(timeline: TimelineNode[]): string {
     .join('\n\n')
 }
 
-export async function runValidateAgent(opts: {
+export type ValidateAgentOptions = {
   cwd: string
   repo: string
   prNumber: number
@@ -59,7 +59,9 @@ export async function runValidateAgent(opts: {
   model: string
   effort?: string
   onTool?: (name: string, info: string) => void
-}): Promise<{ result: ValidateResult; costUsd: number }> {
+}
+
+export async function runValidateAgent(opts: ValidateAgentOptions): Promise<{ result: ValidateResult; costUsd: number }> {
   const lineBlock = opts.comments.length ? serializeComments(opts.comments) : '(none)'
   const topBlock = serializeTimeline(opts.timeline) || '(none)'
 

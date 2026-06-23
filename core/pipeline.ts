@@ -3,8 +3,7 @@ import { eq } from 'drizzle-orm'
 import { reviewQueue } from './queue'
 import { cockpitBus } from './events'
 import { prepareWorktree } from './git/worktree'
-import { runReviewAgent, runGuidedReviewAgent } from './agent/review'
-import { runRecheckAgent } from './agent/recheck'
+import { claudeReviewRunner } from './agent/claudeRunners'
 
 // 这里不直接 import db client，避免 core 依赖运行时；由调用方注入 db + 表 + 配置。
 export type ReviewJobCtx = {
@@ -77,7 +76,7 @@ async function runReviewJob(ctx: ReviewJobCtx) {
     if (guided) {
       // ── 带反馈的针对性复审：保留 notes/勾选，AI 逐条回应 ──
       emit('stage', 'AI 针对你的反馈复审中…')
-      const g = await runGuidedReviewAgent({
+      const g = await claudeReviewRunner.runGuidedReview({
         cwd: wt.path, repo: ctx.repo, prNumber: ctx.prNumber, branch: ctx.branch,
         defaultBranch: ctx.defaultBranch, methodology: ctx.methodology, model: ctx.model, effort: ctx.effort, lang: ctx.lang,
         instruction: review?.reviewInstruction || '', globalNotes: review?.globalNotes || '',
@@ -125,7 +124,7 @@ async function runReviewJob(ctx: ReviewJobCtx) {
     } else {
       // ── 全新首审：清空重写 ──
       emit('stage', 'AI 审核中…')
-      const r = await runReviewAgent({
+      const r = await claudeReviewRunner.runReview({
         cwd: wt.path, repo: ctx.repo, prNumber: ctx.prNumber, branch: ctx.branch,
         defaultBranch: ctx.defaultBranch, methodology: ctx.methodology, model: ctx.model, effort: ctx.effort, lang: ctx.lang,
         onTool: (name, info) => emit('tool', `${name} ${info}`),
@@ -195,7 +194,7 @@ async function runRecheckJob(ctx: ReviewJobCtx) {
     })
 
     emit('stage', '复审中：判断作者改了没')
-    const { result } = await runRecheckAgent({
+    const { result } = await claudeReviewRunner.runRecheck({
       cwd: wt.path, repo: ctx.repo, prNumber: ctx.prNumber, defaultBranch: ctx.defaultBranch,
       lastPostSha: review?.lastPostSha ?? null,
       requirement: review?.requirement ?? null,

@@ -7,8 +7,8 @@ import { reviewQueue } from '../queue'
 import { cockpitBus } from '../events'
 import { prepareWorktree, removeWorktree } from '../git/worktree'
 import { fetchTimeline, fetchReviewComments } from '../github/gh'
-import { runValidateAgent } from '../agent/validate'
-import { runFixAgent, runFixChat, type FixItem } from '../agent/fixer'
+import { claudeChatRunner, claudeFixRunner, claudeValidateRunner } from '../agent/claudeRunners'
+import type { FixItem } from '../agent/runners'
 import type { ChildProcess } from 'node:child_process'
 
 const pexec = promisify(execFile)
@@ -130,7 +130,7 @@ async function runValidateJob(ctx: FixJobCtx) {
 
     h.setStage('验证中：逐条核对评论是否成立')
     const fix = h.row()
-    const { result, costUsd } = await runValidateAgent({
+    const { result, costUsd } = await claudeValidateRunner.runValidate({
       cwd: wt.path,
       repo: ctx.repo,
       prNumber: ctx.prNumber,
@@ -227,7 +227,7 @@ async function runFixPhase(ctx: FixJobCtx) {
       note: f.note,
     }))
     const fix = h.row()
-    const { costUsd, sessionId, results } = await runFixAgent({
+    const { costUsd, sessionId, results } = await claudeFixRunner.runFix({
       cwd: wt.path,
       model: ctx.model,
       lang: ctx.lang,
@@ -325,7 +325,7 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
       ? `There are UNRESOLVED merge conflicts in these files (they contain <<<<<<< / ======= / >>>>>>> markers): ${uFiles.trim().split('\n').join(', ')}. Resolve every conflict by editing the files (remove all conflict markers), following the reviewer's guidance below.`
       : ''
     try {
-      const r = await runFixChat({
+      const r = await claudeChatRunner.runChat({
         cwd: wt.path,
         model: ctx.model,
         lang: ctx.lang,

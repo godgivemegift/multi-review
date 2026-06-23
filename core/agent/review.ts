@@ -63,8 +63,7 @@ function buildPrompt(opts: { repo: string; prNumber: number; branch: string; def
 ${outputSpec(opts.lang)}`
 }
 
-// 跑一次审核：Agent SDK 带 git 工具在 worktree 里干活，返回结构化结果。
-export async function runReviewAgent(opts: {
+export type ReviewAgentOptions = {
   cwd: string
   repo: string
   prNumber: number
@@ -75,7 +74,10 @@ export async function runReviewAgent(opts: {
   effort?: string
   lang?: string
   onTool?: (name: string, info: string) => void
-}): Promise<{ result: ReviewResult; costUsd: number; raw: string }> {
+}
+
+// 跑一次审核：Agent SDK 带 git 工具在 worktree 里干活，返回结构化结果。
+export async function runReviewAgent(opts: ReviewAgentOptions): Promise<{ result: ReviewResult; costUsd: number; raw: string }> {
   const stream = query({
     prompt: buildPrompt({ ...opts, lang: opts.lang || 'zh' }),
     options: {
@@ -145,9 +147,9 @@ export const GuidedResultSchema = z.object({
 })
 export type GuidedResult = z.infer<typeof GuidedResultSchema>
 
-type GuidedInput = { fid: string; severity: string; title: string; location: string | null; problem: string | null; reviewerNote: string | null }
+export type GuidedInput = { fid: string; severity: string; title: string; location: string | null; problem: string | null; reviewerNote: string | null }
 
-export async function runGuidedReviewAgent(opts: {
+export type GuidedReviewAgentOptions = {
   cwd: string
   repo: string
   prNumber: number
@@ -161,7 +163,9 @@ export async function runGuidedReviewAgent(opts: {
   instruction: string
   globalNotes: string
   onTool?: (name: string, info: string) => void
-}): Promise<{ result: GuidedResult; costUsd: number }> {
+}
+
+export async function runGuidedReviewAgent(opts: GuidedReviewAgentOptions): Promise<{ result: GuidedResult; costUsd: number }> {
   const prompt = `你在一个 git worktree 里（已 checkout PR #${opts.prNumber} 分支 ${opts.branch} 并合并 ${opts.defaultBranch}）。这是一次**带审核员反馈的针对性复审**，不是从零重审。
 
 审核员对上一轮的反馈：

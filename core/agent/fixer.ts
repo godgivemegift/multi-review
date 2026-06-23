@@ -24,6 +24,18 @@ export type FixItem = {
   note: string | null // 用户的修复指示（最高优先级）
 }
 
+export type FixAgentResult = {
+  costUsd: number
+  sessionId: string | null
+  results: { idx: number; status: 'fixed' | 'failed' | 'skipped'; text: string }[]
+}
+
+export type FixChatResult = {
+  costUsd: number
+  sessionId: string | null
+  text: string
+}
+
 const FixResultSchema = z.object({
   results: z
     .array(
@@ -36,7 +48,7 @@ const FixResultSchema = z.object({
     .default([]),
 })
 
-export async function runFixAgent(opts: {
+export type FixAgentOptions = {
   cwd: string
   model: string
   lang: string
@@ -44,7 +56,9 @@ export async function runFixAgent(opts: {
   items: FixItem[]
   onTool?: (name: string, info: string) => void
   onText?: (text: string) => void
-}): Promise<{ costUsd: number; sessionId: string | null; results: { idx: number; status: 'fixed' | 'failed' | 'skipped'; text: string }[] }> {
+}
+
+export async function runFixAgent(opts: FixAgentOptions): Promise<FixAgentResult> {
   const args = [
     '-p',
     '--verbose',
@@ -118,7 +132,7 @@ Inside JSON string values never use unescaped double quotes — use backticks or
 // M2 对话跟进：在修复出稿后继续聊、继续改。--resume 续上 sessionId 的会话，所以 agent 记得
 // 自己刚才改了什么、为什么。同样不给 Bash；改文件后由 Node 侧 commit。
 // 返回纯文本回复（不解析 JSON —— chat 是自由对话）+ 新 sessionId（resume 后可能轮换）。
-export async function runFixChat(opts: {
+export type FixChatOptions = {
   cwd: string
   model: string
   lang: string
@@ -128,7 +142,9 @@ export async function runFixChat(opts: {
   onSpawn?: (cp: import('node:child_process').ChildProcess) => void
   onText?: (text: string) => void
   onTool?: (name: string, info: string) => void
-}): Promise<{ costUsd: number; sessionId: string | null; text: string }> {
+}
+
+export async function runFixChat(opts: FixChatOptions): Promise<FixChatResult> {
   const args = [
     '-p',
     '--verbose',

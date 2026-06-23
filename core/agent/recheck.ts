@@ -33,9 +33,9 @@ export const RecheckSchema = z.object({
 })
 export type RecheckResult = z.infer<typeof RecheckSchema>
 
-type ExistingFinding = { fid: string; title: string; location: string | null; problem: string | null; fix: string | null; notes: string | null }
+export type ExistingFinding = { fid: string; title: string; location: string | null; problem: string | null; fix: string | null; notes: string | null }
 
-export async function runRecheckAgent(opts: {
+export type RecheckAgentOptions = {
   cwd: string
   repo: string
   prNumber: number
@@ -48,7 +48,9 @@ export async function runRecheckAgent(opts: {
   effort?: string
   lang?: string
   onTool?: (name: string, info: string) => void
-}): Promise<{ result: RecheckResult; costUsd: number }> {
+}
+
+export async function runRecheckAgent(opts: RecheckAgentOptions): Promise<{ result: RecheckResult; costUsd: number }> {
   const baseline = opts.lastPostSha
     ? `上次发评论时的 commit 是 ${opts.lastPostSha}。先看 \`git diff ${opts.lastPostSha}..HEAD\` 和 \`git log ${opts.lastPostSha}..HEAD --oneline\`，这是作者在你评论之后改的东西。`
     : `没有记录上次评论的 commit，用 \`git diff origin/${opts.defaultBranch}...HEAD\` 看全部变更。`
