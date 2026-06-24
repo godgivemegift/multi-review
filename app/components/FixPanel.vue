@@ -131,12 +131,12 @@ async function stopChat() {
 }
 
 // ── 提交并上传：预览 view ──
-const preview = ref<{ diff: string; truncated: boolean; message: string; filesChanged: number; additions: number; deletions: number } | null>(null)
+const preview = ref<{ diff: string; truncated: boolean; message: string; needsCommit: boolean; filesChanged: number; additions: number; deletions: number } | null>(null)
 const commitMsg = ref('')
 async function openPreview() {
   busy.value = 'upload'
   try {
-    const res = await $fetch<{ diff: string; truncated: boolean; message: string; filesChanged: number; additions: number; deletions: number }>(
+    const res = await $fetch<{ diff: string; truncated: boolean; message: string; needsCommit: boolean; filesChanged: number; additions: number; deletions: number }>(
       `/api/fixes/${currentFixId.value}/push`, { method: 'POST', body: { dryRun: true } },
     )
     preview.value = res
@@ -200,15 +200,18 @@ async function copyWorktree() {
           <span class="text-success">+{{ preview.additions }}</span><span class="text-error"> −{{ preview.deletions }}</span>
         </span>
       </div>
-      <label class="text-[10px] uppercase tracking-[0.15em] text-dimmed">{{ $t('fix.commitMsgLabel') }}</label>
-      <input
-        v-model="commitMsg" type="text" :placeholder="$t('fix.commitMsgPlaceholder')"
-        class="w-full text-sm bg-muted border border-default rounded px-3 py-2 mt-1 mb-3 outline-none focus:border-accented font-mono"
-      />
+      <template v-if="preview.needsCommit">
+        <label class="text-[10px] uppercase tracking-[0.15em] text-dimmed">{{ $t('fix.commitMsgLabel') }}</label>
+        <input
+          v-model="commitMsg" type="text" :placeholder="$t('fix.commitMsgPlaceholder')"
+          class="w-full text-sm bg-muted border border-default rounded px-3 py-2 mt-1 mb-3 outline-none focus:border-accented font-mono"
+        />
+      </template>
+      <p v-else class="text-xs text-dimmed mb-3">{{ $t('fix.rePushHint') }}</p>
       <div class="flex items-center gap-3 mb-3">
         <button
           class="text-sm bg-inverted text-inverted px-4 py-1.5 hover:bg-inverted/90 disabled:opacity-40"
-          :disabled="!commitMsg.trim() || !!busy" @click="confirmUpload"
+          :disabled="(preview.needsCommit && !commitMsg.trim()) || !!busy" @click="confirmUpload"
         >
           {{ busy === 'upload' ? $t('fix.pushing') : $t('fix.commitAndUpload') }}
         </button>
@@ -299,6 +302,7 @@ async function copyWorktree() {
           <button class="hover:text-highlighted shrink-0 underline disabled:opacity-40" :disabled="chatting || pushing || !!busy" @click="rmwtConfirm = true">{{ $t('fix.deleteWorktree') }}</button>
         </div>
       </div>
+      <div ref="chatAnchor" />
     </template>
   </div>
 </template>

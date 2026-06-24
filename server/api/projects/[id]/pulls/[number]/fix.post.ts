@@ -18,20 +18,27 @@ export default defineEventHandler(async (event) => {
   if (!project) throw createError({ statusCode: 404, statusMessage: '项目不存在' })
   if (!project.localPath) throw createError({ statusCode: 400, statusMessage: '项目未配置本地 clone 路径（worktree 需要它）' })
 
-  const existing = d
-    .select()
-    .from(schema.fixes)
-    .where(and(eq(schema.fixes.projectId, projectId), eq(schema.fixes.prNumber, prNumber)))
-    .all()
-    .sort((a: any, b: any) => a.createdAt.localeCompare(b.createdAt))
-  if (existing.length) {
-    const f = existing[existing.length - 1]!
-    return { id: f.id, status: f.status }
+  // 取该 PR 最新的 fix 行（discard 是硬删，所以不会有残留行；存在即复用）
+  const latest = () => {
+    const rows = d
+      .select()
+      .from(schema.fixes)
+      .where(and(eq(schema.fixes.projectId, projectId), eq(schema.fixes.prNumber, prNumber)))
+      .all()
+      .sort((a: any, b: any) => a.createdAt.localeCompare(b.createdAt))
+    return rows.length ? rows[rows.length - 1]! : null
   }
+  const pre = latest()
+  if (pre) return { id: pre.id, status: pre.status }
 
   // 服务端取 PR 元数据（branch/author/title 不信客户端）
   const meta = await fetchPrMeta(project.repo, prNumber)
   if (!meta.branch) throw createError({ statusCode: 400, statusMessage: '拿不到 PR 分支' })
+
+  // 二次检查：fetchPrMeta 期间可能有并发请求已建好。这次 SELECT 到下面 INSERT 之间没有 await，
+  // Node 单线程下原子执行 → 杜绝同 PR 并发建重复行。
+  const dup = latest()
+  if (dup) return { id: dup.id, status: dup.status }
 
   const now = new Date().toISOString()
   const id = nanoid()

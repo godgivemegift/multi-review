@@ -44,16 +44,20 @@ export default defineNitroPlugin(async () => {
     const stuck = d.select().from(schema.fixes).where(eq(schema.fixes.status, 'pushing' as any)).all()
     for (const f of stuck as any[]) {
       let pushed = false
-      if (f.worktreePath && existsSync(f.worktreePath) && f.fixHeadSha && f.branch) {
+      // 比 worktree 的「真实 HEAD」而不是 DB 里的 fixHeadSha：commit 已完成但写回 DB 前崩溃时，DB 值是旧的，
+      // 拿旧值对账会把「本地有新提交、远端还是旧的」误判成已推、从而丢掉这条本地提交。
+      let localHead: string = f.fixHeadSha
+      if (f.worktreePath && existsSync(f.worktreePath) && f.branch) {
+        try { localHead = (await git(f.worktreePath, ['rev-parse', 'HEAD'])).stdout.trim() || f.fixHeadSha } catch { /* 用 DB 值兜底 */ }
         try {
           const { stdout } = await git(f.worktreePath, ['ls-remote', 'origin', f.branch])
           const remoteSha = stdout.trim().split(/\s+/)[0] || ''
-          pushed = !!remoteSha && remoteSha === f.fixHeadSha
+          pushed = !!remoteSha && !!localHead && remoteSha === localHead
         } catch { /* 网络/远端不可达 → 当作未成功 */ }
       }
       if (pushed) {
         d.update(schema.fixes)
-          .set({ status: 'pushed', lastPushSha: f.fixHeadSha, lastActionKind: 'pushed', pushedAt: f.pushedAt || now(), lastUploadAt: now(), updatedAt: now() })
+          .set({ status: 'pushed', error: null, fixHeadSha: localHead, lastPushSha: localHead, lastActionKind: 'pushed', pushedAt: f.pushedAt || now(), lastUploadAt: now(), updatedAt: now() })
           .where(eq(schema.fixes.id, f.id))
           .run()
       } else {

@@ -50,14 +50,15 @@ export default defineEventHandler(async (event) => {
       fixChangesStat(wt).catch(() => ({ filesChanged: 0, additions: 0, deletions: 0 })),
     ])
     const genMsg = dirty ? await genCommitMessage(cfg.translateModel as string, diff) : ''
-    return { dryRun: true, diff, truncated, message: genMsg, ...stat }
+    // needsCommit=false：没有未提交改动，只是本地 HEAD 领先远端（如上次 push 失败）→ 直接重推，不需要 commit message
+    return { dryRun: true, diff, truncated, message: genMsg, needsCommit: dirty, ...stat }
   }
 
   // ── 真跑：CAS 抢锁 → pushing，commit（脏才提交）+ push ──
   if (!(UPLOADABLE as readonly string[]).includes(fix.status)) throw createError({ statusCode: 409, statusMessage: `当前状态（${fix.status}）不能上传` })
   const claimed = d
     .update(schema.fixes)
-    .set({ status: 'pushing', updatedAt: now() })
+    .set({ status: 'pushing', error: null, updatedAt: now() })
     .where(and(eq(schema.fixes.id, id), inArray(schema.fixes.status, UPLOADABLE)))
     .run()
   if (!claimed.changes) throw createError({ statusCode: 409, statusMessage: '该修复正在上传或状态已变，请刷新' })
@@ -83,7 +84,7 @@ export default defineEventHandler(async (event) => {
     const reviewsAtPush = await fetchReviewsCount(project.repo, fix.prNumber).catch(() => null)
     const stat = await fixChangesStat(wt).catch(() => ({ filesChanged: fix.filesChanged ?? 0, additions: fix.additions ?? 0, deletions: fix.deletions ?? 0 }))
     d.update(schema.fixes)
-      .set({ status: 'pushed', fixHeadSha: headSha, lastPushSha: headSha, lastActionKind: 'pushed', reviewsAtPush, pushedAt: now(), lastUploadAt: now(), ...stat, updatedAt: now() })
+      .set({ status: 'pushed', error: null, fixHeadSha: headSha, lastPushSha: headSha, lastActionKind: 'pushed', reviewsAtPush, pushedAt: now(), lastUploadAt: now(), ...stat, updatedAt: now() })
       .where(eq(schema.fixes.id, id))
       .run()
     return { ok: true, sha: headSha.slice(0, 7), url: `https://github.com/${project.repo}/pull/${fix.prNumber}` }

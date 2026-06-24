@@ -63,8 +63,9 @@ function ensureColumns(sqlite: Database.Database) {
   // 纯对话版：把遗留旧状态归一到新枚举（旧库可能有 queued/validating/awaiting/fixing/ready/merging/conflict）。
   // 首次归一后旧值不再存在，之后每次启动都是空操作。
   try {
-    sqlite.exec(`UPDATE fixes SET status = 'open'  WHERE status IN ('queued','validating','awaiting','fixing','ready')`)
+    // 先把（可能留着半截 merge 的）merging/conflict 标 error 提醒用户；其余任何不在新枚举里的旧值兜底归到 open。
     sqlite.exec(`UPDATE fixes SET status = 'error' WHERE status IN ('merging','conflict')`)
+    sqlite.exec(`UPDATE fixes SET status = 'open'  WHERE status NOT IN ('open','pushing','pushed','error','discarded')`)
   } catch { /* 忽略 */ }
 }
 
