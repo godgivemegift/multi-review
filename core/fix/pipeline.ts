@@ -216,8 +216,11 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
       activeChatStops.delete(fixId)
       stopRequested.delete(fixId)
       flushTurn('error')
-      db.update(schema.fixes).set({ status: 'error', error: (e as Error).message, updatedAt: h.now() }).where(eq(schema.fixes.id, fixId)).run()
-      h.emit('error', (e as Error).message)
+      const message = (e as Error).message
+      if (ctx.provider === 'codex') {
+        db.update(schema.fixes).set({ status: 'error', error: message, updatedAt: h.now() }).where(eq(schema.fixes.id, fixId)).run()
+      }
+      h.emit('error', message)
     }
   } finally {
     // 并发锁直到这里（整个 job 含 db 收尾都结束）才释放，杜绝第二个 chat 在收尾期间挤进来
