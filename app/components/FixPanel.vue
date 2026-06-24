@@ -289,8 +289,7 @@ async function copyWorktree() {
       <div class="shrink-0 border-t border-default pt-3 mt-1">
         <textarea
           v-model="chatInput" rows="3" :placeholder="$t('fix.chatPlaceholder')" :disabled="chatting"
-          class="w-full text-sm bg-muted border border-default rounded px-2 py-1.5 resize-none outline-none focus:border-accented disabled:opacity-50"
-          @keydown.enter.exact.prevent="sendChat"
+          class="w-full text-sm bg-muted border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-accented disabled:opacity-50"
         />
         <div class="mt-2 flex items-center gap-3">
           <button
