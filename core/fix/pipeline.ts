@@ -131,6 +131,7 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
         sessionId: fix?.sessionId ?? null,
         message,
         onSpawn: (cp) => activeChats.set(fixId, cp),
+        onTool: (name, info) => h.emit('tool', `${name} ${info}`), // 工具调用 → tool 事件 → 实时进日志 + 内联步骤
         onText: (t) => {
           acc += t
           const n = new Date().getTime()
