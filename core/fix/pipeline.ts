@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs'
 import { reviewQueue } from '../queue'
 import { cockpitBus } from '../events'
 import { prepareWorktree, removeWorktree } from '../git/worktree'
-import { fetchTimeline, fetchReviewComments } from '../github/gh'
+import { fetchTimeline, fetchReviewComments, fetchReviewsCount } from '../github/gh'
 import { runValidateAgent } from '../agent/validate'
 import { runFixAgent, runFixChat, type FixItem } from '../agent/fixer'
 import type { ChildProcess } from 'node:child_process'
@@ -307,6 +307,17 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
   const asstId = nanoid()
   db.insert(schema.fixTurns).values({ id: asstId, fixId, seq: maxSeq + 2, role: 'assistant', content: '', status: 'streaming', createdAt: h.now() }).run()
   h.emit('chat', 'user')
+
+  // 我介入对话 = 已回应这一轮审核 → 在对话起点把「审核已更新」基线（reviewsAtPush）抬到当前 review 数，清掉红点。
+  // 放在起点而非结束：对话期间/之后才提交的新审核（count 继续增长）仍会重新点亮，符合「介入后又有人审才提示」。
+  // 仅在已 push 过（pushedAt 有值，reviewerUpdated 才可能为真）时才取数，省掉无谓的网络调用。
+  try {
+    const fr = h.row()
+    if (fr?.pushedAt) {
+      const reviewsNow = await fetchReviewsCount(ctx.repo, ctx.prNumber).catch(() => null)
+      if (reviewsNow != null) db.update(schema.fixes).set({ reviewsAtPush: reviewsNow, updatedAt: h.now() }).where(eq(schema.fixes.id, fixId)).run()
+    }
+  } catch { /* 取数失败不影响对话 */ }
 
   let acc = ''
   let lastWrite = 0

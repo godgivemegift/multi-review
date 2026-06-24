@@ -327,12 +327,21 @@ const filterDims = computed(() => [
             <span v-else class="text-dimmed">—</span>
             <span v-if="p.authorUpdated" class="text-[9px] text-highlighted font-medium" :title="$t('project.authorUpdatedTitle')">● {{ $t('project.authorUpdated') }}</span>
           </span>
-          <!-- Fix status + 审核已更新 -->
+          <!-- Fix status：对话中（我已介入）直接接管为主状态，不再叠「已上传 / 审核已更新」；否则显示状态 +（可选）审核已更新 -->
           <span class="text-center text-xs flex flex-col items-center justify-center gap-0.5 leading-tight">
-            <button v-if="fixCell(p)" :class="fixCell(p)!.cls" class="hover:text-highlighted" @click.stop="openDetail(p.number, p.taskId, p.fixId, 'fix')">{{ fixCell(p)!.label }}</button>
-            <span v-else class="text-dimmed">—</span>
-            <span v-if="p.fixChatting" class="text-[9px] text-highlighted font-medium flex items-center gap-1" :title="$t('project.chattingTitle')"><span class="inline-block w-1.5 h-1.5 rounded-full bg-inverted animate-pulse" />{{ $t('project.chatting') }}</span>
-            <span v-if="p.reviewerUpdated" class="text-[9px] text-highlighted font-medium" :title="$t('project.reviewerUpdatedTitle')">● {{ $t('project.reviewerUpdated') }}</span>
+            <button
+              v-if="p.fixChatting"
+              class="text-toned font-medium flex items-center gap-1 hover:text-highlighted"
+              :title="$t('project.chattingTitle')"
+              @click.stop="openDetail(p.number, p.taskId, p.fixId, 'fix')"
+            >
+              <span class="inline-block w-1.5 h-1.5 rounded-full bg-inverted animate-pulse" />{{ $t('project.chatting') }}
+            </button>
+            <template v-else>
+              <button v-if="fixCell(p)" :class="fixCell(p)!.cls" class="hover:text-highlighted" @click.stop="openDetail(p.number, p.taskId, p.fixId, 'fix')">{{ fixCell(p)!.label }}</button>
+              <span v-else class="text-dimmed">—</span>
+              <span v-if="p.reviewerUpdated" class="text-[9px] text-highlighted font-medium" :title="$t('project.reviewerUpdatedTitle')">● {{ $t('project.reviewerUpdated') }}</span>
+            </template>
           </span>
         </div>
         <p v-if="!visiblePulls.length" class="py-16 text-center text-xs text-dimmed">
