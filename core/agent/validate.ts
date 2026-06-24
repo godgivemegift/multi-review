@@ -61,9 +61,13 @@ export type ValidateAgentOptions = {
   onTool?: (name: string, info: string) => void
 }
 
-export async function runValidateAgent(opts: ValidateAgentOptions): Promise<{ result: ValidateResult; costUsd: number }> {
+export function buildValidatePrompt(opts: ValidateAgentOptions & { toolMode?: 'claude' | 'codex' }): string {
   const lineBlock = opts.comments.length ? serializeComments(opts.comments) : '(none)'
   const topBlock = serializeTimeline(opts.timeline) || '(none)'
+  const toolDiscipline =
+    opts.toolMode === 'codex'
+      ? 'The current directory IS this PR\'s code. Use only read-only shell commands to inspect files and search the repository, such as sed, cat, rg, git diff/log/show/status, and gh read commands. Do not modify any file.'
+      : 'The current directory IS this PR\'s code. You only have read tools: Read for files, Grep / Glob to search. No shell, no git — read and search the code directly to verify.'
 
   // Prompt 正文用中性英文 —— 不写任何具体语言的示例词（之前用中文示例「成立」导致 agent
   // 直接照抄那个中文词，verdict 出中文）。输出语言完全由 outputLangClause(lang) 决定，
@@ -71,9 +75,9 @@ export async function runValidateAgent(opts: ValidateAgentOptions): Promise<{ re
   const instructionBlock = opts.instruction?.trim()
     ? `Reviewer's targeted instruction (follow this first):\n${opts.instruction.trim()}\n\n`
     : ''
-  const prompt = `You are in a git worktree with ${opts.repo} PR #${opts.prNumber} (branch ${opts.branch}) checked out; the default branch is NOT merged. This is the VALIDATION phase of the fix flow: check each review comment against the real code and judge whether it holds. You only validate — do not modify any file.
+  return `You are in a git worktree with ${opts.repo} PR #${opts.prNumber} (branch ${opts.branch}) checked out; the default branch is NOT merged. This is the VALIDATION phase of the fix flow: check each review comment against the real code and judge whether it holds. You only validate — do not modify any file.
 
-${instructionBlock}The current directory IS this PR's code. You only have read tools: Read for files, Grep / Glob to search. No shell, no git — read and search the code directly to verify.
+${instructionBlock}${toolDiscipline}
 
 Steps:
 1. Merge the comments below into distinct actionable findings (a back-and-forth on one thread, or several comments about the same thing -> one finding):
@@ -102,6 +106,10 @@ Finally output ONLY one JSON object (no code fences):
 
 ${outputLangClause(opts.lang)} Every string value (summary, title, verdict, reason) MUST be written in that language.
 Output strictly valid JSON: never put an unescaped double quote inside a string value — use guillemets or backticks instead.`
+}
+
+export async function runValidateAgent(opts: ValidateAgentOptions): Promise<{ result: ValidateResult; costUsd: number }> {
+  const prompt = buildValidatePrompt(opts)
 
   const stream = query({
     prompt,

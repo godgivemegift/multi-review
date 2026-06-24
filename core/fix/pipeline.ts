@@ -8,10 +8,15 @@ import { cockpitBus } from '../events'
 import { prepareWorktree, removeWorktree } from '../git/worktree'
 import { fetchTimeline, fetchReviewComments } from '../github/gh'
 import { claudeChatRunner, claudeFixRunner, claudeValidateRunner } from '../agent/claudeRunners'
-import type { FixItem } from '../agent/runners'
+import { codexValidateRunner } from '../agent/codexValidate'
+import type { FixItem, ReviewProvider, ValidateRunner } from '../agent/runners'
 import type { ChildProcess } from 'node:child_process'
 
 const pexec = promisify(execFile)
+
+export function selectValidateRunner(provider?: ReviewProvider): ValidateRunner {
+  return provider === 'codex' ? codexValidateRunner : claudeValidateRunner
+}
 
 // 并发锁：job 一进来就占（spawn 前就生效），直到整个 job（含 commit/db 收尾）结束才释放。
 // 用它防并发，而不是 activeChats —— 后者要等子进程 spawn 才有、子进程一结束就空，两头都漏窗口。
@@ -42,7 +47,9 @@ export type FixJobCtx = {
   localPath: string
   reposDir: string
   methodology: string
+  provider?: ReviewProvider
   model: string
+  claudeModel?: string
   effort: string
   lang: string
 }
@@ -130,7 +137,8 @@ async function runValidateJob(ctx: FixJobCtx) {
 
     h.setStage('验证中：逐条核对评论是否成立')
     const fix = h.row()
-    const { result, costUsd } = await claudeValidateRunner.runValidate({
+    const validateRunner = selectValidateRunner(ctx.provider)
+    const { result, costUsd } = await validateRunner.runValidate({
       cwd: wt.path,
       repo: ctx.repo,
       prNumber: ctx.prNumber,
@@ -141,7 +149,7 @@ async function runValidateJob(ctx: FixJobCtx) {
       instruction: fix?.instruction ?? null,
       lang: ctx.lang,
       methodology: ctx.methodology,
-      model: ctx.model,
+      model: ctx.provider === 'codex' ? ctx.model : ctx.claudeModel || ctx.model,
       effort: ctx.effort,
       onTool: (n, i) => h.emit('tool', `${n} ${i}`),
     })
@@ -229,7 +237,7 @@ async function runFixPhase(ctx: FixJobCtx) {
     const fix = h.row()
     const { costUsd, sessionId, results } = await claudeFixRunner.runFix({
       cwd: wt.path,
-      model: ctx.model,
+      model: ctx.claudeModel || ctx.model,
       lang: ctx.lang,
       instruction: fix?.instruction ?? null,
       items,
@@ -327,7 +335,7 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
     try {
       const r = await claudeChatRunner.runChat({
         cwd: wt.path,
-        model: ctx.model,
+        model: ctx.claudeModel || ctx.model,
         lang: ctx.lang,
         sessionId: fix?.sessionId ?? null,
         message,
