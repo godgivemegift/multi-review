@@ -69,7 +69,7 @@ export default defineEventHandler(async (event) => {
     localPath: project.localPath,
     reposDir: cfg.reposDir as string,
     methodology: rc.methodology,
-    model: rc.model,
+    model: rc.claudeModel,
     effort: rc.effort,
     lang: getCookie(event, 'mr-locale') || 'zh',
   })

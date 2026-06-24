@@ -10,6 +10,7 @@ export const projects = sqliteTable('projects', {
   methodologyRef: text('methodology_ref'), // 旧：方法学文件路径（保留兼容）
   methodologyMd: text('methodology_md'), // 旧：内联方法学（保留兼容）
   activeSkillId: text('active_skill_id'), // 当前启用的审核 skill
+  provider: text('provider', { enum: ['claude', 'codex'] }).notNull().default('claude'),
   model: text('model'), // 审核用模型别名/全名（空=全局默认）
   effort: text('effort'), // 审核力度 low/medium/high/xhigh/max（空=不设）
   defaultBranch: text('default_branch').notNull().default('dev'),

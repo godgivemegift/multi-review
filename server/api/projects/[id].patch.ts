@@ -7,6 +7,7 @@ const Body = z.object({
   repo: z.string().regex(/^[^/\s]+\/[^/\s]+$/).optional(),
   localPath: z.string().nullable().optional(),
   defaultBranch: z.string().optional(),
+  provider: z.enum(['claude', 'codex']).optional(),
   model: z.string().nullable().optional(),
   effort: z.string().nullable().optional(),
   activeSkillId: z.string().nullable().optional(),

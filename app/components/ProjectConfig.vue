@@ -5,6 +5,8 @@ const emit = defineEmits<{ changed: []; deleted: [] }>()
 const { t } = useI18n()
 
 type ModelCap = { value: string; displayName: string; description: string; supportsEffort: boolean; effortLevels: string[] }
+type Provider = 'claude' | 'codex'
+const CODEX_EFFORTS = ['low', 'medium', 'high', 'xhigh']
 
 // 表单（项目信息 + 模型）
 const form = reactive({
@@ -12,6 +14,7 @@ const form = reactive({
   repo: props.project.repo,
   localPath: props.project.localPath || '',
   defaultBranch: props.project.defaultBranch,
+  provider: ((props.project as Project & { provider?: Provider }).provider || 'claude') as Provider,
   model: props.project.model || '',
   effort: props.project.effort || '',
 })
@@ -24,10 +27,15 @@ const modelOptions = computed<ModelCap[]>(() => [
   ...(caps.value?.models ?? []),
 ])
 const effortOptions = computed(() => {
+  if (form.provider === 'codex') return CODEX_EFFORTS
   const m = caps.value?.models.find((x) => x.value === form.model)
   return m?.supportsEffort ? m.effortLevels : []
 })
 watch(() => form.model, () => { if (!effortOptions.value.includes(form.effort)) form.effort = '' })
+watch(() => form.provider, () => {
+  form.model = ''
+  form.effort = ''
+})
 
 async function saveInfo() {
   savingInfo.value = true; msg.value = ''
@@ -36,7 +44,7 @@ async function saveInfo() {
       method: 'PATCH',
       body: {
         name: form.name, repo: form.repo, localPath: form.localPath || null,
-        defaultBranch: form.defaultBranch, model: form.model || null, effort: form.effort || null,
+        defaultBranch: form.defaultBranch, provider: form.provider, model: form.model || null, effort: form.effort || null,
       },
     })
     msg.value = t('config.saved'); emit('changed')
@@ -202,6 +210,22 @@ function srcLabel(source: string) {
 
     <!-- 模型 -->
     <section class="mt-8">
+      <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-3">{{ $t('config.providerSection') }}</div>
+      <div class="inline-flex border border-default rounded overflow-hidden">
+        <button
+          class="px-3 py-1.5 text-sm border-r border-default"
+          :class="form.provider === 'claude' ? 'bg-muted text-highlighted' : 'hover:bg-muted'"
+          @click="form.provider = 'claude'"
+        >{{ $t('config.providerClaude') }}</button>
+        <button
+          class="px-3 py-1.5 text-sm"
+          :class="form.provider === 'codex' ? 'bg-muted text-highlighted' : 'hover:bg-muted'"
+          @click="form.provider = 'codex'"
+        >{{ $t('config.providerCodex') }}</button>
+      </div>
+    </section>
+
+    <section v-if="form.provider === 'claude'" class="mt-8">
       <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-3">{{ $t('config.modelSection') }}</div>
       <div class="space-y-1 max-w-2xl">
         <button
@@ -228,6 +252,22 @@ function srcLabel(source: string) {
         </select>
       </div>
       <p v-else class="text-xs text-dimmed mt-3">{{ $t('config.noEffortSupport') }}</p>
+    </section>
+
+    <section v-else class="mt-8">
+      <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-3">{{ $t('config.codexModelSection') }}</div>
+      <label class="block max-w-xl">
+        <span class="text-xs text-dimmed">{{ $t('config.codexModelLabel') }}</span>
+        <input v-model="form.model" class="w-full text-sm font-mono border-b border-default focus:border-inverted outline-none py-1" :placeholder="$t('config.codexModelPlaceholder')" />
+        <span class="block text-xs text-dimmed mt-1">{{ $t('config.codexModelHint') }}</span>
+      </label>
+      <div class="mt-4">
+        <span class="text-xs text-dimmed">{{ $t('config.effortLabel') }}</span>
+        <select v-model="form.effort" class="block text-sm border-b border-default py-1 bg-transparent outline-none min-w-32">
+          <option value="">{{ $t('config.effortNone') }}</option>
+          <option v-for="e in effortOptions" :key="e" :value="e">{{ e }}</option>
+        </select>
+      </div>
     </section>
 
     <div class="mt-6 flex items-center gap-4">

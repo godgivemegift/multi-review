@@ -37,10 +37,10 @@ export default defineEventHandler(async (event) => {
   let content: string
   let toolN = 0
   try {
-    emit('stage', `开始调研项目（${rc.model}${rc.effort ? ' · ' + rc.effort : ''}）…`)
+    emit('stage', `开始调研项目（${rc.claudeModel}${rc.effort ? ' · ' + rc.effort : ''}）…`)
     const res = await generateSkill({
       cwd: project.localPath,
-      model: rc.model,
+      model: rc.claudeModel,
       effort: rc.effort,
       baseContent,
       instruction: b.instruction || null,

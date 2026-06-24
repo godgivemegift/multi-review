@@ -3,6 +3,8 @@ import type { GuidedReviewAgentOptions, GuidedResult, ReviewAgentOptions, Review
 import type { RecheckAgentOptions, RecheckResult } from './recheck'
 import type { ValidateAgentOptions, ValidateResult } from './validate'
 
+export type ReviewProvider = 'claude' | 'codex'
+
 export interface ReviewRunner {
   runReview(opts: ReviewAgentOptions): Promise<{ result: ReviewResult; costUsd: number; raw: string }>
   runGuidedReview(opts: GuidedReviewAgentOptions): Promise<{ result: GuidedResult; costUsd: number }>
