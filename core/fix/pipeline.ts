@@ -21,9 +21,14 @@ export function isChatting(fixId: string): boolean {
 }
 export function stopFixChat(fixId: string): boolean {
   const cp = activeChats.get(fixId)
-  if (!cp) return false // 还在准备 worktree（没 spawn）或没在跑 → 没句柄可 kill
+  if (!cp || cp.pid == null) return false // 还在准备 worktree（没 spawn）或没在跑 → 没句柄可 kill
   stopRequested.add(fixId)
-  cp.kill('SIGTERM') // agent 用 acceptEdits 已落盘的改动会保留，等用户上传
+  const pid = cp.pid
+  // 子进程是 detached 起的进程组组长 → 给「整个组」发 SIGINT（含它 spawn 的子进程），等同 Ctrl+C。
+  // agent 用 acceptEdits 已落盘的改动会保留，等用户上传。
+  try { process.kill(-pid, 'SIGINT') } catch { try { cp.kill('SIGINT') } catch { /* 已退出 */ } }
+  // 兜底：1.5s 还没退就强杀整组
+  setTimeout(() => { try { process.kill(-pid, 'SIGKILL') } catch { /* 已退出 */ } }, 1500)
   return true
 }
 

@@ -4,7 +4,7 @@
 // 布局：自身 flex 撑满抽屉 fix tab 高度——对话流区域内部滚动，输入条固定钉在最底。
 const props = defineProps<{ projectId: string; prNumber: number; fixId: string | null; active: boolean }>()
 const emit = defineEmits<{ changed: [] }>()
-const { t, te } = useI18n()
+const { t, te, locale } = useI18n()
 
 type FixTurn = { id: string; seq: number; role: 'user' | 'assistant'; content: string; status: string }
 type FixData = {
@@ -22,7 +22,13 @@ watch(() => props.fixId, (v) => { currentFixId.value = v })
 const data = ref<FixData | null>(null)
 const busy = ref('') // '' | 'discard' | 'rmwt' | 'upload'
 const view = ref<'chat' | 'preview'>('chat')
+const logLines = ref<string[]>([]) // 运行日志（worktree 准备 / 工具调用 / 阶段等），可展开
+const showLog = ref(false)
 let es: EventSource | null = null
+
+function hhmmss(iso?: string) {
+  return new Date(iso ?? new Date().toISOString()).toLocaleTimeString(locale.value, { hour12: false })
+}
 
 const toast = useToast()
 function notify(msg: string, ok = false) {
@@ -41,6 +47,10 @@ function fixStatusLabel(s: string) { const k = `status.fix.${s}`; return te(k) ?
 async function load() {
   if (!currentFixId.value) return
   data.value = await $fetch<FixData>(`/api/fixes/${currentFixId.value}`)
+  // 首次：用落库的历史事件回填运行日志
+  if (!logLines.value.length && data.value.events?.length) {
+    logLines.value = data.value.events.filter((e) => e.message).map((e) => `${hhmmss(e.ts)}  ${e.message}`)
+  }
   emit('changed')
 }
 function openSSE() {
@@ -51,9 +61,13 @@ function openSSE() {
     try {
       const e = JSON.parse(ev.data)
       if (e.kind === 'text') { liveAssistant.value += e.message || ''; return }
-      if (e.message && (e.kind === 'tool' || e.kind === 'stage')) {
-        chatSteps.value.push(e.message)
-        if (chatSteps.value.length > 80) chatSteps.value.shift()
+      if (e.message) {
+        logLines.value.push(`${hhmmss()}  ${e.message}`)
+        if (logLines.value.length > 300) logLines.value.shift()
+        if (e.kind === 'tool' || e.kind === 'stage') {
+          chatSteps.value.push(e.message)
+          if (chatSteps.value.length > 80) chatSteps.value.shift()
+        }
       }
       if (['done', 'status', 'error', 'chat'].includes(e.kind)) { liveAssistant.value = ''; load() }
     } catch {}
@@ -237,6 +251,10 @@ async function copyWorktree() {
           <button v-else class="ml-auto text-dimmed hover:text-highlighted disabled:opacity-40 whitespace-nowrap" :disabled="chatting || pushing || !!busy" @click="confirming = 'discard'">{{ $t('fix.discard') }}</button>
         </div>
         <p v-if="data.fix.error" class="text-xs text-error border border-default rounded p-2 mb-3 whitespace-pre-wrap">{{ data.fix.error }}</p>
+        <div v-if="logLines.length" class="text-[11px] text-dimmed mb-3">
+          <button class="hover:text-highlighted" @click="showLog = !showLog">{{ showLog ? $t('review.collapseLog') : $t('review.expandLog', { count: logLines.length }) }}</button>
+          <pre v-if="showLog" class="mt-1 max-h-48 overflow-auto bg-neutral-900 text-neutral-300 rounded p-2 leading-relaxed font-mono whitespace-pre-wrap">{{ logLines.join('\n') }}</pre>
+        </div>
       </div>
 
       <!-- 对话流（滚动区） -->
@@ -265,21 +283,6 @@ async function copyWorktree() {
             <div v-for="(s, i) in chatSteps" :key="i" class="text-[11px] font-mono text-dimmed truncate">{{ s }}</div>
           </div>
         </div>
-
-        <!-- worktree 工具（次要，随对话流滚动） -->
-        <div v-if="data?.fix?.worktreePath" class="mt-2 text-[10px] text-dimmed">
-          <div v-if="rmwtConfirm" class="flex items-center gap-2">
-            <span class="flex-1">{{ data.hasUnpushed ? $t('fix.deleteWorktreeConfirmUnpushed') : $t('fix.deleteWorktreeConfirm') }}</span>
-            <button class="text-error font-medium hover:underline shrink-0 disabled:opacity-40" :disabled="!!busy || chatting" @click="doDeleteWorktree">{{ busy === 'rmwt' ? $t('fix.deleting') : $t('common.delete') }}</button>
-            <button class="hover:text-highlighted shrink-0" @click="rmwtConfirm = false">{{ $t('common.cancel') }}</button>
-          </div>
-          <div v-else class="flex items-center gap-2">
-            <span class="shrink-0">{{ $t('fix.worktreeHint') }}</span>
-            <code class="font-mono truncate flex-1">{{ data.fix.worktreePath }}</code>
-            <button class="hover:text-highlighted shrink-0 underline" @click="copyWorktree">{{ $t('fix.copyPath') }}</button>
-            <button class="hover:text-highlighted shrink-0 underline disabled:opacity-40" :disabled="chatting || pushing || !!busy" @click="rmwtConfirm = true">{{ $t('fix.deleteWorktree') }}</button>
-          </div>
-        </div>
       </div>
 
       <!-- 输入条（固定钉在最底） -->
@@ -301,6 +304,21 @@ async function copyWorktree() {
             <button v-if="chatting" class="w-24 text-sm border border-accented py-1.5 hover:bg-muted" @click="stopChat">{{ $t('fix.stop') }}</button>
             <button v-else class="w-24 text-sm bg-inverted text-inverted py-1.5 hover:bg-inverted/90 disabled:opacity-40" :disabled="!chatInput.trim() || !!busy" @click="sendChat">{{ $t('fix.send') }}</button>
           </div>
+        </div>
+      </div>
+
+      <!-- worktree 工具（固定在最底） -->
+      <div v-if="data?.fix?.worktreePath" class="shrink-0 mt-2 text-[10px] text-dimmed">
+        <div v-if="rmwtConfirm" class="flex items-center gap-2">
+          <span class="flex-1">{{ data.hasUnpushed ? $t('fix.deleteWorktreeConfirmUnpushed') : $t('fix.deleteWorktreeConfirm') }}</span>
+          <button class="text-error font-medium hover:underline shrink-0 disabled:opacity-40" :disabled="!!busy || chatting" @click="doDeleteWorktree">{{ busy === 'rmwt' ? $t('fix.deleting') : $t('common.delete') }}</button>
+          <button class="hover:text-highlighted shrink-0" @click="rmwtConfirm = false">{{ $t('common.cancel') }}</button>
+        </div>
+        <div v-else class="flex items-center gap-2">
+          <span class="shrink-0">{{ $t('fix.worktreeHint') }}</span>
+          <code class="font-mono truncate flex-1">{{ data.fix.worktreePath }}</code>
+          <button class="hover:text-highlighted shrink-0 underline" @click="copyWorktree">{{ $t('fix.copyPath') }}</button>
+          <button class="hover:text-highlighted shrink-0 underline disabled:opacity-40" :disabled="chatting || pushing || !!busy" @click="rmwtConfirm = true">{{ $t('fix.deleteWorktree') }}</button>
         </div>
       </div>
     </template>
