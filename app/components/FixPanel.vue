@@ -64,10 +64,6 @@ function openSSE() {
       if (e.message) {
         logLines.value.push(`${hhmmss()}  ${e.message}`)
         if (logLines.value.length > 300) logLines.value.shift()
-        if (e.kind === 'tool' || e.kind === 'stage') {
-          chatSteps.value.push(e.message)
-          if (chatSteps.value.length > 80) chatSteps.value.shift()
-        }
       }
       if (['done', 'status', 'error', 'chat'].includes(e.kind)) { liveAssistant.value = ''; load() }
     } catch {}
@@ -87,7 +83,6 @@ onBeforeUnmount(() => { closeSSE(); if (chatTimer) clearInterval(chatTimer); if 
 
 // ── 对话 ──
 const chatInput = ref('')
-const chatSteps = ref<string[]>([])
 const liveAssistant = ref('')
 
 // 进对话 / 来新消息时自动滚到最底
@@ -116,7 +111,6 @@ async function sendChat() {
   const msg = chatInput.value.trim()
   if (!msg || chatting.value || !!busy.value) return
   chatInput.value = ''
-  chatSteps.value = []
   liveAssistant.value = ''
   try {
     // 惰性创建：还没有 fix 行就先建一个（不跑验证），再发第一条
@@ -266,22 +260,17 @@ async function copyWorktree() {
               <span class="text-[10px] uppercase tracking-wider text-dimmed mr-1.5">{{ $t('fix.you') }}</span>{{ turn.content }}
             </div>
             <div v-else class="text-toned whitespace-pre-wrap leading-relaxed">
-              {{ turn.status === 'streaming' && ti === data.turns.length - 1 ? liveAssistant : turn.content }}<span v-if="turn.status === 'streaming'" class="animate-pulse">▍</span>
+              {{ turn.status === 'streaming' && ti === data.turns.length - 1 && liveAssistant ? liveAssistant : turn.content }}<span v-if="turn.status === 'streaming'" class="animate-pulse">▍</span>
               <span v-if="turn.status === 'stopped'" class="text-[10px] text-dimmed ml-1">· {{ $t('fix.stoppedTag') }}</span>
               <span v-else-if="turn.status === 'error'" class="text-[10px] text-dimmed ml-1">· {{ $t('common.failed') }}</span>
             </div>
           </div>
         </template>
 
-        <!-- 对话进行中：动词 + 工具/阶段步骤 -->
-        <div v-if="chatting" class="mb-3">
-          <div class="flex items-center gap-2 text-xs text-toned mb-1">
-            <span class="inline-block w-1.5 h-1.5 rounded-full bg-inverted animate-pulse" />
-            <span class="font-mono">{{ chatVerb }}… {{ chatElapsed }}s</span>
-          </div>
-          <div v-if="chatSteps.length" class="border-l-2 border-default pl-2.5 space-y-0.5">
-            <div v-for="(s, i) in chatSteps" :key="i" class="text-[11px] font-mono text-dimmed truncate">{{ s }}</div>
-          </div>
+        <!-- 对话进行中：活动指示（步骤详情看上方「展开日志」） -->
+        <div v-if="chatting" class="mb-3 flex items-center gap-2 text-xs text-toned">
+          <span class="inline-block w-1.5 h-1.5 rounded-full bg-inverted animate-pulse" />
+          <span class="font-mono">{{ chatVerb }}… {{ chatElapsed }}s</span>
         </div>
       </div>
 
