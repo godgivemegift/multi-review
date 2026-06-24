@@ -271,8 +271,9 @@ function codexAuthClass(status: CodexSdkStatus | null) {
         >{{ $t('config.providerCodex') }}</button>
       </div>
 
-      <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] max-w-4xl">
-        <div class="border border-default rounded overflow-hidden">
+      <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] max-w-4xl min-w-0">
+        <div class="border border-default rounded overflow-x-auto">
+          <div class="min-w-[22rem]">
           <div class="grid grid-cols-[minmax(0,1fr)_5.5rem_5.5rem] gap-2 px-3 py-2 border-b border-default bg-muted/40 text-[10px] uppercase tracking-[0.12em] text-dimmed">
             <span>{{ $t('config.stageColumn') }}</span>
             <span>{{ $t('config.providerClaude') }}</span>
@@ -301,6 +302,7 @@ function codexAuthClass(status: CodexSdkStatus | null) {
                 {{ supportLabel(stage.codex) }}
               </span>
             </div>
+          </div>
           </div>
         </div>
 

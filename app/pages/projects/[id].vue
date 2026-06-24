@@ -240,18 +240,18 @@ const filterDims = computed(() => [
 </script>
 
 <template>
-  <div class="max-w-6xl mx-auto px-10 py-12">
+  <div class="max-w-6xl mx-auto px-4 py-6 sm:px-6 sm:py-8 lg:px-10 lg:py-12">
     <!-- 头 -->
-    <div v-if="project" class="flex items-end justify-between">
-      <div>
-        <h1 class="text-3xl font-light tracking-tight">{{ project.name }}</h1>
+    <div v-if="project" class="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+      <div class="min-w-0">
+        <h1 class="text-2xl sm:text-3xl font-light tracking-tight break-words">{{ project.name }}</h1>
         <p class="text-xs uppercase tracking-[0.15em] text-dimmed mt-2">{{ project.repo }} · {{ project.defaultBranch }}</p>
       </div>
       <span class="text-xs text-dimmed">{{ msg }}</span>
     </div>
 
     <!-- Tabs：只剩 全部 PR + 项目配置 -->
-    <div class="mt-10 flex gap-8 border-b border-default text-sm">
+    <div class="mt-8 sm:mt-10 flex gap-6 sm:gap-8 border-b border-default text-sm overflow-x-auto">
       <button
         class="pb-3 -mb-px border-b-2 transition-colors"
         :class="tab === 'pulls' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'"
@@ -298,7 +298,8 @@ const filterDims = computed(() => [
       </div>
 
       <!-- PR 列表：PR | 标题(固定宽·换行) | 作者 | PR状态 | 审核 | 修复 -->
-      <div class="mt-3">
+      <div class="mt-3 overflow-x-auto">
+        <div class="min-w-[46rem]">
         <div class="grid grid-cols-[3.5rem_minmax(20rem,1fr)_8rem_6rem_7rem_7rem] gap-x-4 px-1 pb-3 text-[10px] uppercase tracking-[0.15em] text-dimmed border-b border-inverted">
           <span>PR</span>
           <span>{{ $t('project.col.title') }}</span>
@@ -344,6 +345,7 @@ const filterDims = computed(() => [
             <button class="hover:text-highlighted disabled:opacity-30" :disabled="page === 0 || pullsPending" @click="prevPage">{{ $t('project.pagination.prev') }}</button>
             <button class="hover:text-highlighted disabled:opacity-30" :disabled="page >= pageCount - 1 || pullsPending" @click="nextPage">{{ $t('project.pagination.next') }}</button>
           </div>
+        </div>
         </div>
       </div>
     </div>
