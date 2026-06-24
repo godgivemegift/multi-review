@@ -1,9 +1,10 @@
 <script setup lang="ts">
 // 「修复 PR」面板（纯对话版）：点进来就是一个常驻对话框，和 Claude 在 PR 的 worktree 里聊、让它直接改代码。
 // 不自动 commit；点「提交并上传」跳到预览 view（待上传 diff + 生成的 commit message，可改）→ 确认才 commit+push。
+// 布局：自身 flex 撑满抽屉 fix tab 高度——对话流区域内部滚动，输入条固定钉在最底。
 const props = defineProps<{ projectId: string; prNumber: number; fixId: string | null; active: boolean }>()
 const emit = defineEmits<{ changed: [] }>()
-const { t, te, locale } = useI18n()
+const { t, te } = useI18n()
 
 type FixTurn = { id: string; seq: number; role: 'user' | 'assistant'; content: string; status: string }
 type FixData = {
@@ -76,18 +77,11 @@ const chatSteps = ref<string[]>([])
 const liveAssistant = ref('')
 
 // 进对话 / 来新消息时自动滚到最底
-const chatAnchor = ref<HTMLElement | null>(null)
+const chatScroll = ref<HTMLElement | null>(null)
 function scrollChatToBottom() {
-  nextTick(() => {
-    let p = chatAnchor.value?.parentElement ?? null
-    while (p) {
-      const oy = getComputedStyle(p).overflowY
-      if (oy === 'auto' || oy === 'scroll') { p.scrollTop = p.scrollHeight; return }
-      p = p.parentElement
-    }
-  })
+  nextTick(() => { const el = chatScroll.value; if (el) el.scrollTop = el.scrollHeight })
 }
-watch([view, () => data.value?.turns.length], ([v]) => { if (v === 'chat') scrollChatToBottom() })
+watch([view, () => data.value?.turns.length, liveAssistant], ([v]) => { if (v === 'chat') scrollChatToBottom() })
 
 const chatElapsed = ref(0)
 const VERBS = ['Thinking', 'Working', 'Reading', 'Editing', 'Reasoning', 'Crunching', 'Resolving']
@@ -190,88 +184,110 @@ async function copyWorktree() {
 </script>
 
 <template>
-  <div class="flex flex-col min-h-0">
+  <div class="flex flex-col min-h-0 flex-1">
     <!-- ── 预览 view：待上传 diff + 可编辑 commit message ── -->
     <template v-if="view === 'preview' && preview">
-      <div class="flex items-center gap-3 mb-3">
-        <button class="text-sm text-dimmed hover:text-highlighted" @click="view = 'chat'">← {{ $t('fix.backToChat') }}</button>
-        <span class="text-xs text-dimmed tabular-nums ml-auto">
-          {{ $t('prDrawer.filesCount', { count: preview.filesChanged }) }} ·
-          <span class="text-success">+{{ preview.additions }}</span><span class="text-error"> −{{ preview.deletions }}</span>
-        </span>
+      <div class="shrink-0">
+        <div class="flex items-center gap-3 mb-3">
+          <button class="text-sm text-dimmed hover:text-highlighted" @click="view = 'chat'">← {{ $t('fix.backToChat') }}</button>
+          <span class="text-xs text-dimmed tabular-nums ml-auto">
+            {{ $t('prDrawer.filesCount', { count: preview.filesChanged }) }} ·
+            <span class="text-success">+{{ preview.additions }}</span><span class="text-error"> −{{ preview.deletions }}</span>
+          </span>
+        </div>
+        <template v-if="preview.needsCommit">
+          <label class="text-[10px] uppercase tracking-[0.15em] text-dimmed">{{ $t('fix.commitMsgLabel') }}</label>
+          <input
+            v-model="commitMsg" type="text" :placeholder="$t('fix.commitMsgPlaceholder')"
+            class="w-full text-sm bg-muted border border-default rounded px-3 py-2 mt-1 mb-3 outline-none focus:border-accented font-mono"
+          />
+        </template>
+        <p v-else class="text-xs text-dimmed mb-3">{{ $t('fix.rePushHint') }}</p>
+        <div class="flex items-center gap-3 mb-3">
+          <button
+            class="text-sm bg-inverted text-inverted px-4 py-1.5 hover:bg-inverted/90 disabled:opacity-40"
+            :disabled="(preview.needsCommit && !commitMsg.trim()) || !!busy" @click="confirmUpload"
+          >
+            {{ busy === 'upload' ? $t('fix.pushing') : $t('fix.commitAndUpload') }}
+          </button>
+          <button class="text-sm text-dimmed hover:text-highlighted" @click="view = 'chat'">{{ $t('common.cancel') }}</button>
+        </div>
       </div>
-      <template v-if="preview.needsCommit">
-        <label class="text-[10px] uppercase tracking-[0.15em] text-dimmed">{{ $t('fix.commitMsgLabel') }}</label>
-        <input
-          v-model="commitMsg" type="text" :placeholder="$t('fix.commitMsgPlaceholder')"
-          class="w-full text-sm bg-muted border border-default rounded px-3 py-2 mt-1 mb-3 outline-none focus:border-accented font-mono"
-        />
-      </template>
-      <p v-else class="text-xs text-dimmed mb-3">{{ $t('fix.rePushHint') }}</p>
-      <div class="flex items-center gap-3 mb-3">
-        <button
-          class="text-sm bg-inverted text-inverted px-4 py-1.5 hover:bg-inverted/90 disabled:opacity-40"
-          :disabled="(preview.needsCommit && !commitMsg.trim()) || !!busy" @click="confirmUpload"
-        >
-          {{ busy === 'upload' ? $t('fix.pushing') : $t('fix.commitAndUpload') }}
-        </button>
-        <button class="text-sm text-dimmed hover:text-highlighted" @click="view = 'chat'">{{ $t('common.cancel') }}</button>
+      <div class="flex-1 min-h-0 overflow-y-auto">
+        <DiffView :diff="preview.diff || ''" :truncated="preview.truncated" />
       </div>
-      <DiffView :diff="preview.diff || ''" :truncated="preview.truncated" />
     </template>
 
     <!-- ── 对话 view ── -->
     <template v-else>
-      <!-- 头：状态 + 统计 + 放弃 -->
-      <div v-if="currentFixId && data" class="flex items-center gap-3 text-xs mb-3">
-        <span :class="data.fix.status === 'error' ? 'text-error font-medium' : 'text-toned'">{{ fixStatusLabel(data.fix.status) }}</span>
-        <span v-if="(data.fix.filesChanged ?? 0) > 0" class="text-dimmed tabular-nums">
-          {{ $t('prDrawer.filesCount', { count: data.fix.filesChanged }) }} ·
-          <span class="text-success">+{{ data.fix.additions }}</span><span class="text-error"> −{{ data.fix.deletions }}</span>
-        </span>
-        <a v-if="data.commitUrl" :href="data.commitUrl" target="_blank" class="text-highlighted hover:underline">{{ $t('fix.viewChanges') }} ↗</a>
-        <template v-if="confirming === 'discard'">
-          <span class="ml-auto text-dimmed">{{ $t('fix.discardConfirm') }}</span>
-          <button class="text-error font-medium hover:underline disabled:opacity-40" :disabled="!!busy" @click="doDiscard">{{ $t('common.delete') }}</button>
-          <button class="text-dimmed hover:text-highlighted" @click="confirming = ''">{{ $t('common.cancel') }}</button>
+      <!-- 头（固定）：状态 + 统计 + 放弃 + 出错横幅 -->
+      <div v-if="currentFixId && data" class="shrink-0">
+        <div class="flex items-center gap-3 text-xs mb-3">
+          <span :class="data.fix.status === 'error' ? 'text-error font-medium' : 'text-toned'">{{ fixStatusLabel(data.fix.status) }}</span>
+          <span v-if="(data.fix.filesChanged ?? 0) > 0" class="text-dimmed tabular-nums">
+            {{ $t('prDrawer.filesCount', { count: data.fix.filesChanged }) }} ·
+            <span class="text-success">+{{ data.fix.additions }}</span><span class="text-error"> −{{ data.fix.deletions }}</span>
+          </span>
+          <a v-if="data.commitUrl" :href="data.commitUrl" target="_blank" class="text-highlighted hover:underline">{{ $t('fix.viewChanges') }} ↗</a>
+          <template v-if="confirming === 'discard'">
+            <span class="ml-auto text-dimmed">{{ $t('fix.discardConfirm') }}</span>
+            <button class="text-error font-medium hover:underline disabled:opacity-40" :disabled="!!busy" @click="doDiscard">{{ $t('common.delete') }}</button>
+            <button class="text-dimmed hover:text-highlighted" @click="confirming = ''">{{ $t('common.cancel') }}</button>
+          </template>
+          <button v-else class="ml-auto text-dimmed hover:text-highlighted disabled:opacity-40 whitespace-nowrap" :disabled="chatting || pushing || !!busy" @click="confirming = 'discard'">{{ $t('fix.discard') }}</button>
+        </div>
+        <p v-if="data.fix.error" class="text-xs text-error border border-default rounded p-2 mb-3 whitespace-pre-wrap">{{ data.fix.error }}</p>
+      </div>
+
+      <!-- 对话流（滚动区） -->
+      <div ref="chatScroll" class="flex-1 min-h-0 overflow-y-auto">
+        <p v-if="(!data || !data.turns.length)" class="text-sm text-dimmed py-8">{{ $t('fix.chatHint') }}</p>
+        <template v-else>
+          <div v-for="(turn, ti) in data.turns" :key="turn.id" class="mb-3 text-sm">
+            <div v-if="turn.role === 'user'" class="text-highlighted">
+              <span class="text-[10px] uppercase tracking-wider text-dimmed mr-1.5">{{ $t('fix.you') }}</span>{{ turn.content }}
+            </div>
+            <div v-else class="text-toned whitespace-pre-wrap leading-relaxed">
+              {{ turn.status === 'streaming' && ti === data.turns.length - 1 ? liveAssistant : turn.content }}<span v-if="turn.status === 'streaming'" class="animate-pulse">▍</span>
+              <span v-if="turn.status === 'stopped'" class="text-[10px] text-dimmed ml-1">· {{ $t('fix.stoppedTag') }}</span>
+              <span v-else-if="turn.status === 'error'" class="text-[10px] text-dimmed ml-1">· {{ $t('common.failed') }}</span>
+            </div>
+          </div>
         </template>
-        <button v-else class="ml-auto text-dimmed hover:text-highlighted disabled:opacity-40 whitespace-nowrap" :disabled="chatting || pushing || !!busy" @click="confirming = 'discard'">{{ $t('fix.discard') }}</button>
-      </div>
 
-      <!-- 出错横幅 -->
-      <p v-if="data?.fix?.error" class="text-xs text-error border border-default rounded p-2 mb-3 whitespace-pre-wrap">{{ data.fix.error }}</p>
-
-      <!-- 对话流 -->
-      <p v-if="(!data || !data.turns.length)" class="text-sm text-dimmed py-8">{{ $t('fix.chatHint') }}</p>
-      <template v-else>
-        <div v-for="(turn, ti) in data.turns" :key="turn.id" class="mb-3 text-sm">
-          <div v-if="turn.role === 'user'" class="text-highlighted">
-            <span class="text-[10px] uppercase tracking-wider text-dimmed mr-1.5">{{ $t('fix.you') }}</span>{{ turn.content }}
+        <!-- 对话进行中：动词 + 工具/阶段步骤 -->
+        <div v-if="chatting" class="mb-3">
+          <div class="flex items-center gap-2 text-xs text-toned mb-1">
+            <span class="inline-block w-1.5 h-1.5 rounded-full bg-inverted animate-pulse" />
+            <span class="font-mono">{{ chatVerb }}… {{ chatElapsed }}s</span>
           </div>
-          <div v-else class="text-toned whitespace-pre-wrap leading-relaxed">
-            {{ turn.status === 'streaming' && ti === data.turns.length - 1 ? liveAssistant : turn.content }}<span v-if="turn.status === 'streaming'" class="animate-pulse">▍</span>
-            <span v-if="turn.status === 'stopped'" class="text-[10px] text-dimmed ml-1">· {{ $t('fix.stoppedTag') }}</span>
-            <span v-else-if="turn.status === 'error'" class="text-[10px] text-dimmed ml-1">· {{ $t('common.failed') }}</span>
+          <div v-if="chatSteps.length" class="border-l-2 border-default pl-2.5 space-y-0.5">
+            <div v-for="(s, i) in chatSteps" :key="i" class="text-[11px] font-mono text-dimmed truncate">{{ s }}</div>
           </div>
         </div>
-      </template>
 
-      <!-- 对话进行中：动词 + 工具/阶段步骤 -->
-      <div v-if="chatting" class="mb-3">
-        <div class="flex items-center gap-2 text-xs text-toned mb-1">
-          <span class="inline-block w-1.5 h-1.5 rounded-full bg-inverted animate-pulse" />
-          <span class="font-mono">{{ chatVerb }}… {{ chatElapsed }}s</span>
-        </div>
-        <div v-if="chatSteps.length" class="border-l-2 border-default pl-2.5 space-y-0.5">
-          <div v-for="(s, i) in chatSteps" :key="i" class="text-[11px] font-mono text-dimmed truncate">{{ s }}</div>
+        <!-- worktree 工具（次要，随对话流滚动） -->
+        <div v-if="data?.fix?.worktreePath" class="mt-2 text-[10px] text-dimmed">
+          <div v-if="rmwtConfirm" class="flex items-center gap-2">
+            <span class="flex-1">{{ data.hasUnpushed ? $t('fix.deleteWorktreeConfirmUnpushed') : $t('fix.deleteWorktreeConfirm') }}</span>
+            <button class="text-error font-medium hover:underline shrink-0 disabled:opacity-40" :disabled="!!busy || chatting" @click="doDeleteWorktree">{{ busy === 'rmwt' ? $t('fix.deleting') : $t('common.delete') }}</button>
+            <button class="hover:text-highlighted shrink-0" @click="rmwtConfirm = false">{{ $t('common.cancel') }}</button>
+          </div>
+          <div v-else class="flex items-center gap-2">
+            <span class="shrink-0">{{ $t('fix.worktreeHint') }}</span>
+            <code class="font-mono truncate flex-1">{{ data.fix.worktreePath }}</code>
+            <button class="hover:text-highlighted shrink-0 underline" @click="copyWorktree">{{ $t('fix.copyPath') }}</button>
+            <button class="hover:text-highlighted shrink-0 underline disabled:opacity-40" :disabled="chatting || pushing || !!busy" @click="rmwtConfirm = true">{{ $t('fix.deleteWorktree') }}</button>
+          </div>
         </div>
       </div>
 
-      <!-- 输入条（常驻底部）：textarea + 提交并上传 + 发送/停止 -->
-      <div class="sticky bottom-0 bg-default pt-2 pb-1">
+      <!-- 输入条（固定钉在最底） -->
+      <div class="shrink-0 border-t border-default pt-3 mt-1">
         <textarea
-          v-model="chatInput" rows="4" :placeholder="$t('fix.chatPlaceholder')" :disabled="chatting"
-          class="w-full text-sm bg-muted border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-accented disabled:opacity-50"
+          v-model="chatInput" rows="3" :placeholder="$t('fix.chatPlaceholder')" :disabled="chatting"
+          class="w-full text-sm bg-muted border border-default rounded px-2 py-1.5 resize-none outline-none focus:border-accented disabled:opacity-50"
+          @keydown.enter.exact.prevent="sendChat"
         />
         <div class="mt-2 flex items-center gap-3">
           <button
@@ -287,22 +303,6 @@ async function copyWorktree() {
           </div>
         </div>
       </div>
-
-      <!-- worktree 工具（次要，靠底，muted） -->
-      <div v-if="data?.fix?.worktreePath" class="mt-2 text-[10px] text-dimmed">
-        <div v-if="rmwtConfirm" class="flex items-center gap-2">
-          <span class="flex-1">{{ data.hasUnpushed ? $t('fix.deleteWorktreeConfirmUnpushed') : $t('fix.deleteWorktreeConfirm') }}</span>
-          <button class="text-error font-medium hover:underline shrink-0 disabled:opacity-40" :disabled="!!busy || chatting" @click="doDeleteWorktree">{{ busy === 'rmwt' ? $t('fix.deleting') : $t('common.delete') }}</button>
-          <button class="hover:text-highlighted shrink-0" @click="rmwtConfirm = false">{{ $t('common.cancel') }}</button>
-        </div>
-        <div v-else class="flex items-center gap-2">
-          <span class="shrink-0">{{ $t('fix.worktreeHint') }}</span>
-          <code class="font-mono truncate flex-1">{{ data.fix.worktreePath }}</code>
-          <button class="hover:text-highlighted shrink-0 underline" @click="copyWorktree">{{ $t('fix.copyPath') }}</button>
-          <button class="hover:text-highlighted shrink-0 underline disabled:opacity-40" :disabled="chatting || pushing || !!busy" @click="rmwtConfirm = true">{{ $t('fix.deleteWorktree') }}</button>
-        </div>
-      </div>
-      <div ref="chatAnchor" />
     </template>
   </div>
 </template>
