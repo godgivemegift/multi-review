@@ -148,10 +148,9 @@ export const events = sqliteTable('events', {
   message: text('message'),
 })
 
-// 一次「修复 PR」任务（见 issue #16）。两阶段：
-//   ① 验证（只读）：拉评论 → 归一化成 fix_findings + verdict → status=awaiting 等用户勾选
-//   ② 修复（写）：只修勾选条目 → 本地 commit（不 push）→ status=ready
-// push + 回复作者永远手动（确认弹窗）。worktree 保留到 push/discard。
+// 一次「修复 PR」任务（纯对话版）：在 PR 分支的 worktree 里和 Claude 对话改代码（不自动 commit），
+// 用户点「提交并上传」才 commit + push。没有验证/批量修复/合并基础分支/回复作者这些阶段。
+// worktree 第一条对话时惰性建，保留到 push/discard。
 export const fixes = sqliteTable('fixes', {
   id: text('id').primaryKey(),
   projectId: text('project_id')
@@ -163,12 +162,13 @@ export const fixes = sqliteTable('fixes', {
   title: text('title'),
   instruction: text('instruction'), // 建任务时 prompt 框里的针对性指示（可空 = 用系统默认）
   lang: text('lang').notNull().default('en'), // 工作语言 = 建任务时的 UI locale（verdict/反馈用它写）
+  // open：建好/聊着、无待上传改动；ready：对话改了代码、有未提交/未推改动待上传；pushing：上传中；pushed：已上传；error：失败。
+  // discarded 是历史枚举值（discard 现在硬删行，不会再设）。
   status: text('status', {
-    // merging：正在合并 base 分支（临时锁，防并发）；conflict：merge 有冲突待解决（禁上传/重跑，可对话）
-    enum: ['queued', 'validating', 'awaiting', 'fixing', 'ready', 'merging', 'conflict', 'pushing', 'pushed', 'error', 'discarded'],
+    enum: ['open', 'ready', 'pushing', 'pushed', 'error', 'discarded'],
   })
     .notNull()
-    .default('queued'),
+    .default('open'),
   stage: text('stage'), // 当前细粒度阶段文案（实时展示）
   summary: text('summary'), // 验证阶段的整体结论
   worktreePath: text('worktree_path'),
@@ -176,7 +176,7 @@ export const fixes = sqliteTable('fixes', {
   baseHeadSha: text('base_head_sha'), // 改动前的 PR head（diff 基线）
   fixHeadSha: text('fix_head_sha'), // 本地 commit 后的 head
   lastPushSha: text('last_push_sha'), // 最近成功 push 上去的 commit；和 fixHeadSha 不等 = 有未上传改动
-  lastActionKind: text('last_action_kind', { enum: ['pushed', 'replied'] }), // 最近一次对外动作 → 决定「查看改动/评论」入口
+  lastActionKind: text('last_action_kind', { enum: ['pushed'] }), // 最近一次对外动作（上传）→ 「查看改动」入口
   reviewsAtPush: integer('reviews_at_push'), // push 修复时 PR 的 review 数；之后变多 = reviewer 又审了（「审核已更新」基线）
   filesChanged: integer('files_changed'),
   additions: integer('additions'),
@@ -188,28 +188,6 @@ export const fixes = sqliteTable('fixes', {
   createdAt: text('created_at').notNull(),
   updatedAt: text('updated_at').notNull(),
   pushedAt: text('pushed_at'),
-})
-
-// 验证阶段产出的「评论 → finding」。verdict 是 AI 自由文本（成立/不成立/优先级不高/…，
-// 不限定枚举，#16 决策 B），suggestFix 是唯一机器可读骨架（UI 预勾选用）。
-export const fixFindings = sqliteTable('fix_findings', {
-  id: text('id').primaryKey(),
-  fixId: text('fix_id')
-    .notNull()
-    .references(() => fixes.id, { onDelete: 'cascade' }),
-  ord: integer('ord').notNull().default(0),
-  severity: text('severity'), // High/Medium/Low（AI 给，仅展示，可空）
-  title: text('title').notNull(),
-  location: text('location'), // path:line
-  verdict: text('verdict').notNull(), // 自由文本
-  suggestFix: integer('suggest_fix', { mode: 'boolean' }).notNull().default(false),
-  reason: text('reason'),
-  sourceCommentIds: text('source_comment_ids'), // JSON number[]，锚定 GitHub 评论（增量验证 + 回复挂 thread）
-  checked: integer('checked', { mode: 'boolean' }).notNull().default(false), // 用户勾选要修
-  note: text('note'), // 用户对这条的修复指示
-  fixStatus: text('fix_status'), // 修复后回填：fixed / failed / skipped
-  fixText: text('fix_text'), // 修复反馈（改了什么 / 为什么没改成）
-  createdAt: text('created_at').notNull(),
 })
 
 // M2 对话跟进：修复出稿后在 drawer 里继续聊、继续改（claude --resume 续会话）。
@@ -246,6 +224,5 @@ export type FindingRecheck = typeof findingRechecks.$inferSelect
 export type Post = typeof posts.$inferSelect
 export type ReviewEvent = typeof events.$inferSelect
 export type Fix = typeof fixes.$inferSelect
-export type FixFinding = typeof fixFindings.$inferSelect
 export type FixTurn = typeof fixTurns.$inferSelect
 export type FixEvent = typeof fixEvents.$inferSelect

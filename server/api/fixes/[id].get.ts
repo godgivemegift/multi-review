@@ -1,22 +1,16 @@
 import { asc, eq } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
 import { schema } from '~core/db/client'
-import { fixChangesStat } from '~core/fix/changes'
+import { fixChangesStat, hasUploadable } from '~core/fix/changes'
+import { isChatting } from '~core/fix/pipeline'
 
-// 修复任务详情：fix + 全部 findings。push/reply 对任何 PR 开放（仍手动 + 二次确认）。
-const ACTIVE = ['queued', 'validating', 'fixing', 'pushing', 'merging'] // 跑着的时候别去算 last-changes（和 agent 抢 worktree）
+// 修复任务详情：fix 行 + 对话轮 + 事件日志 + 实时改动统计。纯对话版（无 findings）。
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
   const d = db()
   const fix = d.select().from(schema.fixes).where(eq(schema.fixes.id, id)).get()
   if (!fix) throw createError({ statusCode: 404, statusMessage: 'fix 不存在' })
   const project = d.select().from(schema.projects).where(eq(schema.projects.id, fix.projectId)).get()
-  const findings = d
-    .select()
-    .from(schema.fixFindings)
-    .where(eq(schema.fixFindings.fixId, id))
-    .orderBy(asc(schema.fixFindings.ord))
-    .all()
   const turns = d
     .select()
     .from(schema.fixTurns)
@@ -29,25 +23,29 @@ export default defineEventHandler(async (event) => {
     .where(eq(schema.fixEvents.fixId, id))
     .orderBy(asc(schema.fixEvents.ts))
     .all()
-  // 放宽：只要有 finding 就能回复作者（面板里 AI 按每条现状 + 作者补充生成，作者再挑发哪些）
-  const canReply = findings.length > 0
-  // 有本地 commit 还没 push（上传按钮的显示条件）
-  const hasUnpushed = !!fix.fixHeadSha && fix.fixHeadSha !== fix.lastPushSha
-  const prUrl = project ? `https://github.com/${project.repo}/pull/${fix.prNumber}` : null
-  // 「修复改动」用 last-changes 口径实时算，覆盖 DB 里按旧口径（baseHeadSha..HEAD）存的统计
+
+  // 对话/上传进行中就别去碰 worktree（和 agent 抢；git status 读到的也是半截状态）
+  const busy = fix.status === 'pushing' || isChatting(id)
+  // 「有改动可上传」= worktree 脏（Claude 改了还没提交） 或 本地 HEAD 领先上次 push（遗留的已提交未推）
+  let hasUnpushed = !!fix.fixHeadSha && fix.fixHeadSha !== fix.lastPushSha
   let stat = { filesChanged: fix.filesChanged ?? 0, additions: fix.additions ?? 0, deletions: fix.deletions ?? 0 }
-  if (!ACTIVE.includes(fix.status) && fix.worktreePath && existsSync(fix.worktreePath)) {
-    stat = await fixChangesStat(fix.worktreePath).catch(() => stat)
+  if (!busy && fix.worktreePath && existsSync(fix.worktreePath)) {
+    const [up, s] = await Promise.all([
+      hasUploadable(fix.worktreePath, fix.branch).catch(() => ({ dirty: false, ahead: false })),
+      fixChangesStat(fix.worktreePath).catch(() => stat),
+    ])
+    hasUnpushed = up.dirty || up.ahead // 工作树脏 或 本地领先 origin（含 Claude 自己 commit 的）
+    stat = s
   }
+
+  const prUrl = project ? `https://github.com/${project.repo}/pull/${fix.prNumber}` : null
   return {
-    fix: { ...fix, ...stat }, // 含 worktreePath / baseRef / lastPushSha / lastActionKind；统计已换 last-changes 口径
-    findings: findings.map((f: any) => ({ ...f, sourceCommentIds: JSON.parse(f.sourceCommentIds || '[]') })),
+    fix: { ...fix, ...stat }, // 含 worktreePath / baseRef / lastPushSha / lastActionKind；统计是 last-changes 口径
     turns,
     events,
     hasUnpushed,
-    canReply,
     prUrl,
-    // 「最近一次我的动作」入口：上传→看那次 commit；回复→看 PR 评论
+    // 上传过 → 看那次 commit
     commitUrl: project && fix.lastPushSha ? `https://github.com/${project.repo}/pull/${fix.prNumber}/commits/${fix.lastPushSha}` : null,
   }
 })

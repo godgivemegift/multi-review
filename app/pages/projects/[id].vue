@@ -178,7 +178,7 @@ watch([fAuthors, fReview, fFix, fWorktree], () => { page.value = 0 }) // 改 fil
 // filter 可选项
 const PR_OPTS = ['open', 'draft', 'merged', 'closed']
 const REVIEW_OPTS = ['none', 'reviewing', 'reviewed', 'posted', 'approved', 'changes']
-const FIX_OPTS = ['none', 'queued', 'validating', 'awaiting', 'fixing', 'ready', 'merging', 'conflict', 'pushing', 'pushed', 'error']
+const FIX_OPTS = ['none', 'open', 'ready', 'pushing', 'pushed', 'error']
 const WT_OPTS = ['has', 'none']
 
 // ── 三列状态显示 ──

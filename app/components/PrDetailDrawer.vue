@@ -188,7 +188,7 @@ const lineCls: Record<DiffLine['t'], string> = {
         />
 
         <!-- ── 修复 PR ── -->
-        <div v-if="detail && activeTab === 'fix' && prNumber" class="flex-1 overflow-y-auto px-6 py-5">
+        <div v-if="detail && activeTab === 'fix' && prNumber" class="flex-1 min-h-0 flex flex-col px-6 py-4">
           <FixPanel :project-id="projectId" :pr-number="prNumber" :fix-id="fixId" :active="activeTab === 'fix'" @changed="emit('taskCreated')" />
         </div>
 

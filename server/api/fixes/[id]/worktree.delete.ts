@@ -14,12 +14,9 @@ export default defineEventHandler(async (event) => {
   const d = db()
   const fix = d.select().from(schema.fixes).where(eq(schema.fixes.id, id)).get()
   if (!fix) throw createError({ statusCode: 404, statusMessage: 'fix 不存在' })
-  if (['queued', 'validating', 'fixing', 'pushing', 'merging'].includes(fix.status)) {
-    throw createError({ statusCode: 409, statusMessage: '修复进行中，请等它完成' })
+  if (fix.status === 'pushing') {
+    throw createError({ statusCode: 409, statusMessage: '上传进行中，请等它完成' })
   }
-  // conflict 时不能只删 worktree：删了会留下「有状态无 worktree」的死局，
-  // 想放弃这次合并请用「中止合并」，想整个丢弃用 discard。
-  if (fix.status === 'conflict') throw createError({ statusCode: 409, statusMessage: '有未解决的合并冲突，请先在对话里解决或中止合并' })
   if (isChatting(id)) throw createError({ statusCode: 409, statusMessage: '对话进行中，请等它完成或停止' })
 
   const project = d.select().from(schema.projects).where(eq(schema.projects.id, fix.projectId)).get()
