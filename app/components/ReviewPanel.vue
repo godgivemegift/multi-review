@@ -20,6 +20,7 @@ const rid = ref<string | null>(props.reviewId)
 watch(() => props.reviewId, (v) => { rid.value = v; if (v) load() })
 
 const data = ref<ReviewData | null>(null)
+let adjustedFor: string | null = null // 已按复审状态自动调过勾选的 review（每次打开 / 复审后只调一次）
 const live = ref('')
 const logLines = ref<string[]>([])
 const showLog = ref(false)
@@ -44,6 +45,26 @@ async function load() {
       .filter((e) => e.message)
       .map((e) => `${new Date(e.ts).toLocaleTimeString(locale.value, { hour12: false })}  ${e.message}`)
   }
+  // 打开 drawer（及每次复审后）按复审状态自动调勾选，每个 review 只调一次
+  if (adjustedFor !== rid.value) {
+    adjustedFor = rid.value
+    await autoAdjustChecks()
+  }
+}
+
+// 已修复（最新一轮复审 = fixed）→ 取消勾选；未修复（其它复审状态）→ 勾选。只动复审过的 finding，
+// 没复审过的保持原样；用户随后可手动改。发评论按勾选走，所以这会直接影响要发哪些。
+async function autoAdjustChecks() {
+  const fs = data.value?.findings ?? []
+  const changed: Finding[] = []
+  for (const f of fs) {
+    if (!f.rechecks.length) continue
+    const latest = f.rechecks[f.rechecks.length - 1]!
+    const desired = latest.status !== 'fixed'
+    if (f.checked !== desired) { f.checked = desired; changed.push(f) }
+  }
+  if (!changed.length) return
+  await Promise.all(changed.map((f) => $fetch(`/api/findings/${f.id}`, { method: 'PATCH', body: { checked: f.checked } }).catch(() => {})))
 }
 function openSSE() {
   if (!rid.value || !import.meta.client) return
@@ -58,6 +79,7 @@ function openSSE() {
         logLines.value.push(`${new Date().toLocaleTimeString(locale.value, { hour12: false })}  ${e.message}`)
         if (logLines.value.length > 200) logLines.value.shift()
       }
+      if (e.kind === 'recheck') adjustedFor = null // 复审完重新按新状态调一次勾选
       if (['done', 'recheck', 'posted', 'error', 'status'].includes(e.kind)) load()
     } catch {}
   }
