@@ -103,6 +103,8 @@
     },
     "reviewerUpdated": "Re-reviewed",
     "reviewerUpdatedTitle": "A new review was submitted after you pushed the fix",
+    "chatting": "Chatting",
+    "chattingTitle": "Chat in progress — the AI is working on this fix",
     "selectAllReviewable": "Select all reviewable",
     "reviewSelected": "Review selected ({count})",
     "creatingTasks": "Creating tasks…",
@@ -451,6 +453,9 @@
     "mergeConflicts": "{count} conflicting file(s) with {base} — ask the AI in chat to resolve",
     "mergeChatDraft": "Resolve the merge conflicts in these files: {files}. ",
     "conflictBanner": "Merge conflicts with the base branch need resolving — tell the AI how in chat",
+    "abortMerge": "Abort merge",
+    "aborting": "Aborting…",
+    "mergeAborted": "Merge aborted",
     "startHint": "Enter any instructions; the AI runs once and validates whether each review comment is a real issue. Then you pick what to fix.",
     "startValidate": "Start validation"
   }

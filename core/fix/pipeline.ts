@@ -6,7 +6,7 @@ import { existsSync } from 'node:fs'
 import { reviewQueue } from '../queue'
 import { cockpitBus } from '../events'
 import { prepareWorktree, removeWorktree } from '../git/worktree'
-import { fetchTimeline, fetchReviewComments } from '../github/gh'
+import { fetchTimeline, fetchReviewComments, fetchReviewsCount } from '../github/gh'
 import { runValidateAgent } from '../agent/validate'
 import { runFixAgent, runFixChat, type FixItem } from '../agent/fixer'
 import type { ChildProcess } from 'node:child_process'
@@ -308,6 +308,17 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
   db.insert(schema.fixTurns).values({ id: asstId, fixId, seq: maxSeq + 2, role: 'assistant', content: '', status: 'streaming', createdAt: h.now() }).run()
   h.emit('chat', 'user')
 
+  // 我介入对话 = 已回应这一轮审核 → 在对话起点把「审核已更新」基线（reviewsAtPush）抬到当前 review 数，清掉红点。
+  // 放在起点而非结束：对话期间/之后才提交的新审核（count 继续增长）仍会重新点亮，符合「介入后又有人审才提示」。
+  // 仅在已 push 过（pushedAt 有值，reviewerUpdated 才可能为真）时才取数，省掉无谓的网络调用。
+  try {
+    const fr = h.row()
+    if (fr?.pushedAt) {
+      const reviewsNow = await fetchReviewsCount(ctx.repo, ctx.prNumber).catch(() => null)
+      if (reviewsNow != null) db.update(schema.fixes).set({ reviewsAtPush: reviewsNow, updatedAt: h.now() }).where(eq(schema.fixes.id, fixId)).run()
+    }
+  } catch { /* 取数失败不影响对话 */ }
+
   let acc = ''
   let lastWrite = 0
   const flushTurn = (status: string) =>
@@ -388,8 +399,13 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
       .set({ fixHeadSha: head.trim(), filesChanged, additions, deletions, sessionId: newSessionId, updatedAt: h.now() })
       .where(eq(schema.fixes.id, fixId))
       .run()
-    // 验证后直接对话改了代码（还没跑过批量修复，停在 awaiting）→ 有改动就推到 ready，让上传按钮出来
-    if (h.row()?.status === 'awaiting' && base && head.trim() !== base) h.setStatus('ready')
+    // 对话改了代码后把状态推到 ready，让上传按钮出来：
+    //  - awaiting（验证后直接对话、还没跑过批量修复）：相对 PR 原始 head 有改动就推
+    //  - pushed（上传后又在对话里改）：相对上次 push 的 sha 有新改动 → 推回「待上传」（保留 lastPushSha/pushedAt，
+    //    所以「审核已更新」信号和 hasUnpushed 仍正常工作）
+    const r2 = h.row()
+    if (r2?.status === 'awaiting' && base && head.trim() !== base) h.setStatus('ready')
+    else if (r2?.status === 'pushed' && r2.lastPushSha && head.trim() !== r2.lastPushSha) h.setStatus('ready')
     h.emit('chat', stopped ? 'stopped' : 'done')
    } catch (e) {
     activeChats.delete(fixId)

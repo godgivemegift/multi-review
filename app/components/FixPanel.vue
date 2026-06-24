@@ -256,6 +256,15 @@ async function mergeBase() {
   } catch (e: any) { notify(e?.data?.statusMessage || t('common.failed')) }
   finally { busy.value = '' }
 }
+async function abortMerge() {
+  busy.value = 'abort'
+  try {
+    await $fetch(`/api/fixes/${currentFixId.value}/abort-merge`, { method: 'POST' })
+    notify(t('fix.mergeAborted'), true)
+    await load()
+  } catch (e: any) { notify(e?.data?.statusMessage || t('common.failed')) }
+  finally { busy.value = '' }
+}
 async function copyWorktree() {
   const p = data.value?.fix?.worktreePath
   if (!p) return
@@ -392,7 +401,7 @@ async function doDeleteWorktree() {
             v-else
             v-model:confirming="confirming"
             :data="data" :busy="busy" :running="running" :chatting="chatting"
-            @push="doPush" @reply="doReply" @merge="mergeBase"
+            @push="doPush" @reply="doReply" @merge="mergeBase" @abort-merge="abortMerge"
           >
             <template #lead>
               <button
@@ -464,7 +473,7 @@ async function doDeleteWorktree() {
             <FixActionBar
               v-model:confirming="confirming"
               :data="data" :busy="busy" :running="running" :chatting="chatting"
-              @push="doPush" @reply="doReply" @merge="mergeBase"
+              @push="doPush" @reply="doReply" @merge="mergeBase" @abort-merge="abortMerge"
             >
               <template #trail>
                 <button v-if="chatting" class="w-24 text-sm border border-accented py-1.5 hover:bg-muted" @click="stopChat">{{ $t('fix.stop') }}</button>

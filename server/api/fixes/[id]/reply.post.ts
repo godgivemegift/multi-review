@@ -2,6 +2,7 @@ import { eq, asc } from 'drizzle-orm'
 import { z } from 'zod'
 import { schema } from '~core/db/client'
 import { buildReplies, replyToThread, postSummaryComment, type ReplyItem } from '~core/fix/upload'
+import { fetchReviewsCount } from '~core/github/gh'
 
 // 「回复作者」（#16）：独立于上传，只回复不 push。两步（复用 review 的 dryRun 模式）：
 //   dryRun=true  → AI 按每条 finding 的素材 + 作者补充判定状态(已修/不修/待办) + 生成英文标题 + 正文，返回预览，不发。
@@ -118,7 +119,13 @@ export default defineEventHandler(async (event) => {
     }
 
     if (replied > 0 || summaryPosted) {
-      d.update(schema.fixes).set({ lastActionKind: 'replied', updatedAt: new Date().toISOString() }).where(eq(schema.fixes.id, id)).run()
+      // 回复作者 = 已回应这一轮审核 → 把「审核已更新」基线（reviewsAtPush）抬到当前 review 数，清掉红点；
+      // 之后再有新 review 才重新点亮。取数失败不致命，跳过重设。
+      const reviewsNow = await fetchReviewsCount(project.repo, fix.prNumber).catch(() => null)
+      d.update(schema.fixes)
+        .set({ lastActionKind: 'replied', ...(reviewsNow != null ? { reviewsAtPush: reviewsNow } : {}), updatedAt: new Date().toISOString() })
+        .where(eq(schema.fixes.id, id))
+        .run()
     }
     return { ok: true, replied, summaryPosted, leftoverCount: summaryPosted ? 0 : leftovers.length, prUrl: `https://github.com/${project.repo}/pull/${fix.prNumber}` }
   } finally {

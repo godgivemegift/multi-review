@@ -103,6 +103,8 @@
     },
     "reviewerUpdated": "Ré-examiné",
     "reviewerUpdatedTitle": "Une nouvelle revue a été soumise après votre correction",
+    "chatting": "En conversation",
+    "chattingTitle": "Conversation en cours — l'IA travaille sur ce correctif",
     "selectAllReviewable": "Tout sélectionner",
     "reviewSelected": "Revoir la sélection ({count})",
     "creatingTasks": "Création des tâches…",
@@ -451,6 +453,9 @@
     "mergeConflicts": "{count} fichier(s) en conflit avec {base} — demandez à l'IA de résoudre dans le chat",
     "mergeChatDraft": "Résous les conflits de fusion dans ces fichiers : {files}. ",
     "conflictBanner": "Conflits de fusion à résoudre — indiquez à l'IA comment dans le chat",
+    "abortMerge": "Abandonner la fusion",
+    "aborting": "Abandon…",
+    "mergeAborted": "Fusion abandonnée",
     "startHint": "Saisissez des instructions ; l'IA s'exécute une fois et vérifie si chaque commentaire de revue est un vrai problème. Vous choisissez ensuite quoi corriger.",
     "startValidate": "Lancer la validation"
   }

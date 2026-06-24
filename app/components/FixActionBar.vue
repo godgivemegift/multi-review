@@ -9,7 +9,7 @@ const props = defineProps<{
   chatting: boolean
 }>()
 const confirming = defineModel<string>('confirming', { required: true })
-const emit = defineEmits<{ push: []; reply: []; merge: [] }>()
+const emit = defineEmits<{ push: []; reply: []; merge: []; abortMerge: [] }>()
 const { t } = useI18n()
 
 // 「最近一次我的对外动作」入口：上传过→看那次 commit；回复过→看 PR 评论（二选一）
@@ -41,6 +41,14 @@ const lockMerge = computed(() => anyBusy.value || ['merging', 'conflict'].includ
       @click="emit('merge')"
     >
       {{ busy === 'merge' ? t('fix.merging') : t('fix.mergeBase') }}
+    </button>
+    <button
+      v-if="data.fix.status === 'conflict'"
+      class="text-sm text-dimmed hover:text-highlighted disabled:opacity-40"
+      :disabled="anyBusy"
+      @click="emit('abortMerge')"
+    >
+      {{ busy === 'abort' ? t('fix.aborting') : t('fix.abortMerge') }}
     </button>
     <button
       v-if="data.canReply"

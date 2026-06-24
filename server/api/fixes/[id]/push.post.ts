@@ -4,6 +4,7 @@ import { promisify } from 'node:util'
 import { existsSync } from 'node:fs'
 import { schema } from '~core/db/client'
 import { fetchReviewsCount } from '~core/github/gh'
+import { isChatting } from '~core/fix/pipeline'
 
 const pexec = promisify(execFile)
 // 首字符必须字母数字（禁前导 `-`/`.`，防被当 git flag 或路径穿越）；和 diff/merge-base 保持一致
@@ -16,6 +17,8 @@ export default defineEventHandler(async (event) => {
   const d = db()
   const fix = d.select().from(schema.fixes).where(eq(schema.fixes.id, id)).get()
   if (!fix) throw createError({ statusCode: 404, statusMessage: 'fix 不存在' })
+  // 对话正占着同一个 worktree（可能正在写文件/commit），不能并发 push
+  if (isChatting(id)) throw createError({ statusCode: 409, statusMessage: '对话正在进行，请等它完成或停止再上传' })
   if (!['ready', 'pushed'].includes(fix.status)) throw createError({ statusCode: 409, statusMessage: '该修复未就绪' })
   if (!fix.worktreePath || !existsSync(fix.worktreePath) || !fix.fixHeadSha) throw createError({ statusCode: 400, statusMessage: '缺少本地提交或 worktree 不在了' })
   if (fix.fixHeadSha === fix.lastPushSha) throw createError({ statusCode: 400, statusMessage: '没有未上传的改动' })

@@ -32,8 +32,8 @@ export default defineEventHandler(async (event) => {
       if (!project) continue
       try {
         const { state, headSha: liveHead, reviewDecision, author } = await fetchPrState(project.repo, review.prNumber)
-        // 基线同单条 refresh：比"上次审/复审看的 sha"，不是"上次发评论的 sha"
-        const authorUpdated = !!review.lastPostSha && !!liveHead && !!review.headSha && liveHead !== review.headSha
+        // 基线同单条 refresh 与列表 pulls.get：比"上次审/复审看的 sha"(headSha)，门控也用 headSha
+        const authorUpdated = !!review.headSha && !!liveHead && liveHead !== review.headSha
         d.update(schema.reviews)
           // 顺便回填空的 author（老记录建任务时漏存 → 列表显示「-」）
           .set({ prState: state, reviewDecision: reviewDecision || null, authorUpdated, updatedAt: new Date().toISOString(), ...(review.author ? {} : { author: author || null }) })

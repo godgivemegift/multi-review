@@ -58,14 +58,25 @@ export default defineEventHandler(async (event) => {
     if (f.status === 'discarded') continue
     fixByPr.set(f.prNumber, f) // 后写覆盖 → 留下最新
   }
+  // 「对话进行中」：最近一条 assistant 轮还在 streaming = AI 正在干活。
+  // 这是状态机之外的旁路（chat 不改 fixes.status），所以列表用它派生「对话中」角标。
+  // 重启会被 recover 插件把 streaming 轮重置成 stopped，所以这里不会有陈旧的 streaming。
+  const chattingFixIds = new Set<string>(
+    d.select({ fixId: schema.fixTurns.fixId })
+      .from(schema.fixTurns)
+      .where(eq(schema.fixTurns.status, 'streaming' as any))
+      .all()
+      .map((r: any) => r.fixId),
+  )
 
   return {
     pulls: page.pulls.map((p) => {
       const task = taskByPr.get(p.number)
       const fix = fixByPr.get(p.number)
-      // 作者已更新：我发评论后 PR head 又变了。基线用「发评论时的 sha」(lastPostSha)，
-      // 不是「审核创建时的 sha」——否则我发评论之前作者就 push 过，会误报成评论后更新。
-      const authorUpdated = !!task?.lastPostSha && !!p.headSha && p.headSha !== task.lastPostSha
+      // 作者已更新：我「看过」的 sha 之后 PR head 又变了。基线用 review.headSha——审核/复审完成都会推进它，
+      // 所以点了复审看过新 commit 后红点自动清，作者在复审基线之后再 push 才重新点亮（与抽屉/refresh 口径统一）。
+      // 副作用：首次审核后即便还没发评论，作者 push 也会点亮——这正是「有我没看过的新改动」的本意。
+      const authorUpdated = !!task?.headSha && !!p.headSha && p.headSha !== task.headSha
       // 审核已更新：我 push 修复后 PR 的 review 计数变多 = 又有人提交了 review。
       // 注：reviewsCount 含 bot/CI 的 review，所以 push 后若有 CI 自动 review 也会算（本地单用户工具可接受）。
       const reviewerUpdated = !!fix?.pushedAt && fix.reviewsAtPush != null && p.reviewsCount > fix.reviewsAtPush
@@ -76,6 +87,7 @@ export default defineEventHandler(async (event) => {
         ...p,
         hasTask: !!task, taskId: task?.id ?? null, taskStatus: task?.status ?? null,
         fixId: fix?.id ?? null, fixStatus: fix?.status ?? null,
+        fixChatting: fix ? chattingFixIds.has(fix.id) : false,
         authorUpdated, reviewerUpdated, hasWorktree,
       }
     }),
