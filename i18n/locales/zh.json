@@ -63,6 +63,7 @@
     },
     "fix": {
       "open": "进行中",
+      "ready": "待上传",
       "pushing": "上传中",
       "pushed": "已上传",
       "error": "出错"

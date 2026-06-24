@@ -65,7 +65,7 @@ function ensureColumns(sqlite: Database.Database) {
   try {
     // 先把（可能留着半截 merge 的）merging/conflict 标 error 提醒用户；其余任何不在新枚举里的旧值兜底归到 open。
     sqlite.exec(`UPDATE fixes SET status = 'error' WHERE status IN ('merging','conflict')`)
-    sqlite.exec(`UPDATE fixes SET status = 'open'  WHERE status NOT IN ('open','pushing','pushed','error','discarded')`)
+    sqlite.exec(`UPDATE fixes SET status = 'open'  WHERE status NOT IN ('open','ready','pushing','pushed','error','discarded')`)
   } catch { /* 忽略 */ }
 }
 

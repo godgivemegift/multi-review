@@ -12,7 +12,7 @@ import { genCommitMessage } from '~core/fix/commitmsg'
 const pexec = promisify(execFile)
 // 首字符必须字母数字（禁前导 `-`/`.`，防被当 git flag 或路径穿越）
 const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._\-/]*$/
-const UPLOADABLE = ['open', 'pushed', 'error'] as const
+const UPLOADABLE = ['open', 'ready', 'pushed', 'error'] as const
 
 // 「提交并上传」：把 worktree 里 Claude 改的（未提交）改动 `git add -A && commit && push` 到 PR 分支。
 // dryRun=true → 返回待上传 diff + 据 diff 生成的 conventional commit message + 统计（不提交不推送），给预览 view 用。

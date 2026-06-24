@@ -162,10 +162,10 @@ export const fixes = sqliteTable('fixes', {
   title: text('title'),
   instruction: text('instruction'), // 建任务时 prompt 框里的针对性指示（可空 = 用系统默认）
   lang: text('lang').notNull().default('en'), // 工作语言 = 建任务时的 UI locale（verdict/反馈用它写）
-  // open：建好/聊着/有未提交改动（默认静止态）；pushing：提交并上传中；pushed：已上传；error：失败。
+  // open：建好/聊着、无待上传改动；ready：对话改了代码、有未提交/未推改动待上传；pushing：上传中；pushed：已上传；error：失败。
   // discarded 是历史枚举值（discard 现在硬删行，不会再设）。
   status: text('status', {
-    enum: ['open', 'pushing', 'pushed', 'error', 'discarded'],
+    enum: ['open', 'ready', 'pushing', 'pushed', 'error', 'discarded'],
   })
     .notNull()
     .default('open'),

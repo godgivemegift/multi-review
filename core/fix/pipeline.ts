@@ -4,6 +4,7 @@ import { existsSync } from 'node:fs'
 import { cockpitBus } from '../events'
 import { prepareWorktree, removeWorktree } from '../git/worktree'
 import { runFixChat } from '../agent/fixer'
+import { worktreeDirty } from './changes'
 import { fetchReviewsCount } from '../github/gh'
 import type { ChildProcess } from 'node:child_process'
 
@@ -152,8 +153,13 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
     flushTurn(stopped ? 'stopped' : 'done')
 
     // 不自动 commit：agent 的改动（acceptEdits 已落盘）留在 worktree 未提交，等用户点「提交并上传」。
+    // 有未提交改动 或 已提交未推 → 标 ready「待上传」(列表/抽屉一眼可见)；否则停留 open / 保持 pushed。
     // 只更新 sessionId 供下次 --resume 续聊；改动统计由 [id].get 用 fixChangesStat 从（含未提交的）worktree 实时算。
-    db.update(schema.fixes).set({ sessionId: newSessionId, updatedAt: h.now() }).where(eq(schema.fixes.id, fixId)).run()
+    const wtDirty = await worktreeDirty(wt.path).catch(() => false)
+    const cur = h.row()
+    const ahead = !!cur?.fixHeadSha && cur.fixHeadSha !== cur.lastPushSha
+    const nextStatus = (wtDirty || ahead) ? 'ready' : (cur?.status === 'pushed' ? 'pushed' : 'open')
+    db.update(schema.fixes).set({ status: nextStatus, sessionId: newSessionId, updatedAt: h.now() }).where(eq(schema.fixes.id, fixId)).run()
     h.emit('chat', stopped ? 'stopped' : 'done')
    } catch (e) {
     activeChats.delete(fixId)

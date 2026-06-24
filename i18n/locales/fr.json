@@ -63,6 +63,7 @@
     },
     "fix": {
       "open": "En cours",
+      "ready": "À envoyer",
       "pushing": "Envoi",
       "pushed": "Poussé",
       "error": "Erreur"

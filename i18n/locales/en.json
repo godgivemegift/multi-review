@@ -63,6 +63,7 @@
     },
     "fix": {
       "open": "In progress",
+      "ready": "Ready to upload",
       "pushing": "Pushing",
       "pushed": "Pushed",
       "error": "Error"
