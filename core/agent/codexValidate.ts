@@ -1,5 +1,6 @@
 import { Codex, type ModelReasoningEffort, type ThreadEvent } from '@openai/codex-sdk'
 import { withContract } from './guard'
+import { extractCodexErrorMessage, formatCodexProviderError, previewRawOutput, rawCodexErrorMessage } from './codexErrors'
 import { buildValidatePrompt, ValidateSchema, type ValidateAgentOptions, type ValidateResult } from './validate'
 import type { ValidateRunner } from './runners'
 
@@ -42,41 +43,9 @@ export class CodexValidateError extends Error {
   }
 }
 
-function extractCodexErrorMessage(message: string): string {
-  try {
-    const parsed = JSON.parse(message) as { error?: { message?: string; type?: string; param?: string }; status?: number }
-    if (parsed.error?.message) {
-      const parts = [parsed.error.message]
-      if (parsed.error.type) parts.push(`type=${parsed.error.type}`)
-      if (parsed.error.param) parts.push(`param=${parsed.error.param}`)
-      if (parsed.status) parts.push(`status=${parsed.status}`)
-      return parts.join(' ')
-    }
-  } catch {
-    /* not a structured Codex error */
-  }
-  return message
-}
-
-function rawMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
-  return extractCodexErrorMessage(message)
-}
-
-function preview(raw: string): string {
-  return raw.replace(/\s+/g, ' ').trim().slice(0, 240)
-}
-
 export function normalizeCodexValidateError(error: unknown): CodexValidateError {
   if (error instanceof CodexValidateError) return error
-  const message = rawMessage(error)
-  if (/auth|api[_ -]?key|unauthorized|forbidden|401|403|login|oauth/i.test(message)) {
-    return new CodexValidateError(`Codex SDK authentication failed. Check OPENAI_API_KEY or local Codex login. Original error: ${message}`, error)
-  }
-  if (/json|schema|parse/i.test(message)) {
-    return new CodexValidateError(`Codex validation returned unusable JSON. ${message}`, error)
-  }
-  return new CodexValidateError(`Codex SDK validation failed: ${message}`, error)
+  return new CodexValidateError(formatCodexProviderError('validation', error), error)
 }
 
 function stripJsonFence(raw: string): string {
@@ -89,13 +58,13 @@ export function parseCodexValidateJson(raw: string): ValidateResult {
   try {
     parsed = JSON.parse(cleaned)
   } catch (error) {
-    throw new CodexValidateError(`Codex validation returned invalid JSON: ${rawMessage(error)}. Raw output starts with: ${preview(raw)}`, error)
+    throw new CodexValidateError(`Codex validation returned invalid JSON: ${rawCodexErrorMessage(error)}. Raw output starts with: ${previewRawOutput(raw)}`, error)
   }
 
   const result = ValidateSchema.safeParse(parsed)
   if (!result.success) {
     const issues = result.error.issues.map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`).join('; ')
-    throw new CodexValidateError(`Codex validation JSON did not match ValidateSchema: ${issues}. Raw output starts with: ${preview(raw)}`, result.error)
+    throw new CodexValidateError(`Codex validation JSON did not match ValidateSchema: ${issues}. Raw output starts with: ${previewRawOutput(raw)}`, result.error)
   }
   return result.data
 }

@@ -45,6 +45,17 @@ async function git(cwd: string, args: string[]) {
 
 export type Worktree = { path: string; headSha: string; cleanup: () => Promise<void> }
 
+export async function resetWorktreeToRef(
+  wtPath: string,
+  ref: string,
+  opts: { cleanUntracked?: boolean } = {},
+) {
+  await git(wtPath, ['reset', '--hard', ref])
+  if (opts.cleanUntracked) {
+    await git(wtPath, ['clean', '-fd'])
+  }
+}
+
 // 在项目已有本地 clone 上开一个隔离 worktree：fetch PR 分支 → detached checkout → merge 默认分支。
 // 全程只读性质，不动主工作目录。返回 worktree 路径 + 清理函数。
 export async function prepareWorktree(opts: {

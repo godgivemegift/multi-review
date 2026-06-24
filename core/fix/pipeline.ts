@@ -5,7 +5,7 @@ import { promisify } from 'node:util'
 import { existsSync } from 'node:fs'
 import { reviewQueue } from '../queue'
 import { cockpitBus } from '../events'
-import { prepareWorktree, removeWorktree } from '../git/worktree'
+import { prepareWorktree, removeWorktree, resetWorktreeToRef } from '../git/worktree'
 import { fetchTimeline, fetchReviewComments } from '../github/gh'
 import { claudeChatRunner, claudeFixRunner, claudeValidateRunner } from '../agent/claudeRunners'
 import { codexChatRunner } from '../agent/codexChat'
@@ -150,7 +150,7 @@ async function runValidateJob(ctx: FixJobCtx) {
     // 验证必须在 PR 原始 head 上做：worktree 可能复用自上一轮修复（已含 fix commit），
     // reset 回 baseHeadSha 才能保证验证看到的是 PR 真实代码，而非自己改过的版本。
     const base0 = h.row()?.baseHeadSha
-    if (base0) await git(wt.path, ['reset', '--hard', base0])
+    if (base0) await resetWorktreeToRef(wt.path, base0, { cleanUntracked: ctx.provider === 'codex' })
 
     h.setStage('验证中：逐条核对评论是否成立')
     const fix = h.row()
@@ -238,7 +238,7 @@ async function runFixPhase(ctx: FixJobCtx) {
     // 每次跑修复都从 PR 原始 head 干净开始：reset 掉上一轮的 commit/改动，按「当前所有勾选」重修一遍。
     // 这样 diff 不累计、commit 不叠加、语义可预测（保留某条修复就保持它勾选）。
     const base = h.row()?.baseHeadSha
-    if (base) await git(wt.path, ['reset', '--hard', base])
+    if (base) await resetWorktreeToRef(wt.path, base, { cleanUntracked: ctx.provider === 'codex' })
     // 清掉所有条目上一轮的修复反馈（避免旧的 fixed/failed 串到这一轮）
     db.update(schema.fixFindings).set({ fixStatus: null, fixText: null }).where(eq(schema.fixFindings.fixId, fixId)).run()
 

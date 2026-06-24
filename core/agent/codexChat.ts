@@ -1,4 +1,5 @@
 import { Codex, type ModelReasoningEffort, type ThreadEvent, type ThreadOptions } from '@openai/codex-sdk'
+import { classifyCodexError, extractCodexErrorMessage, formatCodexProviderError } from './codexErrors'
 import { outputLangClause } from './lang'
 import type { ChatRunner } from './runners'
 import type { FixChatOptions, FixChatResult } from './fixer'
@@ -13,37 +14,13 @@ export class CodexChatError extends Error {
   }
 }
 
-function extractCodexErrorMessage(message: string): string {
-  try {
-    const parsed = JSON.parse(message) as { error?: { message?: string; type?: string; param?: string }; status?: number }
-    if (parsed.error?.message) {
-      const parts = [parsed.error.message]
-      if (parsed.error.type) parts.push(`type=${parsed.error.type}`)
-      if (parsed.error.param) parts.push(`param=${parsed.error.param}`)
-      if (parsed.status) parts.push(`status=${parsed.status}`)
-      return parts.join(' ')
-    }
-  } catch {
-    /* not a structured Codex error */
-  }
-  return message
-}
-
-function rawMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
-  return extractCodexErrorMessage(message)
-}
-
 export function normalizeCodexChatError(error: unknown): CodexChatError {
   if (error instanceof CodexChatError) return error
-  const message = rawMessage(error)
-  if (/abort|cancel|SIGTERM|operation was aborted/i.test(message)) {
-    return new CodexChatError(`Codex chat turn was stopped: ${message}`, error)
-  }
-  if (/auth|api[_ -]?key|unauthorized|forbidden|401|403|login|oauth/i.test(message)) {
-    return new CodexChatError(`Codex SDK authentication failed. Check OPENAI_API_KEY or local Codex login. Original error: ${message}`, error)
-  }
-  return new CodexChatError(`Codex SDK chat failed: ${message}`, error)
+  return new CodexChatError(formatCodexProviderError('chat', error), error)
+}
+
+export function shouldRetryCodexChatWithoutThread(error: unknown, hadSessionId: boolean): boolean {
+  return hadSessionId && classifyCodexError(error) === 'invalid_thread'
 }
 
 function toCodexEffort(effort?: string): ModelReasoningEffort | undefined {
@@ -119,40 +96,49 @@ function emitCodexChatEvent(
 }
 
 export async function runCodexChat(opts: FixChatOptions): Promise<FixChatResult> {
-  try {
+  const runTurn = async (sessionId: string | null): Promise<FixChatResult> => {
+    const runOpts = { ...opts, sessionId }
     const codex = new Codex({
       ...(process.env.OPENAI_API_KEY ? { apiKey: process.env.OPENAI_API_KEY } : {}),
     })
-    const effort = toCodexEffort(opts.effort)
+    const effort = toCodexEffort(runOpts.effort)
     const threadOptions: ThreadOptions = {
-      ...(opts.model ? { model: opts.model } : {}),
+      ...(runOpts.model ? { model: runOpts.model } : {}),
       ...(effort ? { modelReasoningEffort: effort } : {}),
-      workingDirectory: opts.cwd,
+      workingDirectory: runOpts.cwd,
       sandboxMode: 'workspace-write',
       approvalPolicy: 'never',
       networkAccessEnabled: false,
       webSearchMode: 'disabled',
       webSearchEnabled: false,
     }
-    const thread = opts.sessionId
-      ? codex.resumeThread(opts.sessionId, threadOptions)
+    const thread = sessionId
+      ? codex.resumeThread(sessionId, threadOptions)
       : codex.startThread(threadOptions)
-    if (thread.id) opts.onSessionId?.(thread.id)
+    if (thread.id) runOpts.onSessionId?.(thread.id)
 
     const controller = new AbortController()
-    opts.onStop?.(() => controller.abort())
+    runOpts.onStop?.(() => controller.abort())
 
-    const { events } = await thread.runStreamed(buildCodexChatPrompt(opts), { signal: controller.signal })
+    const { events } = await thread.runStreamed(buildCodexChatPrompt(runOpts), { signal: controller.signal })
     const seenTextByItem = new Map<string, number>()
     let text = ''
     for await (const event of events) {
-      if (event.type === 'thread.started') opts.onSessionId?.(event.thread_id)
-      const finalText = emitCodexChatEvent(event, seenTextByItem, opts.onTool, opts.onText)
+      if (event.type === 'thread.started') runOpts.onSessionId?.(event.thread_id)
+      const finalText = emitCodexChatEvent(event, seenTextByItem, runOpts.onTool, runOpts.onText)
       if (finalText != null) text = finalText
     }
 
     return { costUsd: 0, sessionId: thread.id, text: text.trim() }
+  }
+
+  try {
+    return await runTurn(opts.sessionId)
   } catch (error) {
+    if (shouldRetryCodexChatWithoutThread(error, !!opts.sessionId)) {
+      opts.onTool?.('CodexResume', 'saved thread id was invalid; started a fresh thread')
+      return runTurn(null)
+    }
     throw normalizeCodexChatError(error)
   }
 }

@@ -1,5 +1,6 @@
 import { Codex, type ModelReasoningEffort, type ThreadEvent } from '@openai/codex-sdk'
 import { withContract } from './guard'
+import { extractCodexErrorMessage, formatCodexProviderError, previewRawOutput, rawCodexErrorMessage } from './codexErrors'
 import { buildReviewPrompt, type GuidedReviewAgentOptions, type ReviewAgentOptions, ReviewResultSchema, type ReviewResult } from './review'
 import { runGuidedReviewAgent } from './review'
 import { runRecheckAgent } from './recheck'
@@ -46,41 +47,9 @@ export class CodexReviewError extends Error {
   }
 }
 
-function rawMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
-  return extractCodexErrorMessage(message)
-}
-
-function extractCodexErrorMessage(message: string): string {
-  try {
-    const parsed = JSON.parse(message) as { error?: { message?: string; type?: string; param?: string }; status?: number }
-    if (parsed.error?.message) {
-      const parts = [parsed.error.message]
-      if (parsed.error.type) parts.push(`type=${parsed.error.type}`)
-      if (parsed.error.param) parts.push(`param=${parsed.error.param}`)
-      if (parsed.status) parts.push(`status=${parsed.status}`)
-      return parts.join(' ')
-    }
-  } catch {
-    /* not a structured Codex error */
-  }
-  return message
-}
-
-function preview(raw: string): string {
-  return raw.replace(/\s+/g, ' ').trim().slice(0, 240)
-}
-
 export function normalizeCodexReviewError(error: unknown): CodexReviewError {
   if (error instanceof CodexReviewError) return error
-  const message = rawMessage(error)
-  if (/auth|api[_ -]?key|unauthorized|forbidden|401|403|login|oauth/i.test(message)) {
-    return new CodexReviewError(`Codex SDK authentication failed. Check OPENAI_API_KEY or local Codex login. Original error: ${message}`, error)
-  }
-  if (/json|schema|parse/i.test(message)) {
-    return new CodexReviewError(`Codex review returned unusable JSON. ${message}`, error)
-  }
-  return new CodexReviewError(`Codex SDK review failed: ${message}`, error)
+  return new CodexReviewError(formatCodexProviderError('review', error), error)
 }
 
 function stripJsonFence(raw: string): string {
@@ -93,13 +62,13 @@ export function parseCodexReviewJson(raw: string): ReviewResult {
   try {
     parsed = JSON.parse(cleaned)
   } catch (error) {
-    throw new CodexReviewError(`Codex review returned invalid JSON: ${rawMessage(error)}. Raw output starts with: ${preview(raw)}`, error)
+    throw new CodexReviewError(`Codex review returned invalid JSON: ${rawCodexErrorMessage(error)}. Raw output starts with: ${previewRawOutput(raw)}`, error)
   }
 
   const result = ReviewResultSchema.safeParse(parsed)
   if (!result.success) {
     const issues = result.error.issues.map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`).join('; ')
-    throw new CodexReviewError(`Codex review JSON did not match ReviewResultSchema: ${issues}. Raw output starts with: ${preview(raw)}`, result.error)
+    throw new CodexReviewError(`Codex review JSON did not match ReviewResultSchema: ${issues}. Raw output starts with: ${previewRawOutput(raw)}`, result.error)
   }
   return result.data
 }

@@ -1,11 +1,12 @@
 import { inArray, eq } from 'drizzle-orm'
 import { getDb, schema } from '~core/db/client'
 import { removeWorktree } from '~core/git/worktree'
+import { FIX_IN_FLIGHT_FOR_RECOVERY, REVIEW_IN_FLIGHT_FOR_RECOVERY } from '~core/fix/recovery'
 
 // 启动恢复：上一个进程里"在跑"的任务会随进程死掉（in-process agent）。
 // 服务一启动就把这些卡住的任务重置为 error，保证状态一致 + 不卡死。
-const REVIEW_IN_FLIGHT = ['queued', 'cloning', 'reviewing', 'recheck_requested', 'rechecking']
-const FIX_IN_FLIGHT = ['queued', 'validating', 'fixing', 'pushing']
+const REVIEW_IN_FLIGHT = [...REVIEW_IN_FLIGHT_FOR_RECOVERY]
+const FIX_IN_FLIGHT = [...FIX_IN_FLIGHT_FOR_RECOVERY]
 
 export default defineNitroPlugin(async () => {
   // 审核任务：重置 + 清 worktree（审核 worktree 用完即弃）

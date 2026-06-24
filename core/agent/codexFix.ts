@@ -1,4 +1,5 @@
 import { Codex, type ModelReasoningEffort, type ThreadEvent } from '@openai/codex-sdk'
+import { extractCodexErrorMessage, formatCodexProviderError, previewRawOutput, rawCodexErrorMessage } from './codexErrors'
 import { buildFixPrompt, FixResultSchema, type FixAgentOptions, type FixAgentResult } from './fixer'
 import type { FixRunner } from './runners'
 
@@ -33,41 +34,9 @@ export class CodexFixError extends Error {
   }
 }
 
-function extractCodexErrorMessage(message: string): string {
-  try {
-    const parsed = JSON.parse(message) as { error?: { message?: string; type?: string; param?: string }; status?: number }
-    if (parsed.error?.message) {
-      const parts = [parsed.error.message]
-      if (parsed.error.type) parts.push(`type=${parsed.error.type}`)
-      if (parsed.error.param) parts.push(`param=${parsed.error.param}`)
-      if (parsed.status) parts.push(`status=${parsed.status}`)
-      return parts.join(' ')
-    }
-  } catch {
-    /* not a structured Codex error */
-  }
-  return message
-}
-
-function rawMessage(error: unknown): string {
-  const message = error instanceof Error ? error.message : String(error)
-  return extractCodexErrorMessage(message)
-}
-
-function preview(raw: string): string {
-  return raw.replace(/\s+/g, ' ').trim().slice(0, 240)
-}
-
 export function normalizeCodexFixError(error: unknown): CodexFixError {
   if (error instanceof CodexFixError) return error
-  const message = rawMessage(error)
-  if (/auth|api[_ -]?key|unauthorized|forbidden|401|403|login|oauth/i.test(message)) {
-    return new CodexFixError(`Codex SDK authentication failed. Check OPENAI_API_KEY or local Codex login. Original error: ${message}`, error)
-  }
-  if (/json|schema|parse/i.test(message)) {
-    return new CodexFixError(`Codex fix returned unusable JSON. ${message}`, error)
-  }
-  return new CodexFixError(`Codex SDK fix failed: ${message}`, error)
+  return new CodexFixError(formatCodexProviderError('fix', error), error)
 }
 
 function stripJsonFence(raw: string): string {
@@ -80,13 +49,13 @@ export function parseCodexFixJson(raw: string): Pick<FixAgentResult, 'results'> 
   try {
     parsed = JSON.parse(cleaned)
   } catch (error) {
-    throw new CodexFixError(`Codex fix returned invalid JSON: ${rawMessage(error)}. Raw output starts with: ${preview(raw)}`, error)
+    throw new CodexFixError(`Codex fix returned invalid JSON: ${rawCodexErrorMessage(error)}. Raw output starts with: ${previewRawOutput(raw)}`, error)
   }
 
   const result = FixResultSchema.safeParse(parsed)
   if (!result.success) {
     const issues = result.error.issues.map((issue) => `${issue.path.join('.') || '<root>'}: ${issue.message}`).join('; ')
-    throw new CodexFixError(`Codex fix JSON did not match FixResultSchema: ${issues}. Raw output starts with: ${preview(raw)}`, result.error)
+    throw new CodexFixError(`Codex fix JSON did not match FixResultSchema: ${issues}. Raw output starts with: ${previewRawOutput(raw)}`, result.error)
   }
   return result.data
 }
