@@ -8,9 +8,10 @@ import { cockpitBus } from '../events'
 import { prepareWorktree, removeWorktree } from '../git/worktree'
 import { fetchTimeline, fetchReviewComments } from '../github/gh'
 import { claudeChatRunner, claudeFixRunner, claudeValidateRunner } from '../agent/claudeRunners'
+import { codexChatRunner } from '../agent/codexChat'
 import { codexFixRunner } from '../agent/codexFix'
 import { codexValidateRunner } from '../agent/codexValidate'
-import type { FixItem, FixRunner, ReviewProvider, ValidateRunner } from '../agent/runners'
+import type { ChatRunner, FixItem, FixRunner, ReviewProvider, ValidateRunner } from '../agent/runners'
 import type { ChildProcess } from 'node:child_process'
 
 const pexec = promisify(execFile)
@@ -23,16 +24,27 @@ export function selectFixRunner(provider?: ReviewProvider): FixRunner {
   return provider === 'codex' ? codexFixRunner : claudeFixRunner
 }
 
+export function selectChatRunner(provider?: ReviewProvider): ChatRunner {
+  return provider === 'codex' ? codexChatRunner : claudeChatRunner
+}
+
 // 并发锁：job 一进来就占（spawn 前就生效），直到整个 job（含 commit/db 收尾）结束才释放。
 // 用它防并发，而不是 activeChats —— 后者要等子进程 spawn 才有、子进程一结束就空，两头都漏窗口。
 const chatLocks = new Set<string>()
 // 真子进程句柄（spawn 后才有），停止按钮 kill 用。
 const activeChats = new Map<string, ChildProcess>()
+const activeChatStops = new Map<string, () => void>()
 const stopRequested = new Set<string>() // 用户主动停止的 → job 把那轮标记 stopped（而非 error）
 export function isChatting(fixId: string): boolean {
   return chatLocks.has(fixId)
 }
 export function stopFixChat(fixId: string): boolean {
+  const stop = activeChatStops.get(fixId)
+  if (stop) {
+    stopRequested.add(fixId)
+    stop()
+    return true
+  }
   const cp = activeChats.get(fixId)
   if (!cp) return false // 还在准备 worktree（没 spawn）或没在跑 → 没句柄可 kill
   stopRequested.add(fixId)
@@ -341,20 +353,35 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
     const fix = h.row()
     let stopped = false
     let newSessionId: string | null = fix?.sessionId ?? null
+    const persistSessionId = (sessionId: string) => {
+      newSessionId = sessionId
+      db.update(schema.fixes)
+        .set({ sessionId, updatedAt: h.now() })
+        .where(eq(schema.fixes.id, fixId))
+        .run()
+    }
     // worktree 里有没有未解决的 merge 冲突？有就提示 agent 去解决
     const { stdout: uFiles } = await git(wt.path, ['diff', '--name-only', '--diff-filter=U']).catch(() => ({ stdout: '' }))
     const conflictHint = uFiles.trim()
       ? `There are UNRESOLVED merge conflicts in these files (they contain <<<<<<< / ======= / >>>>>>> markers): ${uFiles.trim().split('\n').join(', ')}. Resolve every conflict by editing the files (remove all conflict markers), following the reviewer's guidance below.`
       : ''
+    const { stdout: headBeforeChat } = await git(wt.path, ['rev-parse', 'HEAD'])
     try {
-      const r = await claudeChatRunner.runChat({
+      const chatRunner = selectChatRunner(ctx.provider)
+      const r = await chatRunner.runChat({
         cwd: wt.path,
-        model: ctx.claudeModel || ctx.model,
+        model: ctx.provider === 'codex' ? ctx.model : ctx.claudeModel || ctx.model,
+        effort: ctx.effort,
         lang: ctx.lang,
         sessionId: fix?.sessionId ?? null,
         message,
         conflictHint,
-        onSpawn: (cp) => activeChats.set(fixId, cp),
+        onSpawn: (cp) => {
+          activeChats.set(fixId, cp)
+          activeChatStops.set(fixId, () => cp.kill('SIGTERM'))
+        },
+        onStop: (stop) => activeChatStops.set(fixId, stop),
+        onSessionId: persistSessionId,
         onText: (t) => {
           acc += t
           const n = new Date().getTime()
@@ -369,10 +396,18 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
       else throw e
     } finally {
       activeChats.delete(fixId)
+      activeChatStops.delete(fixId)
       stopRequested.delete(fixId)
     }
 
     flushTurn(stopped ? 'stopped' : 'done')
+
+    if (ctx.provider === 'codex') {
+      const { stdout: headAfterChat } = await git(wt.path, ['rev-parse', 'HEAD'])
+      if (headAfterChat.trim() !== headBeforeChat.trim()) {
+        throw new Error('Codex chat must leave commits to Node; HEAD changed before Node commit')
+      }
+    }
 
     // agent 改的文件（acceptEdits 已落盘，停止也保留）→ Node 侧 commit + 刷新 diff stats
     let inMerge = false
@@ -415,6 +450,7 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
     h.emit('chat', stopped ? 'stopped' : 'done')
    } catch (e) {
     activeChats.delete(fixId)
+    activeChatStops.delete(fixId)
     stopRequested.delete(fixId)
     flushTurn('error')
     h.emit('error', (e as Error).message)
@@ -423,6 +459,7 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
     // 并发锁直到这里（整个 job 含 commit/db 收尾都结束）才释放，杜绝第二个 chat 在收尾期间挤进来
     chatLocks.delete(fixId)
     activeChats.delete(fixId)
+    activeChatStops.delete(fixId)
     stopRequested.delete(fixId)
   }
 }

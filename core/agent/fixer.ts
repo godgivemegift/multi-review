@@ -148,11 +148,14 @@ export async function runFixAgent(opts: FixAgentOptions): Promise<FixAgentResult
 export type FixChatOptions = {
   cwd: string
   model: string
+  effort?: string
   lang: string
   sessionId: string | null // 有就 --resume；没有就开新会话（agent 缺修复上下文，但仍可用）
   message: string
   conflictHint?: string // worktree 里有未解决的 merge 冲突时，告诉 agent 去解决（文件列表）
   onSpawn?: (cp: import('node:child_process').ChildProcess) => void
+  onStop?: (stop: () => void) => void
+  onSessionId?: (sessionId: string) => void
   onText?: (text: string) => void
   onTool?: (name: string, info: string) => void
 }
