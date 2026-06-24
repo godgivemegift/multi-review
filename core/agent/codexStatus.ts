@@ -1,5 +1,7 @@
 import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
+import { readFile } from 'node:fs/promises'
+import { dirname, join, parse } from 'node:path'
 
 export type CodexAuthStatus = 'authenticated' | 'missing' | 'unknown'
 
@@ -22,15 +24,21 @@ export async function getCodexSdkStatus(force = false): Promise<CodexSdkStatus> 
 }
 
 async function resolveCodexSdkStatus(): Promise<CodexSdkStatus> {
-  let sdkVersion: string | undefined
+  let Codex: typeof import('@openai/codex-sdk').Codex
 
   try {
-    const require = createRequire(import.meta.url)
-    const packageJsonPath = require.resolve('@openai/codex-sdk/package.json')
-    const packageJson = require(packageJsonPath) as { version?: string }
-    sdkVersion = packageJson.version
+    ;({ Codex } = await import('@openai/codex-sdk'))
+  } catch (error) {
+    return {
+      installed: false,
+      authStatus: 'unknown',
+      detail: error instanceof Error ? error.message : String(error),
+    }
+  }
 
-    const { Codex } = await import('@openai/codex-sdk')
+  const sdkVersion = await resolveCodexSdkVersion()
+
+  try {
     const codex = new Codex()
     const executablePath = (codex as unknown as { exec?: { executablePath?: string } }).exec?.executablePath
 
@@ -83,12 +91,34 @@ async function resolveCodexSdkStatus(): Promise<CodexSdkStatus> {
     }
   } catch (error) {
     return {
-      installed: false,
+      installed: true,
       authStatus: 'unknown',
       sdkVersion,
       detail: error instanceof Error ? error.message : String(error),
     }
   }
+}
+
+async function resolveCodexSdkVersion(): Promise<string | undefined> {
+  try {
+    const require = createRequire(import.meta.url)
+    let dir = dirname(require.resolve('@openai/codex-sdk'))
+    const root = parse(dir).root
+
+    while (dir !== root) {
+      try {
+        const raw = await readFile(join(dir, 'package.json'), 'utf8')
+        const packageJson = JSON.parse(raw) as { name?: string; version?: string }
+        if (packageJson.name === '@openai/codex-sdk') return packageJson.version
+      } catch {
+        /* keep walking */
+      }
+      dir = dirname(dir)
+    }
+  } catch {
+    /* version is informational only */
+  }
+  return undefined
 }
 
 async function runCodexLoginStatus(executablePath: string): Promise<{ ok: boolean; output: string }> {

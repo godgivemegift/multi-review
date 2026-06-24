@@ -13,6 +13,7 @@ import { codexFixRunner } from '../agent/codexFix'
 import { codexValidateRunner } from '../agent/codexValidate'
 import type { ChatRunner, FixItem, FixRunner, ReviewProvider, ValidateRunner } from '../agent/runners'
 import type { ChildProcess } from 'node:child_process'
+import { assertCodexCommitSafe } from './codexCommitSafety'
 
 const pexec = promisify(execFile)
 
@@ -293,6 +294,7 @@ async function runFixPhase(ctx: FixJobCtx) {
     let additions = 0
     let deletions = 0
     if (porcelain.trim()) {
+      if (ctx.provider === 'codex') assertCodexCommitSafe(porcelain)
       await git(wt.path, ['add', '-A'])
       await git(wt.path, ['commit', '-m', 'fix: address review feedback'])
       const { stdout: numstat } = await git(wt.path, ['diff', '--numstat', `${h.row()?.baseHeadSha}..HEAD`])
@@ -420,6 +422,10 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
       if (markersLeft) {
         h.emit('stage', '文件里还有未解决的冲突标记，请继续在对话里让 AI 解决')
       } else {
+        if (ctx.provider === 'codex') {
+          const { stdout: porcelain } = await git(wt.path, ['status', '--porcelain'])
+          assertCodexCommitSafe(porcelain)
+        }
         await git(wt.path, ['add', '-A'])
         await git(wt.path, ['commit', '--no-edit']) // 完成 merge commit
         if (h.row()?.status === 'conflict') h.setStatus('ready') // 冲突解决完，解锁回 ready
@@ -427,6 +433,7 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
     } else {
       const { stdout: porcelain } = await git(wt.path, ['status', '--porcelain'])
       if (porcelain.trim()) {
+        if (ctx.provider === 'codex') assertCodexCommitSafe(porcelain)
         await git(wt.path, ['add', '-A'])
         await git(wt.path, ['commit', '-m', 'fix: follow-up from review chat'])
       }
