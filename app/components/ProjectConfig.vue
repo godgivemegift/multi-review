@@ -6,7 +6,7 @@ const { t } = useI18n()
 
 type ModelCap = { value: string; displayName: string; description: string; supportsEffort: boolean; effortLevels: string[] }
 type Provider = 'claude' | 'codex'
-type ProviderStageId = 'review' | 'validate' | 'fix' | 'chat' | 'recheck' | 'skill_generation' | 'publish_reply'
+type ProviderStageId = 'review' | 'fix_chat' | 'recheck' | 'skill_generation' | 'publish_reply'
 type ProviderCapabilityStage = { id: ProviderStageId; claude: boolean; codex: boolean; providerControlled: boolean }
 type CodexSdkStatus = { installed: boolean; authStatus: 'authenticated' | 'missing' | 'unknown'; detail: string; sdkVersion?: string }
 type AgentCapabilities = {

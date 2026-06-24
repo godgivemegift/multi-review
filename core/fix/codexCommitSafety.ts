@@ -31,6 +31,6 @@ export function assertCodexCommitSafe(porcelain: string): void {
   const blocked = codexBlockedCommitPaths(porcelain)
   if (!blocked.length) return
   throw new Error(
-    `Codex produced protected workspace artifact(s): ${blocked.join(', ')}. Refusing to auto-commit protected workspace artifacts; ask Codex to remove them or inspect the worktree before retrying.`,
+    `Codex produced protected workspace artifact(s): ${blocked.join(', ')}. Refusing to upload protected workspace artifacts; ask Codex to remove them or inspect the worktree before retrying.`,
   )
 }

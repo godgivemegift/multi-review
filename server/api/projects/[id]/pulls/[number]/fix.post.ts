@@ -1,43 +1,44 @@
 import { nanoid } from 'nanoid'
 import { and, eq } from 'drizzle-orm'
-import { z } from 'zod'
 import { schema } from '~core/db/client'
 import { fetchPrMeta } from '~core/github/gh'
-import { enqueueValidate } from '~core/fix/pipeline'
-import { reviewQueue } from '~core/queue'
 
-// 建一个「修复 PR」任务并入队验证阶段（#16）。
-// 验证 / push / reply 对任何 PR 都开放（push 与 reply 仍走手动 + 二次确认）。
-const Body = z.object({ instruction: z.string().max(4000).optional() })
-
+// 建一个「修复 PR」对话任务（惰性）：插一行 fixes（status=open），不跑验证、不入队。
+// worktree 在第一条对话消息时由 ensureWorktree 惰性创建。
+// 同一 PR 已有任务就直接复用（点进 tab 多次不重复建；discard 是硬删，所以不会有残留行）。
 export default defineEventHandler(async (event) => {
   const projectId = getRouterParam(event, 'id')!
   const prNumber = Number(getRouterParam(event, 'number'))
   if (!Number.isInteger(prNumber) || prNumber <= 0) {
     throw createError({ statusCode: 400, statusMessage: 'PR 编号不合法' })
   }
-  const { instruction } = Body.parse((await readBody(event)) || {})
-  const cfg = useRuntimeConfig()
   const d = db()
 
   const project = d.select().from(schema.projects).where(eq(schema.projects.id, projectId)).get()
   if (!project) throw createError({ statusCode: 404, statusMessage: '项目不存在' })
   if (!project.localPath) throw createError({ statusCode: 400, statusMessage: '项目未配置本地 clone 路径（worktree 需要它）' })
 
-  // 同一 PR 同时只允许一个未终结的修复任务（git 写互斥）
-  const active = d
-    .select()
-    .from(schema.fixes)
-    .where(and(eq(schema.fixes.projectId, projectId), eq(schema.fixes.prNumber, prNumber)))
-    .all()
-    .filter((f: any) => !['pushed', 'error', 'discarded'].includes(f.status))
-  if (active.length) {
-    throw createError({ statusCode: 409, statusMessage: `该 PR 已有进行中的修复任务（${active[0]!.status}）` })
+  // 取该 PR 最新的 fix 行（discard 是硬删，所以不会有残留行；存在即复用）
+  const latest = () => {
+    const rows = d
+      .select()
+      .from(schema.fixes)
+      .where(and(eq(schema.fixes.projectId, projectId), eq(schema.fixes.prNumber, prNumber)))
+      .all()
+      .sort((a: any, b: any) => a.createdAt.localeCompare(b.createdAt))
+    return rows.length ? rows[rows.length - 1]! : null
   }
+  const pre = latest()
+  if (pre) return { id: pre.id, status: pre.status }
 
   // 服务端取 PR 元数据（branch/author/title 不信客户端）
   const meta = await fetchPrMeta(project.repo, prNumber)
   if (!meta.branch) throw createError({ statusCode: 400, statusMessage: '拿不到 PR 分支' })
+
+  // 二次检查：fetchPrMeta 期间可能有并发请求已建好。这次 SELECT 到下面 INSERT 之间没有 await，
+  // Node 单线程下原子执行 → 杜绝同 PR 并发建重复行。
+  const dup = latest()
+  if (dup) return { id: dup.id, status: dup.status }
 
   const now = new Date().toISOString()
   const id = nanoid()
@@ -46,35 +47,14 @@ export default defineEventHandler(async (event) => {
     projectId,
     prNumber,
     branch: meta.branch,
-    baseRef: meta.baseBranch || project.defaultBranch || null, // PR 目标分支，diff 三点 + merge 用
+    baseRef: meta.baseBranch || project.defaultBranch || null, // PR 目标分支，diff 三点用
     prAuthor: meta.author || null,
     title: meta.title || null,
-    instruction: instruction?.trim() || null,
     lang: getCookie(event, 'mr-locale') || 'zh',
-    status: 'queued',
+    status: 'open',
     createdAt: now,
     updatedAt: now,
   }).run()
 
-  const rc = resolveReviewConfig(d, project)
-  reviewQueue.setLimit(Number(cfg.maxConcurrency) || 3)
-  enqueueValidate({
-    db: d,
-    schema,
-    fixId: id,
-    repo: project.repo,
-    prNumber,
-    branch: meta.branch,
-    defaultBranch: project.defaultBranch,
-    localPath: project.localPath,
-    reposDir: cfg.reposDir as string,
-    methodology: rc.methodology,
-    provider: rc.provider,
-    model: rc.model,
-    claudeModel: rc.claudeModel,
-    effort: rc.effort,
-    lang: getCookie(event, 'mr-locale') || 'zh',
-  })
-
-  return { id, status: 'queued' }
+  return { id, status: 'open' }
 })

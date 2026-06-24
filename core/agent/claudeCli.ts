@@ -53,7 +53,8 @@ export function runClaudeStream(
   const bin = resolveClaudeExecutable() ?? 'claude'
   const hasInput = typeof opts.input === 'string'
   return new Promise((resolve, reject) => {
-    const cp = spawn(bin, args, { cwd: opts.cwd, stdio: [hasInput ? 'pipe' : 'ignore', 'pipe', 'pipe'] })
+    // detached:true → 子进程成为新进程组组长，停止时可对「整个组」发信号（含它 spawn 的子进程），等同 Ctrl+C。
+    const cp = spawn(bin, args, { cwd: opts.cwd, stdio: [hasInput ? 'pipe' : 'ignore', 'pipe', 'pipe'], detached: true })
     opts.onSpawn?.(cp)
     let buf = ''
     let err = ''
@@ -67,7 +68,8 @@ export function runClaudeStream(
       clearTimeout(timer)
       fn()
     }
-    const timer = setTimeout(() => finish(() => { cp.kill('SIGKILL'); reject(new Error('claude 修复调用超时')) }), timeout)
+    const killTree = (sig: NodeJS.Signals) => { try { process.kill(-(cp.pid as number), sig) } catch { try { cp.kill(sig) } catch { /* 已退出 */ } } }
+    const timer = setTimeout(() => finish(() => { killTree('SIGKILL'); reject(new Error('claude 修复调用超时')) }), timeout)
 
     const consume = (line: string) => {
       if (!line) return

@@ -32,7 +32,8 @@ export default defineEventHandler(async (event) => {
   }
 
   reviewQueue.setLimit(Number(cfg.maxConcurrency) || 3)
-  d.update(schema.reviews).set({ status: 'recheck_requested', updatedAt: new Date().toISOString() }).where(eq(schema.reviews.id, id)).run()
+  // 重入复审时清掉上一轮的 error（可能是从 error 状态重新发起）
+  d.update(schema.reviews).set({ status: 'recheck_requested', error: null, updatedAt: new Date().toISOString() }).where(eq(schema.reviews.id, id)).run()
 
   const rc = resolveReviewConfig(d, project)
   enqueueRecheck({

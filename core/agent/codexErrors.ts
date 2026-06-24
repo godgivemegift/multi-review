@@ -1,5 +1,5 @@
 export type CodexFailureKind = 'auth' | 'json' | 'invalid_thread' | 'interrupted' | 'runtime'
-export type CodexPhase = 'review' | 'validation' | 'fix' | 'chat'
+export type CodexPhase = 'review' | 'chat'
 
 export function extractCodexErrorMessage(message: string): string {
   try {

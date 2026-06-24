@@ -21,6 +21,11 @@ export default defineEventHandler(async (event) => {
 
   const review = d.select().from(schema.reviews).where(eq(schema.reviews.id, id)).get()
   if (!review) throw createError({ statusCode: 404, statusMessage: 'review 不存在' })
+  // 任务在跑（克隆/审核/复审）时不能发布/预览，防和正在写 findings 的 job 抢同一批数据。
+  // 允许 draft / ready_to_post / posted（再发）/ error。
+  if (['queued', 'cloning', 'reviewing', 'recheck_requested', 'rechecking'].includes(review.status)) {
+    throw createError({ statusCode: 409, statusMessage: `当前状态（${review.status}）不能发布评论，请等任务完成` })
+  }
   const project = d.select().from(schema.projects).where(eq(schema.projects.id, review.projectId)).get()
   if (!project) throw createError({ statusCode: 404, statusMessage: '项目不存在' })
 

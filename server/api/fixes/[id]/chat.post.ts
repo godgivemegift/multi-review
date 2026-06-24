@@ -3,8 +3,8 @@ import { z } from 'zod'
 import { schema } from '~core/db/client'
 import { runFixChatJob, isChatting, type FixJobCtx } from '~core/fix/pipeline'
 
-// 对话工作区：验证完（awaiting）就能直接聊、直接让 AI 改代码，不必先跑一轮批量修复。
-// 一个会话就能干完后续精修。awaiting/ready/error/pushed/conflict 可发；同一 fix 同时只允许一个 chat。
+// 对话工作区：fix task 创建后就能直接聊、直接让 AI 改代码，不必先跑一轮批量修复。
+// 一个会话就能干完后续精修。open/ready/error/pushed 可发；同一 fix 同时只允许一个 chat。
 const Body = z.object({ message: z.string().min(1).max(8000) })
 
 export default defineEventHandler(async (event) => {
@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
 
   const fix = d.select().from(schema.fixes).where(eq(schema.fixes.id, id)).get()
   if (!fix) throw createError({ statusCode: 404, statusMessage: 'fix 不存在' })
-  if (!['awaiting', 'ready', 'error', 'pushed', 'conflict'].includes(fix.status)) {
+  if (!['open', 'ready', 'pushed', 'error'].includes(fix.status)) {
     throw createError({ statusCode: 409, statusMessage: `当前状态（${fix.status}）不能对话` })
   }
   if (isChatting(id)) throw createError({ statusCode: 409, statusMessage: '上一条还在生成中，请等它完成或停止' })
@@ -33,7 +33,6 @@ export default defineEventHandler(async (event) => {
     defaultBranch: project.defaultBranch,
     localPath: project.localPath,
     reposDir: cfg.reposDir as string,
-    methodology: rc.methodology,
     provider: rc.provider,
     model: rc.model,
     claudeModel: rc.claudeModel,

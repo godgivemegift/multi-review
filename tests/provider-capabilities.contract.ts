@@ -9,15 +9,13 @@ const stageIds = PROVIDER_CAPABILITY_STAGES.map((stage) => stage.id)
 
 assert.deepEqual(stageIds, [
   'review',
-  'validate',
-  'fix',
-  'chat',
+  'fix_chat',
   'recheck',
   'skill_generation',
   'publish_reply',
 ])
 
-for (const stage of ['review', 'validate', 'fix', 'chat'] as const) {
+for (const stage of ['review', 'fix_chat'] as const) {
   assert.equal(providerSupportsStage('claude', stage), true)
   assert.equal(providerSupportsStage('codex', stage), true)
 }

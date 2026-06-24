@@ -2,9 +2,7 @@ import type { ReviewProvider } from './runners'
 
 export type ProviderCapabilityStageId =
   | 'review'
-  | 'validate'
-  | 'fix'
-  | 'chat'
+  | 'fix_chat'
   | 'recheck'
   | 'skill_generation'
   | 'publish_reply'
@@ -20,9 +18,7 @@ export type ProviderCapabilityStage = {
 
 export const PROVIDER_CAPABILITY_STAGES: ProviderCapabilityStage[] = [
   { id: 'review', claude: true, codex: true, providerControlled: true },
-  { id: 'validate', claude: true, codex: true, providerControlled: true },
-  { id: 'fix', claude: true, codex: true, providerControlled: true },
-  { id: 'chat', claude: true, codex: true, providerControlled: true },
+  { id: 'fix_chat', claude: true, codex: true, providerControlled: true },
   { id: 'recheck', claude: true, codex: false, providerControlled: false },
   { id: 'skill_generation', claude: true, codex: false, providerControlled: false },
   { id: 'publish_reply', claude: true, codex: false, providerControlled: false },

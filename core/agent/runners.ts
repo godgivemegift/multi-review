@@ -1,7 +1,6 @@
-import type { FixChatOptions, FixChatResult, FixAgentOptions, FixAgentResult, FixItem } from './fixer'
+import type { FixChatOptions, FixChatResult } from './fixer'
 import type { GuidedReviewAgentOptions, GuidedResult, ReviewAgentOptions, ReviewResult } from './review'
 import type { RecheckAgentOptions, RecheckResult } from './recheck'
-import type { ValidateAgentOptions, ValidateResult } from './validate'
 
 export type ReviewProvider = 'claude' | 'codex'
 
@@ -11,16 +10,6 @@ export interface ReviewRunner {
   runRecheck(opts: RecheckAgentOptions): Promise<{ result: RecheckResult; costUsd: number }>
 }
 
-export interface ValidateRunner {
-  runValidate(opts: ValidateAgentOptions): Promise<{ result: ValidateResult; costUsd: number }>
-}
-
-export interface FixRunner {
-  runFix(opts: FixAgentOptions): Promise<FixAgentResult>
-}
-
 export interface ChatRunner {
   runChat(opts: FixChatOptions): Promise<FixChatResult>
 }
-
-export type { FixItem }

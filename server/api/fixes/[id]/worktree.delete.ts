@@ -14,8 +14,8 @@ export default defineEventHandler(async (event) => {
   const d = db()
   const fix = d.select().from(schema.fixes).where(eq(schema.fixes.id, id)).get()
   if (!fix) throw createError({ statusCode: 404, statusMessage: 'fix 不存在' })
-  if (['queued', 'validating', 'fixing', 'pushing'].includes(fix.status)) {
-    throw createError({ statusCode: 409, statusMessage: '修复进行中，请等它完成' })
+  if (fix.status === 'pushing') {
+    throw createError({ statusCode: 409, statusMessage: '上传进行中，请等它完成' })
   }
   if (isChatting(id)) throw createError({ statusCode: 409, statusMessage: '对话进行中，请等它完成或停止' })
 
