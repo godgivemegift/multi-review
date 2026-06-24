@@ -62,17 +62,10 @@
       "unknown": "—"
     },
     "fix": {
-      "queued": "排队中",
-      "validating": "验证中",
-      "awaiting": "待勾选",
-      "fixing": "修复中",
-      "ready": "待上传",
+      "open": "进行中",
       "pushing": "上传中",
       "pushed": "已上传",
-      "error": "出错",
-      "discarded": "已放弃",
-      "merging": "合并中",
-      "conflict": "待解决冲突"
+      "error": "出错"
     }
   },
   "project": {
@@ -403,6 +396,10 @@
     "pushFailed": "上传失败",
     "pushedOnly": "已上传 {sha}",
     "uploadChanges": "上传改动",
+    "commitAndUpload": "提交并上传",
+    "backToChat": "返回对话",
+    "commitMsgLabel": "提交信息",
+    "commitMsgPlaceholder": "提交信息（可改）",
     "replyBtn": "回复作者",
     "replied": "已回复 {replied} 条",
     "replyPanelTitle": "回复作者",

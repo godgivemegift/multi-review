@@ -60,6 +60,12 @@ function ensureColumns(sqlite: Database.Database) {
     sqlite.exec(`UPDATE fixes SET last_push_sha = fix_head_sha, last_action_kind = 'pushed'
                  WHERE pushed_at IS NOT NULL AND last_push_sha IS NULL AND fix_head_sha IS NOT NULL`)
   } catch { /* 老库无相关列时忽略 */ }
+  // 纯对话版：把遗留旧状态归一到新枚举（旧库可能有 queued/validating/awaiting/fixing/ready/merging/conflict）。
+  // 首次归一后旧值不再存在，之后每次启动都是空操作。
+  try {
+    sqlite.exec(`UPDATE fixes SET status = 'open'  WHERE status IN ('queued','validating','awaiting','fixing','ready')`)
+    sqlite.exec(`UPDATE fixes SET status = 'error' WHERE status IN ('merging','conflict')`)
+  } catch { /* 忽略 */ }
 }
 
 function ensureSchema(sqlite: Database.Database) {
@@ -176,7 +182,7 @@ function ensureSchema(sqlite: Database.Database) {
       title TEXT,
       instruction TEXT,
       lang TEXT NOT NULL DEFAULT 'en',
-      status TEXT NOT NULL DEFAULT 'queued',
+      status TEXT NOT NULL DEFAULT 'open',
       stage TEXT,
       summary TEXT,
       worktree_path TEXT,
@@ -198,25 +204,6 @@ function ensureSchema(sqlite: Database.Database) {
       pushed_at TEXT
     );
     CREATE INDEX IF NOT EXISTS fixes_project_pr_idx ON fixes(project_id, pr_number);
-
-    CREATE TABLE IF NOT EXISTS fix_findings (
-      id TEXT PRIMARY KEY,
-      fix_id TEXT NOT NULL REFERENCES fixes(id) ON DELETE CASCADE,
-      ord INTEGER NOT NULL DEFAULT 0,
-      severity TEXT,
-      title TEXT NOT NULL,
-      location TEXT,
-      verdict TEXT NOT NULL,
-      suggest_fix INTEGER NOT NULL DEFAULT 0,
-      reason TEXT,
-      source_comment_ids TEXT,
-      checked INTEGER NOT NULL DEFAULT 0,
-      note TEXT,
-      fix_status TEXT,
-      fix_text TEXT,
-      created_at TEXT NOT NULL
-    );
-    CREATE INDEX IF NOT EXISTS fix_findings_fix_idx ON fix_findings(fix_id);
 
     CREATE TABLE IF NOT EXISTS fix_turns (
       id TEXT PRIMARY KEY,

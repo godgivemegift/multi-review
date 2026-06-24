@@ -62,17 +62,10 @@
       "unknown": "—"
     },
     "fix": {
-      "queued": "Queued",
-      "validating": "Validating",
-      "awaiting": "Awaiting selection",
-      "fixing": "Fixing",
-      "ready": "Ready to push",
+      "open": "In progress",
       "pushing": "Pushing",
       "pushed": "Pushed",
-      "error": "Error",
-      "discarded": "Discarded",
-      "merging": "Merging",
-      "conflict": "Conflicts to resolve"
+      "error": "Error"
     }
   },
   "project": {
@@ -403,6 +396,10 @@
     "pushFailed": "Push failed",
     "pushedOnly": "Pushed {sha}",
     "uploadChanges": "Push changes",
+    "commitAndUpload": "Commit & upload",
+    "backToChat": "Back to chat",
+    "commitMsgLabel": "Commit message",
+    "commitMsgPlaceholder": "Commit message (editable)",
     "replyBtn": "Reply to author",
     "replied": "Replied to {replied} thread(s)",
     "replyPanelTitle": "Reply to author",

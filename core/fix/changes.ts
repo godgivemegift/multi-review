@@ -50,6 +50,12 @@ async function untracked(wt: string): Promise<{ diff: string; numstat: string }>
   return { diff, numstat }
 }
 
+// worktree 是否有未提交改动（含未跟踪文件）→ 「有东西可上传」的判定之一
+export async function worktreeDirty(wt: string): Promise<boolean> {
+  const { stdout } = await git(wt, ['status', '--porcelain'])
+  return !!stdout.trim()
+}
+
 // 文件数 + 增删行（状态行/确认框用，不需要完整 diff 文本）
 export async function fixChangesStat(wt: string): Promise<{ filesChanged: number; additions: number; deletions: number }> {
   const r = await resolveRange(wt)

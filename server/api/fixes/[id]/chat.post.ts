@@ -15,7 +15,7 @@ export default defineEventHandler(async (event) => {
 
   const fix = d.select().from(schema.fixes).where(eq(schema.fixes.id, id)).get()
   if (!fix) throw createError({ statusCode: 404, statusMessage: 'fix 不存在' })
-  if (!['awaiting', 'ready', 'error', 'pushed', 'conflict'].includes(fix.status)) {
+  if (!['open', 'pushed', 'error'].includes(fix.status)) {
     throw createError({ statusCode: 409, statusMessage: `当前状态（${fix.status}）不能对话` })
   }
   if (isChatting(id)) throw createError({ statusCode: 409, statusMessage: '上一条还在生成中，请等它完成或停止' })
@@ -33,9 +33,7 @@ export default defineEventHandler(async (event) => {
     defaultBranch: project.defaultBranch,
     localPath: project.localPath,
     reposDir: cfg.reposDir as string,
-    methodology: rc.methodology,
     model: rc.model,
-    effort: rc.effort,
     lang: fix.lang || 'zh',
   }
   // fire-and-forget：长任务，进度走 SSE；错误已在 job 内部捕获落库。
