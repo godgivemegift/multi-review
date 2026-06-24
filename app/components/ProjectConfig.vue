@@ -6,6 +6,14 @@ const { t } = useI18n()
 
 type ModelCap = { value: string; displayName: string; description: string; supportsEffort: boolean; effortLevels: string[] }
 type Provider = 'claude' | 'codex'
+type ProviderStageId = 'review' | 'validate' | 'fix' | 'chat' | 'recheck' | 'skill_generation' | 'publish_reply'
+type ProviderCapabilityStage = { id: ProviderStageId; claude: boolean; codex: boolean; providerControlled: boolean }
+type CodexSdkStatus = { installed: boolean; authStatus: 'authenticated' | 'missing' | 'unknown'; detail: string; sdkVersion?: string }
+type AgentCapabilities = {
+  models: ModelCap[]
+  providers?: { stages: ProviderCapabilityStage[] }
+  codex?: CodexSdkStatus
+}
 const CODEX_EFFORTS = ['low', 'medium', 'high', 'xhigh']
 
 // 表单（项目信息 + 模型）
@@ -21,11 +29,14 @@ const form = reactive({
 const savingInfo = ref(false)
 const msg = ref('')
 
-const { data: caps } = useFetch<{ models: ModelCap[] }>('/api/agent/capabilities')
+const { data: caps, pending: capsPending } = useFetch<AgentCapabilities>('/api/agent/capabilities')
 const modelOptions = computed<ModelCap[]>(() => [
   { value: '', displayName: t('config.globalDefault'), description: t('config.useEnvDefault'), supportsEffort: false, effortLevels: [] },
   ...(caps.value?.models ?? []),
 ])
+const capabilityStages = computed(() => caps.value?.providers?.stages ?? [])
+const codexStatus = computed<CodexSdkStatus | null>(() => caps.value?.codex ?? null)
+const selectedProviderLabel = computed(() => form.provider === 'codex' ? t('config.providerCodex') : t('config.providerClaude'))
 const effortOptions = computed(() => {
   if (form.provider === 'codex') return CODEX_EFFORTS
   const m = caps.value?.models.find((x) => x.value === form.model)
@@ -189,6 +200,37 @@ function srcLabel(source: string) {
   const k = SRC[source]
   return k ? t(k) : source
 }
+function stageLabel(id: ProviderStageId) {
+  return t(`config.stage.${id}`)
+}
+function stageHint(id: ProviderStageId) {
+  return t(`config.stageHint.${id}`)
+}
+function supportLabel(supported: boolean) {
+  return supported ? t('config.stageSupported') : t('config.stageUnsupported')
+}
+function supportClass(supported: boolean, active: boolean) {
+  if (!supported) return 'border-default text-dimmed bg-transparent'
+  return active
+    ? 'border-inverted text-highlighted bg-muted'
+    : 'border-success/30 text-success bg-success/10'
+}
+function codexInstallLabel(status: CodexSdkStatus | null) {
+  if (!status) return t('config.codexInstall.unknown')
+  return status.installed ? t('config.codexInstall.installed') : t('config.codexInstall.missing')
+}
+function codexInstallClass(status: CodexSdkStatus | null) {
+  if (!status) return 'text-dimmed'
+  return status.installed ? 'text-success' : 'text-error'
+}
+function codexAuthLabel(status: CodexSdkStatus | null) {
+  return t(`config.codexAuth.${status?.authStatus || 'unknown'}`)
+}
+function codexAuthClass(status: CodexSdkStatus | null) {
+  if (status?.authStatus === 'authenticated') return 'text-success'
+  if (status?.authStatus === 'missing') return 'text-warning'
+  return 'text-dimmed'
+}
 </script>
 
 <template>
@@ -210,7 +252,12 @@ function srcLabel(source: string) {
 
     <!-- 模型 -->
     <section class="mt-8">
-      <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-3">{{ $t('config.providerSection') }}</div>
+      <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
+        <div>
+          <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed">{{ $t('config.providerSection') }}</div>
+          <p class="text-xs text-dimmed mt-1">{{ $t('config.selectedProvider', { provider: selectedProviderLabel }) }}</p>
+        </div>
+      </div>
       <div class="inline-flex border border-default rounded overflow-hidden">
         <button
           class="px-3 py-1.5 text-sm border-r border-default"
@@ -223,10 +270,63 @@ function srcLabel(source: string) {
           @click="form.provider = 'codex'"
         >{{ $t('config.providerCodex') }}</button>
       </div>
+
+      <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] max-w-4xl">
+        <div class="border border-default rounded overflow-hidden">
+          <div class="grid grid-cols-[minmax(0,1fr)_5.5rem_5.5rem] gap-2 px-3 py-2 border-b border-default bg-muted/40 text-[10px] uppercase tracking-[0.12em] text-dimmed">
+            <span>{{ $t('config.stageColumn') }}</span>
+            <span>{{ $t('config.providerClaude') }}</span>
+            <span>{{ $t('config.providerCodex') }}</span>
+          </div>
+          <div v-if="capsPending && !capabilityStages.length" class="px-3 py-3 text-xs text-dimmed">{{ $t('config.loadingCapabilities') }}</div>
+          <div
+            v-for="stage in capabilityStages"
+            :key="stage.id"
+            class="grid grid-cols-[minmax(0,1fr)_5.5rem_5.5rem] gap-2 px-3 py-2 border-b border-default last:border-b-0 text-sm"
+          >
+            <div class="min-w-0">
+              <div class="text-sm text-highlighted">{{ stageLabel(stage.id) }}</div>
+              <div class="text-[11px] text-dimmed leading-snug">
+                {{ stageHint(stage.id) }}
+                <span v-if="!stage.providerControlled"> · {{ $t('config.notProviderControlled') }}</span>
+              </div>
+            </div>
+            <div>
+              <span class="inline-flex items-center rounded border px-2 py-0.5 text-[11px]" :class="supportClass(stage.claude, form.provider === 'claude')">
+                {{ supportLabel(stage.claude) }}
+              </span>
+            </div>
+            <div>
+              <span class="inline-flex items-center rounded border px-2 py-0.5 text-[11px]" :class="supportClass(stage.codex, form.provider === 'codex')">
+                {{ supportLabel(stage.codex) }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div class="border border-default rounded p-3 self-start">
+          <div class="flex items-center justify-between gap-3">
+            <div class="text-[10px] uppercase tracking-[0.12em] text-dimmed">{{ $t('config.codexSdkStatus') }}</div>
+            <span v-if="codexStatus?.sdkVersion" class="font-mono text-[10px] text-dimmed">v{{ codexStatus.sdkVersion }}</span>
+          </div>
+          <div class="mt-3 space-y-2 text-sm">
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-xs text-dimmed">{{ $t('config.codexSdkInstalled') }}</span>
+              <span class="text-xs font-medium" :class="codexInstallClass(codexStatus)">{{ codexInstallLabel(codexStatus) }}</span>
+            </div>
+            <div class="flex items-center justify-between gap-3">
+              <span class="text-xs text-dimmed">{{ $t('config.codexAuthenticated') }}</span>
+              <span class="text-xs font-medium" :class="codexAuthClass(codexStatus)">{{ codexAuthLabel(codexStatus) }}</span>
+            </div>
+          </div>
+          <p class="mt-3 text-[11px] leading-relaxed text-dimmed">{{ codexStatus?.detail || $t('config.codexStatusUnknown') }}</p>
+        </div>
+      </div>
     </section>
 
     <section v-if="form.provider === 'claude'" class="mt-8">
-      <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-3">{{ $t('config.modelSection') }}</div>
+      <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-2">{{ $t('config.claudeModelSection') }}</div>
+      <p class="text-xs text-dimmed mb-3 max-w-2xl">{{ $t('config.claudeModelHint') }}</p>
       <div class="space-y-1 max-w-2xl">
         <button
           v-for="m in modelOptions"
@@ -255,11 +355,12 @@ function srcLabel(source: string) {
     </section>
 
     <section v-else class="mt-8">
-      <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-3">{{ $t('config.codexModelSection') }}</div>
+      <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-2">{{ $t('config.codexModelSection') }}</div>
+      <p class="text-xs text-dimmed mb-3 max-w-2xl">{{ $t('config.codexModelHint') }}</p>
       <label class="block max-w-xl">
         <span class="text-xs text-dimmed">{{ $t('config.codexModelLabel') }}</span>
         <input v-model="form.model" class="w-full text-sm font-mono border-b border-default focus:border-inverted outline-none py-1" :placeholder="$t('config.codexModelPlaceholder')" />
-        <span class="block text-xs text-dimmed mt-1">{{ $t('config.codexModelHint') }}</span>
+        <span class="block text-xs text-dimmed mt-1">{{ $t('config.codexModelFieldHint') }}</span>
       </label>
       <div class="mt-4">
         <span class="text-xs text-dimmed">{{ $t('config.effortLabel') }}</span>
