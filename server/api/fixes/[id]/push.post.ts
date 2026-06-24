@@ -6,7 +6,7 @@ import { z } from 'zod'
 import { schema } from '~core/db/client'
 import { fetchReviewsCount } from '~core/github/gh'
 import { isChatting } from '~core/fix/pipeline'
-import { fixChangesDiff, fixChangesStat } from '~core/fix/changes'
+import { fixChangesDiff, fixChangesStat, hasUploadable } from '~core/fix/changes'
 import { genCommitMessage } from '~core/fix/commitmsg'
 
 const pexec = promisify(execFile)
@@ -36,11 +36,8 @@ export default defineEventHandler(async (event) => {
   const git = (args: string[]) => pexec('git', ['-C', wt, ...args], { maxBuffer: 64 * 1024 * 1024 })
   const now = () => new Date().toISOString()
 
-  // 有可上传的东西吗：worktree 脏（未提交改动）或本地 HEAD 领先上次 push 的 sha
-  const { stdout: porcelain } = await git(['status', '--porcelain'])
-  const dirty = !!porcelain.trim()
-  const { stdout: headOut } = await git(['rev-parse', 'HEAD']).catch(() => ({ stdout: '' }))
-  const ahead = !!headOut.trim() && headOut.trim() !== fix.lastPushSha
+  // 有可上传的东西吗：worktree 脏（未提交改动）或本地 HEAD 领先 origin/<branch>（已提交未推，含 Claude 自己提交的）
+  const { dirty, ahead } = await hasUploadable(wt, fix.branch)
   if (!dirty && !ahead) throw createError({ statusCode: 400, statusMessage: '没有可上传的改动' })
 
   // ── 预览：待上传 diff + 生成的 commit message + 统计，不提交不推送 ──

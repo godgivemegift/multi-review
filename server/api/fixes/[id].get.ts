@@ -1,7 +1,7 @@
 import { asc, eq } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
 import { schema } from '~core/db/client'
-import { fixChangesStat, worktreeDirty } from '~core/fix/changes'
+import { fixChangesStat, hasUploadable } from '~core/fix/changes'
 import { isChatting } from '~core/fix/pipeline'
 
 // 修复任务详情：fix 行 + 对话轮 + 事件日志 + 实时改动统计。纯对话版（无 findings）。
@@ -30,11 +30,11 @@ export default defineEventHandler(async (event) => {
   let hasUnpushed = !!fix.fixHeadSha && fix.fixHeadSha !== fix.lastPushSha
   let stat = { filesChanged: fix.filesChanged ?? 0, additions: fix.additions ?? 0, deletions: fix.deletions ?? 0 }
   if (!busy && fix.worktreePath && existsSync(fix.worktreePath)) {
-    const [dirty, s] = await Promise.all([
-      worktreeDirty(fix.worktreePath).catch(() => false),
+    const [up, s] = await Promise.all([
+      hasUploadable(fix.worktreePath, fix.branch).catch(() => ({ dirty: false, ahead: false })),
       fixChangesStat(fix.worktreePath).catch(() => stat),
     ])
-    hasUnpushed = hasUnpushed || dirty
+    hasUnpushed = up.dirty || up.ahead // 工作树脏 或 本地领先 origin（含 Claude 自己 commit 的）
     stat = s
   }
 

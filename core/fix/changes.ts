@@ -50,10 +50,18 @@ async function untracked(wt: string): Promise<{ diff: string; numstat: string }>
   return { diff, numstat }
 }
 
-// worktree 是否有未提交改动（含未跟踪文件）→ 「有东西可上传」的判定之一
-export async function worktreeDirty(wt: string): Promise<boolean> {
-  const { stdout } = await git(wt, ['status', '--porcelain'])
-  return !!stdout.trim()
+// 「有东西可上传」检测：工作树脏（未提交改动，含未跟踪文件） 或 本地 HEAD 领先 origin/<branch>
+// （已提交未推，含 Claude 自己 commit/merge 出来的提交）。后者不能只看 DB 里的 fixHeadSha——
+// 对话不再更新它，而 Claude 有全套 git、会自己动提交，DB 值会过期。
+export async function hasUploadable(wt: string, branch: string | null): Promise<{ dirty: boolean; ahead: boolean }> {
+  const { stdout: porcelain } = await git(wt, ['status', '--porcelain']).catch(() => ({ stdout: '' }))
+  const dirty = !!porcelain.trim()
+  let ahead = false
+  if (branch) {
+    const { stdout } = await git(wt, ['rev-list', '--count', `origin/${branch}..HEAD`]).catch(() => ({ stdout: '0' }))
+    ahead = (Number(stdout.trim()) || 0) > 0
+  }
+  return { dirty, ahead }
 }
 
 // 文件数 + 增删行（状态行/确认框用，不需要完整 diff 文本）
