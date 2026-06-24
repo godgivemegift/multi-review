@@ -37,7 +37,9 @@ export default defineEventHandler(async (event) => {
     localPath: project.localPath,
     reposDir: cfg.reposDir as string,
     methodology: rc.methodology,
-    model: rc.claudeModel,
+    provider: rc.provider,
+    model: rc.model,
+    claudeModel: rc.claudeModel,
     effort: rc.effort,
     lang: fix.lang || 'zh',
   })

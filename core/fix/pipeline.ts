@@ -8,14 +8,19 @@ import { cockpitBus } from '../events'
 import { prepareWorktree, removeWorktree } from '../git/worktree'
 import { fetchTimeline, fetchReviewComments } from '../github/gh'
 import { claudeChatRunner, claudeFixRunner, claudeValidateRunner } from '../agent/claudeRunners'
+import { codexFixRunner } from '../agent/codexFix'
 import { codexValidateRunner } from '../agent/codexValidate'
-import type { FixItem, ReviewProvider, ValidateRunner } from '../agent/runners'
+import type { FixItem, FixRunner, ReviewProvider, ValidateRunner } from '../agent/runners'
 import type { ChildProcess } from 'node:child_process'
 
 const pexec = promisify(execFile)
 
 export function selectValidateRunner(provider?: ReviewProvider): ValidateRunner {
   return provider === 'codex' ? codexValidateRunner : claudeValidateRunner
+}
+
+export function selectFixRunner(provider?: ReviewProvider): FixRunner {
+  return provider === 'codex' ? codexFixRunner : claudeFixRunner
 }
 
 // 并发锁：job 一进来就占（spawn 前就生效），直到整个 job（含 commit/db 收尾）结束才释放。
@@ -235,9 +240,11 @@ async function runFixPhase(ctx: FixJobCtx) {
       note: f.note,
     }))
     const fix = h.row()
-    const { costUsd, sessionId, results } = await claudeFixRunner.runFix({
+    const fixRunner = selectFixRunner(ctx.provider)
+    const { costUsd, sessionId, results } = await fixRunner.runFix({
       cwd: wt.path,
-      model: ctx.claudeModel || ctx.model,
+      model: ctx.provider === 'codex' ? ctx.model : ctx.claudeModel || ctx.model,
+      effort: ctx.effort,
       lang: ctx.lang,
       instruction: fix?.instruction ?? null,
       items,
@@ -247,6 +254,13 @@ async function runFixPhase(ctx: FixJobCtx) {
     if (h.gone()) {
       h.emit('error', '任务已被删除，丢弃修复结果')
       return
+    }
+
+    if (ctx.provider === 'codex' && base) {
+      const { stdout: headAfterRunner } = await git(wt.path, ['rev-parse', 'HEAD'])
+      if (headAfterRunner.trim() !== base) {
+        throw new Error('Codex fix must leave commits to Node; HEAD changed before Node commit')
+      }
     }
 
     // 逐条回填反馈

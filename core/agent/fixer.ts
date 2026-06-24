@@ -36,7 +36,7 @@ export type FixChatResult = {
   text: string
 }
 
-const FixResultSchema = z.object({
+export const FixResultSchema = z.object({
   results: z
     .array(
       z.object({
@@ -51,11 +51,50 @@ const FixResultSchema = z.object({
 export type FixAgentOptions = {
   cwd: string
   model: string
+  effort?: string
   lang: string
   instruction: string | null // 任务级指示（建任务时的 prompt 框）
   items: FixItem[]
   onTool?: (name: string, info: string) => void
   onText?: (text: string) => void
+}
+
+export function buildFixPrompt(opts: FixAgentOptions & { toolMode?: 'claude' | 'codex' }): string {
+  const itemsBlock = opts.items
+    .map((it) => {
+      const lines = [
+        `### [${it.idx}] ${it.title}`,
+        it.location ? `Location: ${it.location}` : '',
+        `Verdict from validation: ${it.verdict}`,
+        it.reason ? `Why: ${it.reason}` : '',
+        it.note?.trim() ? `Reviewer instruction (FOLLOW THIS FIRST): ${it.note.trim()}` : '',
+      ]
+      return lines.filter(Boolean).join('\n')
+    })
+    .join('\n\n')
+  const toolBlock =
+    opts.toolMode === 'codex'
+      ? `TOOLS: You may edit files in this workspace and run local commands to inspect code and run tests.
+- Do NOT push, post comments, reply to GitHub, or mutate any remote service.
+- Do NOT run git add, git commit, git push, gh pr review/comment/merge, or gh api mutations.
+- Leave all edits unstaged and uncommitted. The Node process will inspect the diff, commit it, and update fixHeadSha.
+- Match the existing code style. Keep changes minimal and targeted — fix ONLY the findings below.`
+      : `TOOLS: You have the full toolset — Bash, gh, network (WebFetch/WebSearch), and file edits. Work like you would in a terminal: run gh / tests / git as needed.
+- The engine also auto-commits your edits at the end and the user uploads from the UI, so you don't have to commit/push yourself (you may, but you don't need to). When done, say it's ready to upload.
+- Match the existing code style. Keep changes minimal and targeted — fix ONLY the findings below.`
+
+  return `You are a senior engineer fixing your own pull request from validated review findings.
+You are inside a git worktree checked out at the PR branch HEAD (the current directory).
+
+${toolBlock}
+${opts.instruction?.trim() ? `\nTask-level instruction from the reviewer (applies to everything):\n${opts.instruction.trim()}\n` : ''}
+## Findings to fix
+${itemsBlock}
+
+When you are done, output ONLY one JSON object (no code fences, no commentary) as your final message:
+{ "results": [ { "idx": <number from the [n] header>, "status": "fixed|failed|skipped", "text": "what you changed and why (or why you could not)" } ] }
+Every finding above MUST appear exactly once in results. ${outputLangClause(opts.lang)}
+Inside JSON string values never use unescaped double quotes — use backticks or guillemets.`
 }
 
 export async function runFixAgent(opts: FixAgentOptions): Promise<FixAgentResult> {
@@ -69,33 +108,7 @@ export async function runFixAgent(opts: FixAgentOptions): Promise<FixAgentResult
     ...(DISALLOWED.length ? ['--disallowedTools', DISALLOWED.join(',')] : []),
   ]
 
-  const itemsBlock = opts.items
-    .map((it) => {
-      const lines = [
-        `### [${it.idx}] ${it.title}`,
-        it.location ? `Location: ${it.location}` : '',
-        `Verdict from validation: ${it.verdict}`,
-        it.reason ? `Why: ${it.reason}` : '',
-        it.note?.trim() ? `Reviewer instruction (FOLLOW THIS FIRST): ${it.note.trim()}` : '',
-      ]
-      return lines.filter(Boolean).join('\n')
-    })
-    .join('\n\n')
-
-  const prompt = `You are a senior engineer fixing your own pull request from validated review findings.
-You are inside a git worktree checked out at the PR branch HEAD (the current directory).
-
-TOOLS: You have the full toolset — Bash, gh, network (WebFetch/WebSearch), and file edits. Work like you would in a terminal: run gh / tests / git as needed.
-- The engine also auto-commits your edits at the end and the user uploads from the UI, so you don't have to commit/push yourself (you may, but you don't need to). When done, say it's ready to upload.
-- Match the existing code style. Keep changes minimal and targeted — fix ONLY the findings below.
-${opts.instruction?.trim() ? `\nTask-level instruction from the reviewer (applies to everything):\n${opts.instruction.trim()}\n` : ''}
-## Findings to fix
-${itemsBlock}
-
-When you are done, output ONLY one JSON object (no code fences, no commentary) as your final message:
-{ "results": [ { "idx": <number from the [n] header>, "status": "fixed|failed|skipped", "text": "what you changed and why (or why you could not)" } ] }
-Every finding above MUST appear exactly once in results. ${outputLangClause(opts.lang)}
-Inside JSON string values never use unescaped double quotes — use backticks or guillemets.`
+  const prompt = buildFixPrompt(opts)
 
   let liveText = ''
   const { costUsd, result, sessionId } = await runClaudeStream(args, {
