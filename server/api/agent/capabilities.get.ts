@@ -1,10 +1,12 @@
 import { getCapabilities } from '~core/agent/capabilities'
 import { getCodexSdkStatus } from '~core/agent/codexStatus'
+import { getCodexModels } from '~core/agent/codexModels'
 import { PROVIDER_CAPABILITY_STAGES } from '~core/agent/providerCapabilities'
 
 export default defineEventHandler(async (event) => {
   const force = getQuery(event).force === '1'
-  const codex = await getCodexSdkStatus(force)
+  // codex 状态 + codex 真实可用模型（从 `codex debug models` 读，不硬编码）
+  const [codex, codexModels] = await Promise.all([getCodexSdkStatus(force), getCodexModels(force)])
   try {
     return {
       ...(await getCapabilities(force)),
@@ -12,6 +14,7 @@ export default defineEventHandler(async (event) => {
         stages: PROVIDER_CAPABILITY_STAGES,
       },
       codex,
+      codexModels,
     }
   } catch (e) {
     // 拿不到就给个保底（别名总能用）
@@ -25,6 +28,7 @@ export default defineEventHandler(async (event) => {
         stages: PROVIDER_CAPABILITY_STAGES,
       },
       codex,
+      codexModels,
       error: (e as Error).message,
     }
   }
