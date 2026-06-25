@@ -2,6 +2,7 @@ import { spawn } from 'node:child_process'
 import { createRequire } from 'node:module'
 import { readFile } from 'node:fs/promises'
 import { dirname, join, parse } from 'node:path'
+import { resolveCodexExecutable } from './codexAgent'
 
 export type CodexAuthStatus = 'authenticated' | 'missing' | 'unknown'
 
@@ -24,78 +25,42 @@ export async function getCodexSdkStatus(force = false): Promise<CodexSdkStatus> 
 }
 
 async function resolveCodexSdkStatus(): Promise<CodexSdkStatus> {
-  let Codex: typeof import('@openai/codex-sdk').Codex
+  const sdkVersion = await resolveCodexSdkVersion()
+  // installed = 平台 CLI 二进制能解析到（用与运行时一致的解析逻辑，nitro 打包后也准）。
+  const executablePath = resolveCodexExecutable()
 
-  try {
-    ;({ Codex } = await import('@openai/codex-sdk'))
-  } catch (error) {
+  if (!executablePath) {
     return {
       installed: false,
       authStatus: 'unknown',
-      detail: error instanceof Error ? error.message : String(error),
+      sdkVersion,
+      detail: '找不到 Codex CLI 二进制。请确认 `pnpm install` 装上了 @openai/codex 的平台包，或设置 CODEX_EXECUTABLE 指向 codex 可执行文件。',
     }
   }
 
-  const sdkVersion = await resolveCodexSdkVersion()
+  const envAuthenticated = Boolean(
+    process.env.CODEX_API_KEY || process.env.OPENAI_API_KEY || process.env.CODEX_ACCESS_TOKEN,
+  )
+  if (envAuthenticated) {
+    return {
+      installed: true,
+      authStatus: 'authenticated',
+      sdkVersion,
+      detail: 'Codex API credentials are present in the server environment.',
+    }
+  }
 
   try {
-    const codex = new Codex()
-    const executablePath = (codex as unknown as { exec?: { executablePath?: string } }).exec?.executablePath
-
-    const envAuthenticated = Boolean(
-      process.env.CODEX_API_KEY || process.env.OPENAI_API_KEY || process.env.CODEX_ACCESS_TOKEN,
-    )
-
-    if (envAuthenticated) {
-      return {
-        installed: true,
-        authStatus: 'authenticated',
-        sdkVersion,
-        detail: 'Codex API credentials are present in the server environment.',
-      }
-    }
-
-    if (!executablePath) {
-      return {
-        installed: true,
-        authStatus: 'unknown',
-        sdkVersion,
-        detail: 'Codex SDK loaded, but its CLI binary path was not exposed.',
-      }
-    }
-
     const login = await runCodexLoginStatus(executablePath)
     if (login.ok && /logged in/i.test(login.output)) {
-      return {
-        installed: true,
-        authStatus: 'authenticated',
-        sdkVersion,
-        detail: login.output.split('\n')[0] || 'Codex login is configured.',
-      }
+      return { installed: true, authStatus: 'authenticated', sdkVersion, detail: login.output.split('\n')[0] || 'Codex login is configured.' }
     }
-
     if (login.ok) {
-      return {
-        installed: true,
-        authStatus: 'missing',
-        sdkVersion,
-        detail: login.output.split('\n')[0] || 'Codex login is not configured.',
-      }
+      return { installed: true, authStatus: 'missing', sdkVersion, detail: login.output.split('\n')[0] || 'Codex login is not configured.' }
     }
-
-    return {
-      installed: true,
-      authStatus: 'unknown',
-      sdkVersion,
-      detail: login.output || 'Codex SDK loaded, but login status could not be checked.',
-    }
+    return { installed: true, authStatus: 'unknown', sdkVersion, detail: login.output || 'Codex CLI found, but login status could not be checked.' }
   } catch (error) {
-    return {
-      installed: true,
-      authStatus: 'unknown',
-      sdkVersion,
-      detail: error instanceof Error ? error.message : String(error),
-    }
+    return { installed: true, authStatus: 'unknown', sdkVersion, detail: error instanceof Error ? error.message : String(error) }
   }
 }
 

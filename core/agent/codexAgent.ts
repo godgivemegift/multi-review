@@ -1,3 +1,5 @@
+import { existsSync, readdirSync } from 'node:fs'
+import { join } from 'node:path'
 import { Codex, type ModelReasoningEffort, type ThreadEvent } from '@openai/codex-sdk'
 import { extractCodexErrorMessage } from './codexErrors'
 
@@ -8,9 +10,65 @@ export function toCodexEffort(effort?: string): ModelReasoningEffort | undefined
   return undefined
 }
 
+// 平台 → Rust target triple（Codex 二进制放在 vendor/<triple>/bin/codex 下）。
+const CODEX_TARGET_TRIPLE: Record<string, string> = {
+  'darwin-arm64': 'aarch64-apple-darwin',
+  'darwin-x64': 'x86_64-apple-darwin',
+  'linux-arm64': 'aarch64-unknown-linux-musl',
+  'linux-x64': 'x86_64-unknown-linux-musl',
+  'win32-arm64': 'aarch64-pc-windows-msvc',
+  'win32-x64': 'x86_64-pc-windows-msvc',
+}
+
+// 从「项目真实 node_modules」(process.cwd()) 按文件查 Codex CLI 二进制路径。
+// 为什么需要：nitro 生产构建只把 @openai/codex-sdk 的 JS 打进 .output，没带平台二进制包
+// （@openai/codex 及 @openai/codex-<platform>-<arch>）。SDK 自带解析基于打包后的 import.meta.url，
+// 在 .output 里找不到二进制 → new Codex() 会抛「Unable to locate Codex CLI binaries」。
+// 这里直接在 node_modules 里按文件找二进制，跟打包方式无关；找到后显式传给 codexPathOverride。
+// 不用 require.resolve：@openai/codex-sdk 是 ESM-only、exports 不暴露 package.json，CJS 解析会失败。
+function codexBinCandidates(triple: string, binName: string): string[] {
+  const cwd = process.cwd()
+  const key = `${process.platform}-${process.arch}`
+  const out: string[] = []
+  // pnpm store：.pnpm/@openai+codex@<ver>-<platform>-<arch>/node_modules/@openai/codex/vendor/<triple>/bin/codex
+  const pnpmDir = join(cwd, 'node_modules', '.pnpm')
+  try {
+    for (const entry of readdirSync(pnpmDir)) {
+      if (entry.startsWith('@openai+codex@') && entry.endsWith(`-${key}`)) {
+        out.push(join(pnpmDir, entry, 'node_modules', '@openai', 'codex', 'vendor', triple, 'bin', binName))
+      }
+    }
+  } catch { /* 没有 .pnpm 目录（非 pnpm 布局）→ 走下面的 hoisted 候选 */ }
+  // npm/yarn 扁平布局
+  out.push(join(cwd, 'node_modules', '@openai', `codex-${key}`, 'vendor', triple, 'bin', binName))
+  out.push(join(cwd, 'node_modules', '@openai', 'codex', 'vendor', triple, 'bin', binName))
+  return out
+}
+
+let _codexBin: string | null | undefined
+export function resolveCodexExecutable(): string | undefined {
+  if (_codexBin !== undefined) return _codexBin ?? undefined
+  const envBin = process.env.CODEX_EXECUTABLE
+  if (envBin && existsSync(envBin)) return (_codexBin = envBin)
+  const triple = CODEX_TARGET_TRIPLE[`${process.platform}-${process.arch}`]
+  if (triple) {
+    const binName = process.platform === 'win32' ? 'codex.exe' : 'codex'
+    for (const cand of codexBinCandidates(triple, binName)) {
+      if (existsSync(cand)) return (_codexBin = cand)
+    }
+  }
+  _codexBin = null
+  return undefined
+}
+
 // 有本地 OpenAI key 就用 key；否则交给 Codex CLI 的本地登录（不覆盖 env，让它继承 gh/codex 凭据）。
+// codexPathOverride：显式指向解析到的二进制，绕开 nitro 打包后找不到二进制的问题。
 export function newCodex(): Codex {
-  return new Codex({ ...(process.env.OPENAI_API_KEY ? { apiKey: process.env.OPENAI_API_KEY } : {}) })
+  const executablePath = resolveCodexExecutable()
+  return new Codex({
+    ...(executablePath ? { codexPathOverride: executablePath } : {}),
+    ...(process.env.OPENAI_API_KEY ? { apiKey: process.env.OPENAI_API_KEY } : {}),
+  })
 }
 
 // 禁止的本地/远端写操作：git 写、gh 的 review/comment/merge 等、以及 gh api 的写方法。
