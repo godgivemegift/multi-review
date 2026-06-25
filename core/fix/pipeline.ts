@@ -156,7 +156,12 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
       const wt = await ensureWorktree(ctx, h)
       const fix = h.row()
       let stopped = false
-      let newSessionId: string | null = fix?.sessionId ?? null
+      // session 按 provider 各存各的列：claude→session_id，codex→codex_session_id。
+      // 切换 provider 时各自 resume 自己的线程，不会拿对方的 id 去 resume（避免报错 / 串上下文 / 混用）。
+      const saveSession = (sid: string | null): { sessionId?: string | null; codexSessionId?: string | null } =>
+        ctx.provider === 'codex' ? { codexSessionId: sid } : { sessionId: sid }
+      const resumeId: string | null = (ctx.provider === 'codex' ? fix?.codexSessionId : fix?.sessionId) ?? null
+      let newSessionId: string | null = resumeId
       const headBeforeCodex = ctx.provider === 'codex' ? await currentHead(wt.path) : null
       try {
         const chatRunner = selectChatRunner(ctx.provider)
@@ -165,14 +170,14 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
           model: ctx.model,
           effort: ctx.effort,
           lang: ctx.lang,
-          sessionId: fix?.sessionId ?? null,
+          sessionId: resumeId,
           message,
           conflictHint: await conflictHint(wt.path),
           onSpawn: (cp) => activeChats.set(fixId, cp),
           onStop: (stop) => activeChatStops.set(fixId, stop),
           onSessionId: (sessionId) => {
             newSessionId = sessionId
-            db.update(schema.fixes).set({ sessionId, updatedAt: h.now() }).where(eq(schema.fixes.id, fixId)).run()
+            db.update(schema.fixes).set({ ...saveSession(sessionId), updatedAt: h.now() }).where(eq(schema.fixes.id, fixId)).run()
           },
           onTool: (name, info) => h.emit('tool', `${name} ${info}`), // 工具调用 → tool 事件 → 实时进日志 + 内联步骤
           onText: (t) => {
@@ -207,7 +212,7 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
       const up = await hasUploadable(wt.path, ctx.branch).catch(() => ({ dirty: false, ahead: false }))
       const cur = h.row()
       const nextStatus = (up.dirty || up.ahead) ? 'ready' : (cur?.status === 'pushed' ? 'pushed' : 'open')
-      db.update(schema.fixes).set({ status: nextStatus, error: null, sessionId: newSessionId, updatedAt: h.now() }).where(eq(schema.fixes.id, fixId)).run()
+      db.update(schema.fixes).set({ status: nextStatus, error: null, ...saveSession(newSessionId), updatedAt: h.now() }).where(eq(schema.fixes.id, fixId)).run()
       h.emit('chat', stopped ? 'stopped' : 'done')
     } catch (e) {
       activeChats.delete(fixId)

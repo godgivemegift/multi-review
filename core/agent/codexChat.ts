@@ -1,6 +1,6 @@
-import { Codex, type ThreadEvent, type ThreadOptions } from '@openai/codex-sdk'
+import { type ThreadEvent, type ThreadOptions } from '@openai/codex-sdk'
 import { classifyCodexError, extractCodexErrorMessage, formatCodexProviderError } from './codexErrors'
-import { isForbiddenRemoteOrGitMutation, toCodexEffort } from './codexAgent'
+import { isForbiddenRemoteOrGitMutation, newCodex, toCodexEffort } from './codexAgent'
 import { outputLangClause } from './lang'
 import type { ChatRunner } from './runners'
 import type { FixChatOptions, FixChatResult } from './fixer'
@@ -87,9 +87,8 @@ function emitCodexChatEvent(
 export async function runCodexChat(opts: FixChatOptions): Promise<FixChatResult> {
   const runTurn = async (sessionId: string | null): Promise<FixChatResult> => {
     const runOpts = { ...opts, sessionId }
-    const codex = new Codex({
-      ...(process.env.OPENAI_API_KEY ? { apiKey: process.env.OPENAI_API_KEY } : {}),
-    })
+    // 用共享的 newCodex()：它带 codexPathOverride，绕开 nitro 打包后找不到二进制的问题。
+    const codex = newCodex()
     const effort = toCodexEffort(runOpts.effort)
     const threadOptions: ThreadOptions = {
       ...(runOpts.model ? { model: runOpts.model } : {}),

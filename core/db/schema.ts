@@ -183,6 +183,7 @@ export const fixes = sqliteTable('fixes', {
   additions: integer('additions'),
   deletions: integer('deletions'),
   sessionId: text('session_id'), // claude stream-json 的会话 id（后续 --resume 续聊）
+  codexSessionId: text('codex_session_id'), // codex thread id（resumeThread 续聊）；与 claude 各存各的，切换 provider 不混用
   lastUploadAt: text('last_upload_at'), // 上次上传时间 → 「审核已更新」基线（M3）
   costUsd: real('cost_usd'),
   error: text('error'),
