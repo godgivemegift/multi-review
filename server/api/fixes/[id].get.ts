@@ -24,6 +24,24 @@ export default defineEventHandler(async (event) => {
     .orderBy(asc(schema.fixEvents.ts))
     .all()
 
+  // 自愈孤儿流式轮：流式轮存在 ⟺ isChatting 为真（job 同步先占锁再建轮），唯一例外是进程已死
+  // （重启/被杀，内存锁没了但 DB 里轮还停在 streaming）。这种情况收尾成 stopped，并据可上传状态把
+  // fix 改成 ready/open（流式轮是最新一轮，盖过了之前可能残留的 error）。前端每次 load 都会调这里
+  // （打开抽屉 / 点停止后），所以刷新或点停止就能把「永远 Working、停止无效」解开。
+  const last = turns[turns.length - 1] as any
+  if (last && last.role === 'assistant' && last.status === 'streaming' && !isChatting(id) && fix.status !== 'pushing') {
+    let up = { dirty: false, ahead: false }
+    if (fix.worktreePath && existsSync(fix.worktreePath)) {
+      up = await hasUploadable(fix.worktreePath, fix.branch).catch(() => ({ dirty: false, ahead: false }))
+    }
+    const next = (up.dirty || up.ahead) ? 'ready' : (fix.status === 'pushed' ? 'pushed' : 'open')
+    d.update(schema.fixTurns).set({ status: 'stopped' }).where(eq(schema.fixTurns.id, last.id)).run()
+    d.update(schema.fixes).set({ status: next, error: null, updatedAt: new Date().toISOString() }).where(eq(schema.fixes.id, id)).run()
+    last.status = 'stopped'
+    ;(fix as any).status = next
+    ;(fix as any).error = null
+  }
+
   // 对话/上传进行中就别去碰 worktree（和 agent 抢；git status 读到的也是半截状态）
   const busy = fix.status === 'pushing' || isChatting(id)
   // 「有改动可上传」= worktree 脏（Claude 改了还没提交） 或 本地 HEAD 领先上次 push（遗留的已提交未推）
