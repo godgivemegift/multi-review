@@ -228,6 +228,13 @@
     "codexSdkInstalled": "SDK 安装",
     "codexAuthenticated": "认证",
     "codexStatusUnknown": "还没有读到 Codex SDK 状态。",
+    "claudeStatus": "Claude 状态",
+    "claudeCli": "本地 Claude",
+    "claudeModels": "可用模型",
+    "claudeReady": "可用",
+    "claudeUnavailable": "不可用",
+    "claudeStatusReady": "本地 claude 可用，{n} 个模型",
+    "claudeStatusUnknown": "Claude 状态未知。",
     "codexInstall": {
       "installed": "已安装",
       "missing": "未安装",

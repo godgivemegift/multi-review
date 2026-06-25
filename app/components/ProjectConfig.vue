@@ -13,8 +13,15 @@ type AgentCapabilities = {
   models: ModelCap[]
   providers?: { stages: ProviderCapabilityStage[] }
   codex?: CodexSdkStatus
+  error?: string // 实时读本地 claude 失败时由后端带回（用于 Claude 状态卡）
 }
 const CODEX_EFFORTS = ['low', 'medium', 'high', 'xhigh']
+// Codex 没有模型枚举接口（不像本地 claude），给一组常用预设 + 「全局默认」，统一用列表组件展示。
+const CODEX_MODELS: ModelCap[] = [
+  { value: 'gpt-5-codex', displayName: 'gpt-5-codex', description: 'Codex 专用（推荐）', supportsEffort: true, effortLevels: CODEX_EFFORTS },
+  { value: 'gpt-5', displayName: 'gpt-5', description: '通用旗舰', supportsEffort: true, effortLevels: CODEX_EFFORTS },
+  { value: 'gpt-5-mini', displayName: 'gpt-5-mini', description: '更快更省', supportsEffort: true, effortLevels: CODEX_EFFORTS },
+]
 
 // 表单（项目信息 + 模型）
 const form = reactive({
@@ -36,7 +43,22 @@ const modelOptions = computed<ModelCap[]>(() => [
 ])
 const capabilityStages = computed(() => caps.value?.providers?.stages ?? [])
 const codexStatus = computed<CodexSdkStatus | null>(() => caps.value?.codex ?? null)
+// Claude 状态：本地 claude 能列出模型且无 error = 可用（与 Codex 状态卡对称展示）。
+const claudeStatus = computed(() => {
+  const modelCount = caps.value?.models?.length ?? 0
+  const ready = !caps.value?.error && modelCount > 0
+  const detail = caps.value?.error
+    ? caps.value.error
+    : ready ? t('config.claudeStatusReady', { n: modelCount }) : ''
+  return { ready, modelCount, detail }
+})
 const selectedProviderLabel = computed(() => form.provider === 'codex' ? t('config.providerCodex') : t('config.providerClaude'))
+// 统一的模型列表：claude 用本地真实可用模型；codex 用预设列表。都带「全局默认」。
+const codexModelOptions = computed<ModelCap[]>(() => [
+  { value: '', displayName: t('config.globalDefault'), description: t('config.codexModelPlaceholder'), supportsEffort: false, effortLevels: [] },
+  ...CODEX_MODELS,
+])
+const activeModelOptions = computed<ModelCap[]>(() => form.provider === 'codex' ? codexModelOptions.value : modelOptions.value)
 const effortOptions = computed(() => {
   if (form.provider === 'codex') return CODEX_EFFORTS
   const m = caps.value?.models.find((x) => x.value === form.model)
@@ -306,32 +328,54 @@ function codexAuthClass(status: CodexSdkStatus | null) {
           </div>
         </div>
 
+        <!-- provider 状态卡：跟随当前选择的 provider（Claude/Codex 对称展示） -->
         <div class="border border-default rounded p-3 self-start">
-          <div class="flex items-center justify-between gap-3">
-            <div class="text-[10px] uppercase tracking-[0.12em] text-dimmed">{{ $t('config.codexSdkStatus') }}</div>
-            <span v-if="codexStatus?.sdkVersion" class="font-mono text-[10px] text-dimmed">v{{ codexStatus.sdkVersion }}</span>
-          </div>
-          <div class="mt-3 space-y-2 text-sm">
+          <!-- Codex -->
+          <template v-if="form.provider === 'codex'">
             <div class="flex items-center justify-between gap-3">
-              <span class="text-xs text-dimmed">{{ $t('config.codexSdkInstalled') }}</span>
-              <span class="text-xs font-medium" :class="codexInstallClass(codexStatus)">{{ codexInstallLabel(codexStatus) }}</span>
+              <div class="text-[10px] uppercase tracking-[0.12em] text-dimmed">{{ $t('config.codexSdkStatus') }}</div>
+              <span v-if="codexStatus?.sdkVersion" class="font-mono text-[10px] text-dimmed">v{{ codexStatus.sdkVersion }}</span>
             </div>
-            <div class="flex items-center justify-between gap-3">
-              <span class="text-xs text-dimmed">{{ $t('config.codexAuthenticated') }}</span>
-              <span class="text-xs font-medium" :class="codexAuthClass(codexStatus)">{{ codexAuthLabel(codexStatus) }}</span>
+            <div class="mt-3 space-y-2 text-sm">
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-xs text-dimmed">{{ $t('config.codexSdkInstalled') }}</span>
+                <span class="text-xs font-medium" :class="codexInstallClass(codexStatus)">{{ codexInstallLabel(codexStatus) }}</span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-xs text-dimmed">{{ $t('config.codexAuthenticated') }}</span>
+                <span class="text-xs font-medium" :class="codexAuthClass(codexStatus)">{{ codexAuthLabel(codexStatus) }}</span>
+              </div>
             </div>
-          </div>
-          <p class="mt-3 text-[11px] leading-relaxed text-dimmed">{{ codexStatus?.detail || $t('config.codexStatusUnknown') }}</p>
+            <p class="mt-3 text-[11px] leading-relaxed text-dimmed">{{ codexStatus?.detail || $t('config.codexStatusUnknown') }}</p>
+          </template>
+          <!-- Claude -->
+          <template v-else>
+            <div class="text-[10px] uppercase tracking-[0.12em] text-dimmed">{{ $t('config.claudeStatus') }}</div>
+            <div class="mt-3 space-y-2 text-sm">
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-xs text-dimmed">{{ $t('config.claudeCli') }}</span>
+                <span class="text-xs font-medium" :class="claudeStatus.ready ? 'text-success' : 'text-error'">
+                  {{ claudeStatus.ready ? $t('config.claudeReady') : $t('config.claudeUnavailable') }}
+                </span>
+              </div>
+              <div class="flex items-center justify-between gap-3">
+                <span class="text-xs text-dimmed">{{ $t('config.claudeModels') }}</span>
+                <span class="text-xs font-medium text-dimmed">{{ claudeStatus.modelCount }}</span>
+              </div>
+            </div>
+            <p class="mt-3 text-[11px] leading-relaxed text-dimmed">{{ claudeStatus.detail || $t('config.claudeStatusUnknown') }}</p>
+          </template>
         </div>
       </div>
     </section>
 
-    <section v-if="form.provider === 'claude'" class="mt-8">
-      <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-2">{{ $t('config.claudeModelSection') }}</div>
-      <p class="text-xs text-dimmed mb-3 max-w-2xl">{{ $t('config.claudeModelHint') }}</p>
+    <!-- 模型列表：同一个组件，跟随 provider（claude=本地真实模型；codex=预设列表） -->
+    <section class="mt-8">
+      <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-2">{{ form.provider === 'codex' ? $t('config.codexModelSection') : $t('config.claudeModelSection') }}</div>
+      <p class="text-xs text-dimmed mb-3 max-w-2xl">{{ form.provider === 'codex' ? $t('config.codexModelHint') : $t('config.claudeModelHint') }}</p>
       <div class="space-y-1 max-w-2xl">
         <button
-          v-for="m in modelOptions"
+          v-for="m in activeModelOptions"
           :key="m.value"
           class="w-full text-left flex items-start gap-3 px-3 py-2 rounded border transition-colors"
           :class="form.model === m.value ? 'border-inverted bg-muted' : 'border-default hover:border-accented'"
@@ -354,23 +398,6 @@ function codexAuthClass(status: CodexSdkStatus | null) {
         </select>
       </div>
       <p v-else class="text-xs text-dimmed mt-3">{{ $t('config.noEffortSupport') }}</p>
-    </section>
-
-    <section v-else class="mt-8">
-      <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed mb-2">{{ $t('config.codexModelSection') }}</div>
-      <p class="text-xs text-dimmed mb-3 max-w-2xl">{{ $t('config.codexModelHint') }}</p>
-      <label class="block max-w-xl">
-        <span class="text-xs text-dimmed">{{ $t('config.codexModelLabel') }}</span>
-        <input v-model="form.model" class="w-full text-sm font-mono border-b border-default focus:border-inverted outline-none py-1" :placeholder="$t('config.codexModelPlaceholder')" />
-        <span class="block text-xs text-dimmed mt-1">{{ $t('config.codexModelFieldHint') }}</span>
-      </label>
-      <div class="mt-4">
-        <span class="text-xs text-dimmed">{{ $t('config.effortLabel') }}</span>
-        <select v-model="form.effort" class="block text-sm border-b border-default py-1 bg-transparent outline-none min-w-32">
-          <option value="">{{ $t('config.effortNone') }}</option>
-          <option v-for="e in effortOptions" :key="e" :value="e">{{ e }}</option>
-        </select>
-      </div>
     </section>
 
     <div class="mt-6 flex items-center gap-4">

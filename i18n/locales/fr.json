@@ -228,6 +228,13 @@
     "codexSdkInstalled": "SDK installé",
     "codexAuthenticated": "Auth",
     "codexStatusUnknown": "Le statut du SDK Codex n'est pas encore chargé.",
+    "claudeStatus": "Statut Claude",
+    "claudeCli": "Claude local",
+    "claudeModels": "Modèles",
+    "claudeReady": "Prêt",
+    "claudeUnavailable": "Indisponible",
+    "claudeStatusReady": "Claude local disponible · {n} modèles",
+    "claudeStatusUnknown": "Statut Claude inconnu.",
     "codexInstall": {
       "installed": "Installé",
       "missing": "Absent",
