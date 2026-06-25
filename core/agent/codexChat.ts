@@ -79,7 +79,9 @@ function emitCodexChatEvent(
   } else if (item.type === 'web_search') {
     onTool?.('CodexWebSearch', item.query.slice(0, 100))
   } else if (item.type === 'error') {
-    throw new CodexChatError(`Codex chat item failed: ${item.message}`)
+    // ErrorItem 在 SDK 里是「非致命」错误（如 codex 插件 hooks 解析告警）。出日志、不中断本轮。
+    // 真正致命的是 turn.failed / 顶层 error 事件（上面已抛）/ 本轮无最终输出（调用方兜底）。
+    onTool?.('CodexWarning', item.message.slice(0, 140))
   }
   return null
 }
