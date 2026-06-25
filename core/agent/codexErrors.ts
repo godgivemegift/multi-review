@@ -29,7 +29,8 @@ export function previewRawOutput(raw: string): string {
 export function classifyCodexError(error: unknown): CodexFailureKind {
   const message = rawCodexErrorMessage(error)
   if (/abort|aborted|cancel|cancelled|interrupted|SIGINT|SIGTERM|signal/i.test(message)) return 'interrupted'
-  if (/no session|session .*not found|thread .*not found|conversation .*not found|resume.*not found|invalid.*thread|invalid.*session|codex.*sessions/i.test(message)) return 'invalid_thread'
+  // codex 的措辞：resume 一个本地没有 rollout（会话文件）的 thread id → 当作失效线程，开新线程重试。
+  if (/no session|session .*not found|thread .*not found|conversation .*not found|resume.*not found|invalid.*thread|invalid.*session|codex.*sessions|no rollout|rollout .*not found|thread\/resume/i.test(message)) return 'invalid_thread'
   if (/auth|api[_ -]?key|unauthorized|forbidden|401|403|login|oauth/i.test(message)) return 'auth'
   if (/json|schema|parse|unexpected token/i.test(message)) return 'json'
   return 'runtime'

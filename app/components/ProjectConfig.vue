@@ -13,15 +13,10 @@ type AgentCapabilities = {
   models: ModelCap[]
   providers?: { stages: ProviderCapabilityStage[] }
   codex?: CodexSdkStatus
+  codexModels?: ModelCap[] // 从 `codex debug models` 动态拉取的当前账号真实可用模型
   error?: string // 实时读本地 claude 失败时由后端带回（用于 Claude 状态卡）
 }
-const CODEX_EFFORTS = ['low', 'medium', 'high', 'xhigh']
-// Codex 没有模型枚举接口（不像本地 claude），给一组常用预设 + 「全局默认」，统一用列表组件展示。
-const CODEX_MODELS: ModelCap[] = [
-  { value: 'gpt-5-codex', displayName: 'gpt-5-codex', description: 'Codex 专用（推荐）', supportsEffort: true, effortLevels: CODEX_EFFORTS },
-  { value: 'gpt-5', displayName: 'gpt-5', description: '通用旗舰', supportsEffort: true, effortLevels: CODEX_EFFORTS },
-  { value: 'gpt-5-mini', displayName: 'gpt-5-mini', description: '更快更省', supportsEffort: true, effortLevels: CODEX_EFFORTS },
-]
+const CODEX_EFFORTS = ['low', 'medium', 'high', 'xhigh'] // 选「全局默认」时的兜底档
 
 // 表单（项目信息 + 模型）
 const form = reactive({
@@ -53,16 +48,18 @@ const claudeStatus = computed(() => {
   return { ready, modelCount, detail }
 })
 const selectedProviderLabel = computed(() => form.provider === 'codex' ? t('config.providerCodex') : t('config.providerClaude'))
-// 统一的模型列表：claude 用本地真实可用模型；codex 用预设列表。都带「全局默认」。
+// 统一的模型列表：claude 用本地真实可用模型；codex 用 `codex debug models` 动态拉取的真实模型。都带「全局默认」。
 const codexModelOptions = computed<ModelCap[]>(() => [
   { value: '', displayName: t('config.globalDefault'), description: t('config.codexModelPlaceholder'), supportsEffort: false, effortLevels: [] },
-  ...CODEX_MODELS,
+  ...(caps.value?.codexModels ?? []),
 ])
 const activeModelOptions = computed<ModelCap[]>(() => form.provider === 'codex' ? codexModelOptions.value : modelOptions.value)
 const effortOptions = computed(() => {
-  if (form.provider === 'codex') return CODEX_EFFORTS
-  const m = caps.value?.models.find((x) => x.value === form.model)
-  return m?.supportsEffort ? m.effortLevels : []
+  const list = form.provider === 'codex' ? (caps.value?.codexModels ?? []) : (caps.value?.models ?? [])
+  const m = list.find((x) => x.value === form.model)
+  if (m) return m.supportsEffort ? m.effortLevels : []
+  // 选了「全局默认」（没具体模型）：codex 给通用兜底档，claude 不显示
+  return form.provider === 'codex' ? CODEX_EFFORTS : []
 })
 watch(() => form.model, () => { if (!effortOptions.value.includes(form.effort)) form.effort = '' })
 watch(() => form.provider, () => {

@@ -1,6 +1,6 @@
-import { Codex, type ThreadEvent, type ThreadOptions } from '@openai/codex-sdk'
+import { type ThreadEvent, type ThreadOptions } from '@openai/codex-sdk'
 import { classifyCodexError, extractCodexErrorMessage, formatCodexProviderError } from './codexErrors'
-import { isForbiddenRemoteOrGitMutation, toCodexEffort } from './codexAgent'
+import { isForbiddenRemoteOrGitMutation, newCodex, toCodexEffort } from './codexAgent'
 import { outputLangClause } from './lang'
 import type { ChatRunner } from './runners'
 import type { FixChatOptions, FixChatResult } from './fixer'
@@ -79,7 +79,9 @@ function emitCodexChatEvent(
   } else if (item.type === 'web_search') {
     onTool?.('CodexWebSearch', item.query.slice(0, 100))
   } else if (item.type === 'error') {
-    throw new CodexChatError(`Codex chat item failed: ${item.message}`)
+    // ErrorItem 在 SDK 里是「非致命」错误（如 codex 插件 hooks 解析告警）。出日志、不中断本轮。
+    // 真正致命的是 turn.failed / 顶层 error 事件（上面已抛）/ 本轮无最终输出（调用方兜底）。
+    onTool?.('CodexWarning', item.message.slice(0, 140))
   }
   return null
 }
@@ -87,9 +89,8 @@ function emitCodexChatEvent(
 export async function runCodexChat(opts: FixChatOptions): Promise<FixChatResult> {
   const runTurn = async (sessionId: string | null): Promise<FixChatResult> => {
     const runOpts = { ...opts, sessionId }
-    const codex = new Codex({
-      ...(process.env.OPENAI_API_KEY ? { apiKey: process.env.OPENAI_API_KEY } : {}),
-    })
+    // 用共享的 newCodex()：它带 codexPathOverride，绕开 nitro 打包后找不到二进制的问题。
+    const codex = newCodex()
     const effort = toCodexEffort(runOpts.effort)
     const threadOptions: ThreadOptions = {
       ...(runOpts.model ? { model: runOpts.model } : {}),

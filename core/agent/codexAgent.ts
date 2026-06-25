@@ -104,7 +104,9 @@ function emitReadonlyEvent(event: ThreadEvent, label: string, onTool?: (name: st
   } else if (item.type === 'agent_message') {
     return item.text
   } else if (item.type === 'error') {
-    throw new Error(`Codex ${label} item failed: ${item.message}`)
+    // ErrorItem 在 SDK 里是「非致命」错误（如 codex 插件 hooks 解析告警）。出日志、不中断。
+    // 致命情况由 turn.failed / 顶层 error 事件（上面已抛）或「无最终输出」（调用方抛）兜底。
+    onTool?.('CodexWarning', item.message.slice(0, 140))
   }
   return null
 }
