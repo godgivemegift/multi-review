@@ -165,8 +165,8 @@ export type GuidedReviewAgentOptions = {
   onTool?: (name: string, info: string) => void
 }
 
-export async function runGuidedReviewAgent(opts: GuidedReviewAgentOptions): Promise<{ result: GuidedResult; costUsd: number }> {
-  const prompt = `你在一个 git worktree 里（已 checkout PR #${opts.prNumber} 分支 ${opts.branch} 并合并 ${opts.defaultBranch}）。这是一次**带审核员反馈的针对性复审**，不是从零重审。
+export function buildGuidedReviewPrompt(opts: GuidedReviewAgentOptions): string {
+  return `你在一个 git worktree 里（已 checkout PR #${opts.prNumber} 分支 ${opts.branch} 并合并 ${opts.defaultBranch}）。这是一次**带审核员反馈的针对性复审**，不是从零重审。
 
 审核员对上一轮的反馈：
 - 审核指令（重点看这里，针对性审我提到的内容）：${opts.instruction || '（无）'}
@@ -197,7 +197,10 @@ ${JSON.stringify(opts.existing, null, 2)}
 
 ${outputLangClause(opts.lang || 'zh')}
 ⚠️ 严格合法 JSON：字符串里**绝不要未转义的英文双引号 \`"\`**，引用一律用「」或反引号 \`。`
+}
 
+export async function runGuidedReviewAgent(opts: GuidedReviewAgentOptions): Promise<{ result: GuidedResult; costUsd: number }> {
+  const prompt = buildGuidedReviewPrompt(opts)
   const stream = query({
     prompt,
     options: {

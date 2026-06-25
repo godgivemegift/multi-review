@@ -68,7 +68,6 @@ const ctx: FixJobCtx = {
   reposDir: path.dirname(wt),
   provider: 'claude',
   model: 'sonnet',
-  claudeModel: 'sonnet',
   lang: 'zh',
 }
 
@@ -84,6 +83,7 @@ try {
   rmSync(wt, { recursive: true, force: true })
 }
 
-assert.equal(fixRow.status, 'ready')
-assert.equal(fixRow.error, undefined)
+// 统一行为（不分 provider）：聊天轮真出错 → fix 标 error + 错误信息落库 + 该轮 error。
+assert.equal(fixRow.status, 'error')
+assert.equal(fixRow.error, 'claude runtime failed')
 assert.equal(turns.at(-1)?.status, 'error')

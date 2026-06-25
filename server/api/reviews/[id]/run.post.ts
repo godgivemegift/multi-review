@@ -57,7 +57,6 @@ export default defineEventHandler(async (event) => {
     reposDir: cfg.reposDir as string,
     provider: rc.provider,
     model: rc.model,
-    claudeModel: rc.claudeModel,
     effort: rc.effort,
     lang: getCookie(event, 'mr-locale') || 'zh',
     guided: !fresh,

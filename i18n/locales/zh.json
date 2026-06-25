@@ -246,19 +246,19 @@
       "publish_reply": "发评论 / 回复翻译"
     },
     "stageHint": {
-      "review": "创建 PR review draft findings。",
-      "fix_chat": "通过聊天在常驻修复 worktree 内改代码，上传仍走现有 Node 路径。",
-      "recheck": "当前仍固定走 Claude recheck runner。",
-      "skill_generation": "当前仍由 Claude 读取项目并生成方法学。",
-      "publish_reply": "GitHub push/reply 仍由现有 Node endpoint 和 Claude 翻译处理。"
+      "review": "创建 PR review draft findings，跟随项目 Provider。",
+      "fix_chat": "通过聊天在常驻修复 worktree 内改代码，跟随项目 Provider；上传仍走现有 Node 路径。",
+      "recheck": "作者更新后复审，跟随项目 Provider。",
+      "skill_generation": "读取项目生成 / 优化审核方法学，跟随项目 Provider。",
+      "publish_reply": "发评论的中→英翻译跟随项目 Provider；GitHub 提交动作仍走现有 Node endpoint。"
     },
     "modelSection": "审核模型（你本地 claude 真实可用）",
     "claudeModelSection": "Claude 模型",
-    "claudeModelHint": "这个列表只在 Provider 选择 Claude 时用于首审和修复任务聊天；Codex 模型字段不会读取这里。",
+    "claudeModelHint": "Provider 选择 Claude 时，这个模型用于全部阶段（首审 / 复审 / 反馈复审 / Skill 生成 / 修复聊天 / 发评论翻译）。Codex 模型字段不会读取这里。",
     "codexModelSection": "Codex 模型",
     "codexModelLabel": "Codex 模型",
     "codexModelPlaceholder": "使用 CODEX_MODEL 或 Codex 默认",
-    "codexModelHint": "这个字段只在 Provider 选择 Codex 时用于首审和修复任务聊天。复审、Skill 生成、发评论/回复翻译还没有接入 Codex。",
+    "codexModelHint": "Provider 选择 Codex 时，这个模型用于全部阶段（首审 / 复审 / 反馈复审 / Skill 生成 / 修复聊天 / 发评论翻译）。发评论的翻译也由 Codex 产出，不与 Claude 混用。",
     "codexModelFieldHint": "留空时使用 CODEX_MODEL 或 Codex SDK 默认模型。",
     "globalDefault": "全局默认",
     "useEnvDefault": "用 .env 里的默认模型",

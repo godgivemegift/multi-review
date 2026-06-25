@@ -4,6 +4,8 @@ import { writeFile, rm, mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { runClaude } from '../agent/claudeCli'
+import { runCodexText } from '../agent/codexAgent'
+import type { ReviewProvider } from '../agent/runners'
 
 const pexec = promisify(execFile)
 
@@ -76,27 +78,34 @@ function parseLoc(loc: string | null): { path: string; line: number } | null {
   return { path: m[1]!, line: Number(m[2]) }
 }
 
-// 把中文 findings 翻成英文 PR 评论正文（GitHub 对外内容用英文）
-// 一次 claude --print 调用（用 runClaude：stdin=/dev/null，避免 server 里等 stdin 卡死/失败）。
+// 把中文 findings 翻成英文 PR 评论正文（GitHub 对外内容用英文）。一次性文本生成。
+// 按项目 provider 分流：claude 走 `claude --print`（stdin 喂 prompt，避免 server 里等 stdin 卡死）；
+// codex 走 Codex SDK 的一次性 run()。**不混用**：codex 项目的翻译也由 codex 产出。
 async function claudePrint(model: string, prompt: string): Promise<string> {
   const out = await runClaude(['--print', '--model', model || 'sonnet'], { input: prompt, timeout: 120_000 })
   return String(out).trim()
 }
+function makePrint(provider: ReviewProvider, model: string, cwd?: string): (prompt: string) => Promise<string> {
+  if (provider === 'codex') return (prompt) => runCodexText({ prompt, model: model || undefined, cwd })
+  return (prompt) => claudePrint(model, prompt)
+}
 
 // 每条 finding 独立并行翻译（每个调用输出小、几秒）→ 墙钟 ≈ 最慢的一条，而非全部串起来。
 async function translate(
+  provider: ReviewProvider,
   model: string,
-  _effort: string,
+  cwd: string | undefined,
   findings: PostFinding[],
   globalNotes: string,
 ): Promise<{ globalNotesEn: string; bodies: Record<string, string> }> {
+  const print = makePrint(provider, model, cwd)
   const tasks: Promise<void>[] = []
   const bodies: Record<string, string> = {}
   let globalNotesEn = ''
 
   if (globalNotes.trim()) {
     tasks.push(
-      claudePrint(model, `Translate this PR-review preface (any source language) into concise professional English. Output ONLY the English text, no preamble:\n\n${globalNotes}`)
+      print(`Translate this PR-review preface (any source language) into concise professional English. Output ONLY the English text, no preamble:\n\n${globalNotes}`)
         .then((t) => { globalNotesEn = t }),
     )
   }
@@ -147,7 +156,7 @@ Format: a bold line "**[<severity>] <title>**", then the problem, then detail (k
 FINDING (source language):
 ${JSON.stringify(one)}`
     }
-    tasks.push(claudePrint(model, prompt).then((t) => { bodies[f.fid] = strip(t) }))
+    tasks.push(print(prompt).then((t) => { bodies[f.fid] = strip(t) }))
   }
 
   // 单条翻译失败不毁掉整次发布：失败的 finding 在 assemble 时回退到原标题
@@ -164,13 +173,14 @@ export type AssembledReview = {
 }
 
 export async function assembleReview(opts: {
+  provider?: ReviewProvider
   model: string
-  effort?: string
+  cwd?: string // codex 翻译需要一个 workingDirectory（项目本地 clone 路径），缺省则 skipGitRepoCheck
   findings: PostFinding[]
   globalNotes: string
   diff: string
 }): Promise<AssembledReview> {
-  const { globalNotesEn, bodies } = await translate(opts.model, opts.effort || '', opts.findings, opts.globalNotes)
+  const { globalNotesEn, bodies } = await translate(opts.provider === 'codex' ? 'codex' : 'claude', opts.model, opts.cwd, opts.findings, opts.globalNotes)
   const right = rightLines(opts.diff)
 
   const comments: AssembledReview['comments'] = []

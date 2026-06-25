@@ -40,6 +40,7 @@ export async function runFixChat(opts: FixChatOptions): Promise<FixChatResult> {
     '--verbose',
     '--output-format', 'stream-json',
     '--model', opts.model,
+    ...(opts.effort ? ['--effort', opts.effort] : []), // 跟随项目配置的 effort（claude CLI 支持 --effort）
     '--permission-mode', 'acceptEdits',
     '--allowedTools', ALLOWED.join(','),
     ...(DISALLOWED.length ? ['--disallowedTools', DISALLOWED.join(',')] : []),

@@ -1,5 +1,6 @@
-import { Codex, type ModelReasoningEffort, type ThreadEvent, type ThreadOptions } from '@openai/codex-sdk'
+import { Codex, type ThreadEvent, type ThreadOptions } from '@openai/codex-sdk'
 import { classifyCodexError, extractCodexErrorMessage, formatCodexProviderError } from './codexErrors'
+import { isForbiddenRemoteOrGitMutation, toCodexEffort } from './codexAgent'
 import { outputLangClause } from './lang'
 import type { ChatRunner } from './runners'
 import type { FixChatOptions, FixChatResult } from './fixer'
@@ -21,18 +22,6 @@ export function normalizeCodexChatError(error: unknown): CodexChatError {
 
 export function shouldRetryCodexChatWithoutThread(error: unknown, hadSessionId: boolean): boolean {
   return hadSessionId && classifyCodexError(error) === 'invalid_thread'
-}
-
-function toCodexEffort(effort?: string): ModelReasoningEffort | undefined {
-  if (effort === 'low' || effort === 'medium' || effort === 'high' || effort === 'xhigh') return effort
-  if (effort === 'max') return 'xhigh'
-  return undefined
-}
-
-function isForbiddenRemoteOrGitMutation(command: string): boolean {
-  return /\bgit\s+(?:add|commit|push|reset|checkout|switch|merge|rebase|tag)\b/i.test(command)
-    || /\bgh\s+pr\s+(?:review|comment|merge|close|edit|ready|reopen)\b/i.test(command)
-    || /\bgh\s+api\b.*(?:--method|-X)\s*(?:POST|PUT|PATCH|DELETE)\b/i.test(command)
 }
 
 function buildCodexChatPrompt(opts: FixChatOptions): string {

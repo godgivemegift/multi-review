@@ -64,8 +64,7 @@ export type FixJobCtx = {
   localPath: string
   reposDir: string
   provider?: ReviewProvider
-  model: string
-  claudeModel?: string
+  model: string // 当前 provider 的实模型（不混用）
   effort?: string
   lang: string
 }
@@ -161,10 +160,9 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
       const headBeforeCodex = ctx.provider === 'codex' ? await currentHead(wt.path) : null
       try {
         const chatRunner = selectChatRunner(ctx.provider)
-        const selectedModel = ctx.provider === 'codex' ? ctx.model : ctx.claudeModel || ctx.model
         const r = await chatRunner.runChat({
           cwd: wt.path,
-          model: selectedModel,
+          model: ctx.model,
           effort: ctx.effort,
           lang: ctx.lang,
           sessionId: fix?.sessionId ?? null,
@@ -209,18 +207,18 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
       const up = await hasUploadable(wt.path, ctx.branch).catch(() => ({ dirty: false, ahead: false }))
       const cur = h.row()
       const nextStatus = (up.dirty || up.ahead) ? 'ready' : (cur?.status === 'pushed' ? 'pushed' : 'open')
-      db.update(schema.fixes).set({ status: nextStatus, sessionId: newSessionId, updatedAt: h.now() }).where(eq(schema.fixes.id, fixId)).run()
+      db.update(schema.fixes).set({ status: nextStatus, error: null, sessionId: newSessionId, updatedAt: h.now() }).where(eq(schema.fixes.id, fixId)).run()
       h.emit('chat', stopped ? 'stopped' : 'done')
     } catch (e) {
       activeChats.delete(fixId)
       activeChatStops.delete(fixId)
       stopRequested.delete(fixId)
       flushTurn('error')
-      const message = (e as Error).message
-      if (ctx.provider === 'codex') {
-        db.update(schema.fixes).set({ status: 'error', error: message, updatedAt: h.now() }).where(eq(schema.fixes.id, fixId)).run()
-      }
-      h.emit('error', message)
+      const errMsg = (e as Error).message
+      // 出错时两个 provider 一致：fix 标 error + 错误信息落库可见（轮也是 error）。
+      // 已落盘的改动仍留在 worktree，error 状态也允许上传（UPLOADABLE 含 error）。
+      db.update(schema.fixes).set({ status: 'error', error: errMsg, updatedAt: h.now() }).where(eq(schema.fixes.id, fixId)).run()
+      h.emit('error', errMsg)
     }
   } finally {
     // 并发锁直到这里（整个 job 含 db 收尾都结束）才释放，杜绝第二个 chat 在收尾期间挤进来

@@ -246,19 +246,19 @@
       "publish_reply": "Publication / traduction des réponses"
     },
     "stageHint": {
-      "review": "Crée les draft findings de revue PR.",
-      "fix_chat": "Travaille dans le worktree de correction persistant via chat ; l'upload garde le chemin Node existant.",
-      "recheck": "Reste fixé au runner de recheck Claude.",
-      "skill_generation": "Utilise encore Claude pour lire le projet et générer la méthodologie.",
-      "publish_reply": "GitHub push/reply reste dans les endpoints Node existants, avec traduction Claude."
+      "review": "Crée les draft findings de revue PR ; suit le provider du projet.",
+      "fix_chat": "Travaille dans le worktree de correction persistant via chat ; suit le provider du projet. L'upload garde le chemin Node existant.",
+      "recheck": "Re-revue après mise à jour de l'auteur ; suit le provider du projet.",
+      "skill_generation": "Lit le projet pour générer / optimiser la méthodologie ; suit le provider du projet.",
+      "publish_reply": "La traduction zh→en des commentaires suit le provider du projet ; l'action de soumission GitHub reste dans les endpoints Node existants."
     },
     "modelSection": "Modèle de revue (réellement disponible sur ton claude local)",
     "claudeModelSection": "Modèle Claude",
-    "claudeModelHint": "Ce sélecteur s'applique uniquement quand le provider choisi est Claude pour la revue initiale et le chat Fix-PR. Codex ne lit pas ce champ.",
+    "claudeModelHint": "Quand le provider choisi est Claude, ce modèle sert à toutes les étapes (revue initiale / recheck / revue guidée / génération de skill / chat Fix-PR / traduction des commentaires). Codex ne lit pas ce champ.",
     "codexModelSection": "Modèle Codex",
     "codexModelLabel": "Modèle Codex",
     "codexModelPlaceholder": "Utiliser CODEX_MODEL ou le défaut Codex",
-    "codexModelHint": "Ce champ s'applique uniquement quand le provider choisi est Codex pour la revue initiale et le chat Fix-PR. Recheck, génération de skill et publication/traduction des réponses ne sont pas encore branchés sur Codex.",
+    "codexModelHint": "Quand le provider choisi est Codex, ce modèle sert à toutes les étapes (revue initiale / recheck / revue guidée / génération de skill / chat Fix-PR / traduction des commentaires). La traduction des commentaires est aussi produite par Codex — jamais mélangée avec Claude.",
     "codexModelFieldHint": "Laissez vide pour utiliser CODEX_MODEL ou le modèle par défaut du SDK Codex.",
     "globalDefault": "Défaut global",
     "useEnvDefault": "Utiliser le modèle par défaut du .env",

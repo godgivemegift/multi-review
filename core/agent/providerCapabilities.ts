@@ -19,9 +19,9 @@ export type ProviderCapabilityStage = {
 export const PROVIDER_CAPABILITY_STAGES: ProviderCapabilityStage[] = [
   { id: 'review', claude: true, codex: true, providerControlled: true },
   { id: 'fix_chat', claude: true, codex: true, providerControlled: true },
-  { id: 'recheck', claude: true, codex: false, providerControlled: false },
-  { id: 'skill_generation', claude: true, codex: false, providerControlled: false },
-  { id: 'publish_reply', claude: true, codex: false, providerControlled: false },
+  { id: 'recheck', claude: true, codex: true, providerControlled: true },
+  { id: 'skill_generation', claude: true, codex: true, providerControlled: true },
+  { id: 'publish_reply', claude: true, codex: true, providerControlled: true },
 ]
 
 export function providerSupportsStage(provider: ReviewProvider, stageId: ProviderCapabilityStageId): boolean {

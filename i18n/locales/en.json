@@ -246,19 +246,19 @@
       "publish_reply": "Post / reply translation"
     },
     "stageHint": {
-      "review": "Creates draft PR review findings.",
-      "fix_chat": "Works in the persistent fix worktree through chat; upload still uses the existing Node path.",
-      "recheck": "Still fixed to the Claude recheck runner.",
-      "skill_generation": "Still uses Claude to read the project and generate methodology.",
-      "publish_reply": "GitHub push/reply stays in existing Node endpoints, with Claude translation."
+      "review": "Creates draft PR review findings; follows the project provider.",
+      "fix_chat": "Works in the persistent fix worktree through chat; follows the project provider. Upload still uses the existing Node path.",
+      "recheck": "Re-review after the author updates; follows the project provider.",
+      "skill_generation": "Reads the project to generate / optimize methodology; follows the project provider.",
+      "publish_reply": "Comment zh→en translation follows the project provider; the GitHub submit action stays in existing Node endpoints."
     },
     "modelSection": "Review model (actually available on your local claude)",
     "claudeModelSection": "Claude model",
-    "claudeModelHint": "This picker applies only when the selected provider is Claude for initial review and Fix-PR chat. Codex does not read this field.",
+    "claudeModelHint": "When the selected provider is Claude, this model is used for every stage (initial review / recheck / guided review / skill generation / Fix-PR chat / comment translation). Codex does not read this field.",
     "codexModelSection": "Codex model",
     "codexModelLabel": "Codex model",
     "codexModelPlaceholder": "Use CODEX_MODEL or Codex default",
-    "codexModelHint": "This field applies only when the selected provider is Codex for initial review and Fix-PR chat. Recheck, skill generation, and post/reply translation are not Codex-backed yet.",
+    "codexModelHint": "When the selected provider is Codex, this model is used for every stage (initial review / recheck / guided review / skill generation / Fix-PR chat / comment translation). Comment translation is produced by Codex too — never mixed with Claude.",
     "codexModelFieldHint": "Leave empty to use CODEX_MODEL or the Codex SDK default model.",
     "globalDefault": "Global default",
     "useEnvDefault": "Use the default model from .env",
