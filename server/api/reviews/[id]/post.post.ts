@@ -15,7 +15,6 @@ const Body = z.object({
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
-  const cfg = useRuntimeConfig()
   const { dryRun, force } = Body.parse((await readBody(event)) || {})
   const d = db()
 
@@ -72,9 +71,12 @@ export default defineEventHandler(async (event) => {
     assembled = JSON.parse(review.previewJson!) // 命中缓存，不重新翻译
   } else {
     const { diff } = await fetchPrDiff(project.repo, review.prNumber)
+    // 翻译跟随项目 provider（不混用）：claude 用快模型 TRANSLATE_MODEL；codex 用 codex 主模型。
+    const rc = resolveReviewConfig(d, project)
     assembled = await assembleReview({
-      model: cfg.translateModel as string,
-      effort: '',
+      provider: rc.provider,
+      model: rc.translateModel,
+      cwd: project.localPath || undefined,
       findings,
       globalNotes: review.globalNotes || '',
       diff,

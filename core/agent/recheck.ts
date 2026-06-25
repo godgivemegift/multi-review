@@ -33,9 +33,9 @@ export const RecheckSchema = z.object({
 })
 export type RecheckResult = z.infer<typeof RecheckSchema>
 
-type ExistingFinding = { fid: string; title: string; location: string | null; problem: string | null; fix: string | null; notes: string | null }
+export type ExistingFinding = { fid: string; title: string; location: string | null; problem: string | null; fix: string | null; notes: string | null }
 
-export async function runRecheckAgent(opts: {
+export type RecheckAgentOptions = {
   cwd: string
   repo: string
   prNumber: number
@@ -48,12 +48,14 @@ export async function runRecheckAgent(opts: {
   effort?: string
   lang?: string
   onTool?: (name: string, info: string) => void
-}): Promise<{ result: RecheckResult; costUsd: number }> {
+}
+
+export function buildRecheckPrompt(opts: RecheckAgentOptions): string {
   const baseline = opts.lastPostSha
     ? `上次发评论时的 commit 是 ${opts.lastPostSha}。先看 \`git diff ${opts.lastPostSha}..HEAD\` 和 \`git log ${opts.lastPostSha}..HEAD --oneline\`，这是作者在你评论之后改的东西。`
     : `没有记录上次评论的 commit，用 \`git diff origin/${opts.defaultBranch}...HEAD\` 看全部变更。`
 
-  const prompt = `你在一个 git worktree 里（已 checkout 该 PR 最新分支并合并 ${opts.defaultBranch}）。复审 ${opts.repo} 的 PR #${opts.prNumber}。
+  return `你在一个 git worktree 里（已 checkout 该 PR 最新分支并合并 ${opts.defaultBranch}）。复审 ${opts.repo} 的 PR #${opts.prNumber}。
 
 背景需求（这个 PR 本来要做的事，判断"改对没"时对照它）：
 ${opts.requirement?.trim() || '（无记录）'}
@@ -89,7 +91,10 @@ ${JSON.stringify(opts.findings.map((f) => ({ fid: f.fid, title: f.title, locatio
 
 ${outputLangClause(opts.lang || 'zh')}
 ⚠️ 严格合法 JSON：text/problem 等字段里**绝不要未转义的英文双引号 \`"\`**，引用一律用「」或反引号 \`。`
+}
 
+export async function runRecheckAgent(opts: RecheckAgentOptions): Promise<{ result: RecheckResult; costUsd: number }> {
+  const prompt = buildRecheckPrompt(opts)
   const stream = query({
     prompt,
     options: {

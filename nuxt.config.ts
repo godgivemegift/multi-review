@@ -37,6 +37,7 @@ export default defineNuxtConfig({
     // agent / inference
     inferenceProvider: process.env.INFERENCE_PROVIDER || 'claude',
     anthropicModel: process.env.ANTHROPIC_MODEL || 'sonnet',
+    codexModel: process.env.CODEX_MODEL || '',
     recheckModel: process.env.RECHECK_MODEL || process.env.ANTHROPIC_MODEL || 'sonnet',
     // 发评论时把中文翻成英文——机械活，用快模型，不跟审核的重模型/effort 走
     translateModel: process.env.TRANSLATE_MODEL || 'sonnet',

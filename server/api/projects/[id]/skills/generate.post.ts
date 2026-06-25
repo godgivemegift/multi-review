@@ -3,6 +3,7 @@ import { z } from 'zod'
 import { eq } from 'drizzle-orm'
 import { schema } from '~core/db/client'
 import { generateSkill } from '~core/agent/skillgen'
+import { generateSkillCodex } from '~core/agent/codexSkill'
 import { cockpitBus } from '~core/events'
 
 // AI 读本地项目生成/赋能审核 skill。结果存为**新候选**(不激活、不覆盖)，返回新 skill 供预览/对比。
@@ -36,9 +37,11 @@ export default defineEventHandler(async (event) => {
 
   let content: string
   let toolN = 0
+  // 跟随项目 provider（不混用）：codex 项目用 Codex 读项目生成方法学，claude 项目用 Claude。
+  const runGenerate = rc.provider === 'codex' ? generateSkillCodex : generateSkill
   try {
-    emit('stage', `开始调研项目（${rc.model}${rc.effort ? ' · ' + rc.effort : ''}）…`)
-    const res = await generateSkill({
+    emit('stage', `开始调研项目（${rc.provider} · ${rc.model || '默认'}${rc.effort ? ' · ' + rc.effort : ''}）…`)
+    const res = await runGenerate({
       cwd: project.localPath,
       model: rc.model,
       effort: rc.effort,

@@ -8,6 +8,7 @@ import { fetchReviewsCount } from '~core/github/gh'
 import { isChatting } from '~core/fix/pipeline'
 import { fixChangesDiff, fixChangesStat, hasUploadable } from '~core/fix/changes'
 import { genCommitMessage } from '~core/fix/commitmsg'
+import { assertCodexAheadCommitSafe, assertCodexCommitSafe } from '~core/fix/codexCommitSafety'
 
 const pexec = promisify(execFile)
 // 首字符必须字母数字（禁前导 `-`/`.`，防被当 git flag 或路径穿越）
@@ -61,6 +62,23 @@ export default defineEventHandler(async (event) => {
   if (!claimed.changes) throw createError({ statusCode: 409, statusMessage: '该修复正在上传或状态已变，请刷新' })
 
   try {
+    if (project.provider === 'codex') {
+      if (dirty) {
+        const { stdout: porcelain } = await git(['status', '--porcelain'])
+        assertCodexCommitSafe(porcelain)
+      }
+      if (ahead) {
+        const [{ stdout: head }, { stdout: nameStatus }] = await Promise.all([
+          git(['rev-parse', 'HEAD']),
+          git(['diff', '--name-status', `origin/${fix.branch}..HEAD`]),
+        ])
+        assertCodexAheadCommitSafe({
+          currentHead: head.trim() || null,
+          fixHeadSha: fix.fixHeadSha ?? null,
+          nameStatus,
+        })
+      }
+    }
     if (dirty) {
       let msg = (message || '').trim()
       if (!msg) {

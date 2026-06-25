@@ -9,12 +9,14 @@
     "preview": "nuxt preview",
     "postinstall": "nuxt prepare",
     "db:studio": "drizzle-kit studio",
-    "typecheck": "nuxt typecheck"
+    "typecheck": "nuxt typecheck",
+    "test": "for f in tests/*.test.ts tests/*.contract.ts; do echo \"▸ $f\"; tsx \"$f\" || exit 1; done"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.132",
     "@nuxt/ui": "^4.7.0",
     "@nuxtjs/i18n": "^10.4.0",
+    "@openai/codex-sdk": "0.142.0",
     "better-sqlite3": "^11.3.0",
     "dompurify": "^3.4.7",
     "drizzle-orm": "^0.45.0",
@@ -30,6 +32,7 @@
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.7.0",
     "drizzle-kit": "^0.31.0",
+    "tsx": "^4.22.3",
     "typescript": "^5.6.0"
   },
   "packageManager": "pnpm@9.12.0"

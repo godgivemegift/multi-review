@@ -10,24 +10,37 @@ import { outputLangClause } from './lang'
 const ALLOWED = ['Read', 'Grep', 'Glob', 'Edit', 'Write', 'Bash', 'WebFetch', 'WebSearch', 'TodoWrite']
 const DISALLOWED: string[] = []
 
-// 对话：在 worktree 里 --resume 续上 sessionId 的会话（所以 agent 记得自己刚才改了什么）。
-// 极简原生 prompt：只交代环境与「别 commit」的分工，其余靠 Claude 自己判断。
-// 返回纯文本回复（chat 是自由对话，不解析 JSON）+ 新 sessionId（resume 后可能轮换）。
-export async function runFixChat(opts: {
+export type FixChatOptions = {
   cwd: string
   model: string
+  effort?: string
   lang: string
   sessionId: string | null // 有就 --resume；没有就开新会话
   message: string
+  conflictHint?: string
   onSpawn?: (cp: import('node:child_process').ChildProcess) => void
+  onStop?: (stop: () => void) => void
+  onSessionId?: (sessionId: string) => void
   onText?: (text: string) => void
   onTool?: (name: string, info: string) => void
-}): Promise<{ costUsd: number; sessionId: string | null; text: string }> {
+}
+
+export type FixChatResult = {
+  costUsd: number
+  sessionId: string | null
+  text: string
+}
+
+// 对话：在 worktree 里 --resume 续上 sessionId 的会话（所以 agent 记得自己刚才改了什么）。
+// 极简原生 prompt：只交代环境与「别 commit」的分工，其余靠 Claude 自己判断。
+// 返回纯文本回复（chat 是自由对话，不解析 JSON）+ 新 sessionId（resume 后可能轮换）。
+export async function runFixChat(opts: FixChatOptions): Promise<FixChatResult> {
   const args = [
     '-p',
     '--verbose',
     '--output-format', 'stream-json',
     '--model', opts.model,
+    ...(opts.effort ? ['--effort', opts.effort] : []), // 跟随项目配置的 effort（claude CLI 支持 --effort）
     '--permission-mode', 'acceptEdits',
     '--allowedTools', ALLOWED.join(','),
     ...(DISALLOWED.length ? ['--disallowedTools', DISALLOWED.join(',')] : []),
@@ -35,6 +48,7 @@ export async function runFixChat(opts: {
   if (opts.sessionId) args.push('--resume', opts.sessionId)
 
   const prompt = `You're working on this pull request inside its git worktree (the current directory is the PR branch checked out). Make the changes the reviewer asks for by editing files directly.
+${opts.conflictHint ? `\n${opts.conflictHint}\n` : ''}
 
 You have the full toolset — bash, git, gh, network, tests — so investigate the PR whenever it helps (e.g. \`gh pr view\`, run the tests).
 

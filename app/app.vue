@@ -36,7 +36,7 @@ async function createProject() {
 
 <template>
   <UApp :toaster="{ position: 'top-right' }">
-    <div class="h-screen flex flex-col bg-default text-default antialiased">
+    <div class="h-[100dvh] min-h-[100dvh] flex flex-col bg-default text-default antialiased">
       <!-- 顶部 header：左 logo / 右 控件簇（语言切换 + 深浅色） -->
       <header class="h-16 shrink-0 border-b border-default flex items-center justify-between px-6">
         <NuxtLink to="/" class="flex items-center gap-2.5">
@@ -49,10 +49,10 @@ async function createProject() {
         </div>
       </header>
 
-      <div class="flex flex-1 min-h-0">
+      <div class="flex flex-1 min-h-0 flex-col md:flex-row">
         <!-- 左侧导航 -->
-        <aside class="w-60 shrink-0 border-r border-default flex flex-col">
-          <div class="px-6 pt-5 pb-3 flex items-center justify-between">
+        <aside class="w-full md:w-60 shrink-0 border-b md:border-b-0 md:border-r border-default flex flex-col md:min-h-0 max-h-44 md:max-h-none">
+          <div class="px-4 md:px-6 pt-4 md:pt-5 pb-3 flex items-center justify-between">
             <span class="text-xs font-medium uppercase tracking-[0.15em] text-muted">{{ $t('layout.projectsTitle') }}</span>
             <button
               class="text-dimmed hover:text-highlighted transition-colors text-lg leading-none"
@@ -63,12 +63,12 @@ async function createProject() {
             </button>
           </div>
 
-          <nav class="flex-1 overflow-y-auto px-3 space-y-px">
+          <nav class="flex-1 overflow-x-auto overflow-y-hidden md:overflow-x-hidden md:overflow-y-auto px-3 pb-3 md:pb-0 flex md:block gap-2 md:gap-0 md:space-y-px">
             <NuxtLink
               v-for="p in projects"
               :key="p.id"
               :to="`/projects/${p.id}`"
-              class="block px-3 py-2.5 transition-colors border-l-2"
+              class="block w-52 md:w-auto shrink-0 px-3 py-2.5 transition-colors border-b-2 md:border-b-0 md:border-l-2"
               :class="route.params.id === p.id
                 ? 'border-inverted text-highlighted'
                 : 'border-transparent text-muted hover:text-highlighted'"
@@ -76,7 +76,7 @@ async function createProject() {
               <div class="truncate text-sm font-medium">{{ p.name }}</div>
               <div class="text-xs text-dimmed truncate mt-0.5">{{ p.repo }}</div>
             </NuxtLink>
-            <p v-if="!projects?.length" class="px-3 py-8 text-xs text-dimmed leading-relaxed">
+            <p v-if="!projects?.length" class="px-3 py-4 md:py-8 text-xs text-dimmed leading-relaxed">
               {{ $t('layout.emptyProjects') }}<br />{{ $t('layout.emptyProjectsHint') }}
             </p>
           </nav>

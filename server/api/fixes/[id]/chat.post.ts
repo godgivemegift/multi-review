@@ -3,8 +3,8 @@ import { z } from 'zod'
 import { schema } from '~core/db/client'
 import { runFixChatJob, isChatting, type FixJobCtx } from '~core/fix/pipeline'
 
-// 对话工作区：验证完（awaiting）就能直接聊、直接让 AI 改代码，不必先跑一轮批量修复。
-// 一个会话就能干完后续精修。awaiting/ready/error/pushed/conflict 可发；同一 fix 同时只允许一个 chat。
+// 对话工作区：fix task 创建后就能直接聊、直接让 AI 改代码，不必先跑一轮批量修复。
+// 一个会话就能干完后续精修。open/ready/error/pushed 可发；同一 fix 同时只允许一个 chat。
 const Body = z.object({ message: z.string().min(1).max(8000) })
 
 export default defineEventHandler(async (event) => {
@@ -33,7 +33,9 @@ export default defineEventHandler(async (event) => {
     defaultBranch: project.defaultBranch,
     localPath: project.localPath,
     reposDir: cfg.reposDir as string,
+    provider: rc.provider,
     model: rc.model,
+    effort: rc.effort,
     lang: fix.lang || 'zh',
   }
   // fire-and-forget：长任务，进度走 SSE；错误已在 job 内部捕获落库。
