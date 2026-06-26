@@ -259,8 +259,9 @@ async function copyWorktree() {
             <div v-if="turn.role === 'user'" class="text-highlighted">
               <span class="text-[10px] uppercase tracking-wider text-dimmed mr-1.5">{{ $t('fix.you') }}</span>{{ turn.content }}
             </div>
-            <div v-else class="text-toned whitespace-pre-wrap leading-relaxed">
-              {{ turn.status === 'streaming' && ti === data.turns.length - 1 && liveAssistant ? liveAssistant : turn.content }}<span v-if="turn.status === 'streaming'" class="animate-pulse">▍</span>
+            <div v-else class="text-toned leading-relaxed">
+              <MarkdownBody :text="turn.status === 'streaming' && ti === data.turns.length - 1 && liveAssistant ? liveAssistant : turn.content" />
+              <span v-if="turn.status === 'streaming'" class="animate-pulse">▍</span>
               <span v-if="turn.status === 'stopped'" class="text-[10px] text-dimmed ml-1">· {{ $t('fix.stoppedTag') }}</span>
               <span v-else-if="turn.status === 'error'" class="text-[10px] text-dimmed ml-1">· {{ $t('common.failed') }}</span>
             </div>

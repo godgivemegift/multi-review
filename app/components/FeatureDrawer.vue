@@ -188,7 +188,13 @@ async function confirmPr() {
         <div ref="scrollEl" class="flex-1 min-h-0 overflow-y-auto space-y-4 pr-1">
           <!-- 对话轮 -->
           <div v-for="(turn, ti) in data?.turns ?? []" :key="turn.id" :class="turn.role === 'user' ? 'text-right' : ''">
-            <div class="inline-block max-w-[92%] text-left text-sm rounded-lg px-3 py-2 whitespace-pre-wrap break-words" :class="turn.role === 'user' ? 'bg-inverted text-inverted' : 'bg-muted'">{{ turn.status === 'streaming' && ti === (data?.turns.length ?? 0) - 1 && liveAssistant ? liveAssistant : turn.content }}<span v-if="turn.status === 'streaming'" class="animate-pulse">▍</span></div>
+            <!-- user：纯文本气泡 -->
+            <div v-if="turn.role === 'user'" class="inline-block max-w-[92%] text-left text-sm rounded-lg px-3 py-2 whitespace-pre-wrap break-words bg-inverted text-inverted">{{ turn.content }}</div>
+            <!-- assistant：markdown 渲染 -->
+            <div v-else class="inline-block max-w-[92%] text-left text-sm rounded-lg px-3 py-2 break-words bg-muted">
+              <MarkdownBody :text="turn.status === 'streaming' && ti === (data?.turns.length ?? 0) - 1 && liveAssistant ? liveAssistant : turn.content" />
+              <span v-if="turn.status === 'streaming'" class="animate-pulse">▍</span>
+            </div>
           </div>
           <div v-if="running" class="text-xs text-toned flex items-center gap-2"><span class="inline-block w-1.5 h-1.5 rounded-full bg-inverted animate-pulse" />{{ status === 'building' ? $t('feature.status.building') : $t('feature.status.analyzing') }}…</div>
 
