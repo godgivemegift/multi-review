@@ -1,11 +1,11 @@
 import { nanoid } from 'nanoid'
 import { eq } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
-import { cockpitBus } from '../events'
 import { runFeaturePlanAgent, renderPlanText, type Plan } from '../agent/featurePlan'
 import { prepareFeatureWorktree } from '../git/worktree'
 import { selectChatRunner } from '../fix/pipeline'
 import { appendTurns } from '../db/turns'
+import { makeEmit } from '../streaming/emit'
 import { sessionFields } from '../agent/session'
 import type { ChildProcess } from 'node:child_process'
 import type { ReviewProvider } from '../agent/runners'
@@ -35,14 +35,8 @@ export type FeaturePlanJobCtx = {
 export async function runFeaturePlanJob(ctx: FeaturePlanJobCtx, message: string): Promise<void> {
   const { db, schema, taskId } = ctx
   const now = () => new Date().toISOString()
-  const emit = (kind: string, msg?: string) => {
-    const ts = now()
-    cockpitBus.emit({ reviewId: featureChan(taskId), ts, kind, message: msg })
-    // 落 feature_events（除高频 text）：打开任务时回填历史日志 + 思考/分析过程留痕，同 fix。
-    if (kind !== 'text') {
-      try { db.insert(schema.featureEvents).values({ id: nanoid(), taskId, ts, kind, message: msg ?? null }).run() } catch { /* 落库失败不影响主流程 */ }
-    }
-  }
+  // 落 feature_events（除高频 text）：打开任务时回填历史日志 + 思考/分析过程留痕，同 fix。
+  const emit = makeEmit({ channel: featureChan(taskId), now, db, eventTable: schema.featureEvents, fkField: 'taskId', fkValue: taskId })
   const task = () => db.select().from(schema.featureTasks).where(eq(schema.featureTasks.id, taskId)).get()
 
   if (jobLocks.has(taskId)) return
@@ -145,14 +139,8 @@ export type FeatureImplJobCtx = {
 export async function runFeatureImplJob(ctx: FeatureImplJobCtx, message: string): Promise<void> {
   const { db, schema, taskId } = ctx
   const now = () => new Date().toISOString()
-  const emit = (kind: string, msg?: string) => {
-    const ts = now()
-    cockpitBus.emit({ reviewId: featureChan(taskId), ts, kind, message: msg })
-    // 落 feature_events（除高频 text）：打开任务时回填历史日志 + 思考/分析过程留痕，同 fix。
-    if (kind !== 'text') {
-      try { db.insert(schema.featureEvents).values({ id: nanoid(), taskId, ts, kind, message: msg ?? null }).run() } catch { /* 落库失败不影响主流程 */ }
-    }
-  }
+  // 落 feature_events（除高频 text）：打开任务时回填历史日志 + 思考/分析过程留痕，同 fix。
+  const emit = makeEmit({ channel: featureChan(taskId), now, db, eventTable: schema.featureEvents, fkField: 'taskId', fkValue: taskId })
   const task = () => db.select().from(schema.featureTasks).where(eq(schema.featureTasks.id, taskId)).get()
   const saveSession = (sid: string | null) => sessionFields(ctx.provider, sid)
 

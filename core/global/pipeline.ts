@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
-import { cockpitBus } from '../events'
 import { appendTurns } from '../db/turns'
+import { makeEmit } from '../streaming/emit'
 import { runGlobalChat } from '../agent/globalChat'
 import type { ChildProcess } from 'node:child_process'
 
@@ -39,7 +39,7 @@ export type GlobalChatJobCtx = {
 export async function runGlobalChatJob(ctx: GlobalChatJobCtx, message: string): Promise<void> {
   const { db, schema, sessionId } = ctx
   const now = () => new Date().toISOString()
-  const emit = (kind: string, msg?: string) => cockpitBus.emit({ reviewId: globalChan(sessionId), ts: now(), kind, message: msg })
+  const emit = makeEmit({ channel: globalChan(sessionId), now }) // global 不落库（不传 eventTable）
   const row = () => db.select().from(schema.globalSessions).where(eq(schema.globalSessions.id, sessionId)).get()
 
   // 并发锁：进函数立即占，整个 job 结束才释放。

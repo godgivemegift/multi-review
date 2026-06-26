@@ -3,13 +3,13 @@ import { eq } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { cockpitBus } from '../events'
 import { prepareWorktree, removeWorktree } from '../git/worktree'
 import { claudeChatRunner } from '../agent/claudeRunners'
 import { codexChatRunner } from '../agent/codexChat'
 import { hasUploadable } from './changes'
 import { computeFixNextStatus } from './status'
 import { appendTurns } from '../db/turns'
+import { makeEmit } from '../streaming/emit'
 import { sessionFields } from '../agent/session'
 import { fetchReviewsCount } from '../github/gh'
 import type { ChildProcess } from 'node:child_process'
@@ -76,15 +76,8 @@ export type FixJobCtx = {
 function helpers(ctx: FixJobCtx) {
   const { db, schema, fixId } = ctx
   const now = () => new Date().toISOString()
-  // 事件走实时总线 + 落 fix_events（供打开任务时回填历史日志，同审核 drawer）。
-  // 'text' 是对话 token 流（高频），只实时不落库，否则一句话几十行垃圾。
-  const emit = (kind: string, message?: string) => {
-    const ts = now()
-    cockpitBus.emit({ reviewId: fixId, ts, kind, message })
-    if (kind !== 'text') {
-      try { db.insert(schema.fixEvents).values({ id: nanoid(), fixId, ts, kind, message: message ?? null }).run() } catch { /* 落库失败不影响主流程 */ }
-    }
-  }
+  // 事件走实时总线 + 落 fix_events（供打开任务时回填历史日志，同审核 drawer）。频道=裸 fixId。
+  const emit = makeEmit({ channel: fixId, now, db, eventTable: schema.fixEvents, fkField: 'fixId', fkValue: fixId })
   const row = () => db.select().from(schema.fixes).where(eq(schema.fixes.id, fixId)).get()
   return { now, emit, row }
 }
