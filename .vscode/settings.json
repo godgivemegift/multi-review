@@ -1,0 +1,20 @@
+{
+    "i18n-ally.localesPaths": [
+        "i18n",
+        "i18n/locales",
+        "data/worktrees/Cwv9BklPFAii0sjeDfajP/apps/web/i18n",
+        "data/worktrees/MIM0PbB_6cK2tzzzdNOkR/apps/web/i18n",
+        "data/worktrees/dI7hFXndcCegldOE7QaOk/apps/web/i18n",
+        "data/worktrees/lVwbrV7pY8hnRp4BmCYI1/apps/web/i18n",
+        "data/worktrees/uYH85uUNc27vSyl-vdI3_/apps/web/i18n",
+        "data/worktrees/zH897XYviE91Jf7rsijFC/apps/web/i18n",
+        "data/worktrees/OkG_Y16neDFT5cbD3xoe7/apps/web/i18n",
+        "data/worktrees/Cwv9BklPFAii0sjeDfajP/apps/web/pages/pretys/transaction/[id]/messages",
+        "data/worktrees/MIM0PbB_6cK2tzzzdNOkR/apps/web/pages/pretys/transaction/[id]/messages",
+        "data/worktrees/dI7hFXndcCegldOE7QaOk/apps/web/pages/pretys/transaction/[id]/messages",
+        "data/worktrees/lVwbrV7pY8hnRp4BmCYI1/apps/web/pages/pretys/transaction/[id]/messages",
+        "data/worktrees/uYH85uUNc27vSyl-vdI3_/apps/web/pages/pretys/transaction/[id]/messages",
+        "data/worktrees/zH897XYviE91Jf7rsijFC/apps/web/pages/pretys/transaction/[id]/messages",
+        "data/worktrees/OkG_Y16neDFT5cbD3xoe7/apps/web/pages/pretys/transaction/[id]/messages"
+    ]
+}

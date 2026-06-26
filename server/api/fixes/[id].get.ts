@@ -2,6 +2,7 @@ import { asc, eq } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
 import { schema } from '~core/db/client'
 import { fixChangesStat, hasUploadable } from '~core/fix/changes'
+import { computeFixNextStatus } from '~core/fix/status'
 import { isChatting } from '~core/fix/pipeline'
 
 // 修复任务详情：fix 行 + 对话轮 + 事件日志 + 实时改动统计。纯对话版（无 findings）。
@@ -34,7 +35,7 @@ export default defineEventHandler(async (event) => {
     if (fix.worktreePath && existsSync(fix.worktreePath)) {
       up = await hasUploadable(fix.worktreePath, fix.branch).catch(() => ({ dirty: false, ahead: false }))
     }
-    const next = (up.dirty || up.ahead) ? 'ready' : (fix.status === 'pushed' ? 'pushed' : 'open')
+    const next = computeFixNextStatus({ dirty: up.dirty, ahead: up.ahead, currentStatus: fix.status })
     d.update(schema.fixTurns).set({ status: 'stopped' }).where(eq(schema.fixTurns.id, last.id)).run()
     d.update(schema.fixes).set({ status: next, error: null, updatedAt: new Date().toISOString() }).where(eq(schema.fixes.id, id)).run()
     last.status = 'stopped'

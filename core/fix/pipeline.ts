@@ -8,6 +8,8 @@ import { prepareWorktree, removeWorktree } from '../git/worktree'
 import { claudeChatRunner } from '../agent/claudeRunners'
 import { codexChatRunner } from '../agent/codexChat'
 import { hasUploadable } from './changes'
+import { computeFixNextStatus } from './status'
+import { sessionFields } from '../agent/session'
 import { fetchReviewsCount } from '../github/gh'
 import type { ChildProcess } from 'node:child_process'
 import type { ChatRunner, ReviewProvider } from '../agent/runners'
@@ -158,8 +160,7 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
       let stopped = false
       // session 按 provider 各存各的列：claude→session_id，codex→codex_session_id。
       // 切换 provider 时各自 resume 自己的线程，不会拿对方的 id 去 resume（避免报错 / 串上下文 / 混用）。
-      const saveSession = (sid: string | null): { sessionId?: string | null; codexSessionId?: string | null } =>
-        ctx.provider === 'codex' ? { codexSessionId: sid } : { sessionId: sid }
+      const saveSession = (sid: string | null) => sessionFields(ctx.provider, sid)
       const resumeId: string | null = (ctx.provider === 'codex' ? fix?.codexSessionId : fix?.sessionId) ?? null
       let newSessionId: string | null = resumeId
       const headBeforeCodex = ctx.provider === 'codex' ? await currentHead(wt.path) : null
@@ -211,7 +212,7 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
       // 只更新 sessionId 供下次续聊；改动统计由 [id].get 用 fixChangesStat 从（含未提交的）worktree 实时算。
       const up = await hasUploadable(wt.path, ctx.branch).catch(() => ({ dirty: false, ahead: false }))
       const cur = h.row()
-      const nextStatus = (up.dirty || up.ahead) ? 'ready' : (cur?.status === 'pushed' ? 'pushed' : 'open')
+      const nextStatus = computeFixNextStatus({ dirty: up.dirty, ahead: up.ahead, currentStatus: cur?.status })
       db.update(schema.fixes).set({ status: nextStatus, error: null, ...saveSession(newSessionId), updatedAt: h.now() }).where(eq(schema.fixes.id, fixId)).run()
       h.emit('chat', stopped ? 'stopped' : 'done')
     } catch (e) {

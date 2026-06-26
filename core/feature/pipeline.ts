@@ -5,6 +5,7 @@ import { cockpitBus } from '../events'
 import { runFeaturePlanAgent, renderPlanText, type Plan } from '../agent/featurePlan'
 import { prepareFeatureWorktree } from '../git/worktree'
 import { selectChatRunner } from '../fix/pipeline'
+import { sessionFields } from '../agent/session'
 import type { ChildProcess } from 'node:child_process'
 import type { ReviewProvider } from '../agent/runners'
 
@@ -155,7 +156,7 @@ export async function runFeatureImplJob(ctx: FeatureImplJobCtx, message: string)
     }
   }
   const task = () => db.select().from(schema.featureTasks).where(eq(schema.featureTasks.id, taskId)).get()
-  const saveSession = (sid: string | null) => (ctx.provider === 'codex' ? { codexSessionId: sid } : { sessionId: sid })
+  const saveSession = (sid: string | null) => sessionFields(ctx.provider, sid)
 
   if (jobLocks.has(taskId)) return
   jobLocks.add(taskId)
