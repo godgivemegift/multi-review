@@ -9,6 +9,7 @@ import { claudeChatRunner } from '../agent/claudeRunners'
 import { codexChatRunner } from '../agent/codexChat'
 import { hasUploadable } from './changes'
 import { computeFixNextStatus } from './status'
+import { appendTurns } from '../db/turns'
 import { sessionFields } from '../agent/session'
 import { fetchReviewsCount } from '../github/gh'
 import type { ChildProcess } from 'node:child_process'
@@ -130,11 +131,7 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
   chatLocks.add(fixId)
 
   // append-only 轮次：user 轮 + assistant 占位轮（流式写入）
-  const maxSeq = (db.select().from(schema.fixTurns).where(eq(schema.fixTurns.fixId, fixId)).all() as any[])
-    .reduce((m: number, t: any) => Math.max(m, t.seq), 0)
-  db.insert(schema.fixTurns).values({ id: nanoid(), fixId, seq: maxSeq + 1, role: 'user', content: message, status: 'done', createdAt: h.now() }).run()
-  const asstId = nanoid()
-  db.insert(schema.fixTurns).values({ id: asstId, fixId, seq: maxSeq + 2, role: 'assistant', content: '', status: 'streaming', createdAt: h.now() }).run()
+  const { assistantId: asstId } = appendTurns({ db, turnTable: schema.fixTurns, fkField: 'fixId', fkValue: fixId, now: h.now, message })
   h.emit('chat', 'user')
 
   // 我介入对话 = 已回应这一轮审核 → 在对话起点把「审核已更新」基线（reviewsAtPush）抬到当前 review 数，清掉红点。

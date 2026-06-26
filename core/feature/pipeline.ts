@@ -5,6 +5,7 @@ import { cockpitBus } from '../events'
 import { runFeaturePlanAgent, renderPlanText, type Plan } from '../agent/featurePlan'
 import { prepareFeatureWorktree } from '../git/worktree'
 import { selectChatRunner } from '../fix/pipeline'
+import { appendTurns } from '../db/turns'
 import { sessionFields } from '../agent/session'
 import type { ChildProcess } from 'node:child_process'
 import type { ReviewProvider } from '../agent/runners'
@@ -46,15 +47,12 @@ export async function runFeaturePlanJob(ctx: FeaturePlanJobCtx, message: string)
 
   if (jobLocks.has(taskId)) return
   jobLocks.add(taskId)
-  const asstId = nanoid()
+  let asstId = '' // appendTurns 里赋值；catch 引用它（失败时为 '' → 更新 0 行，无害）。
 
   // 整段放进 try/finally：哪怕建轮/写库就抛了，也保证锁释放（否则任务永久卡 busy）。
   try {
     // append-only：user 轮 + assistant 占位轮（分析完成后写入方案文本）。
-    const maxSeq = (db.select().from(schema.featureTurns).where(eq(schema.featureTurns.taskId, taskId)).all() as any[])
-      .reduce((m: number, t: any) => Math.max(m, t.seq), 0)
-    db.insert(schema.featureTurns).values({ id: nanoid(), taskId, seq: maxSeq + 1, role: 'user', content: message, status: 'done', createdAt: now() }).run()
-    db.insert(schema.featureTurns).values({ id: asstId, taskId, seq: maxSeq + 2, role: 'assistant', content: '', status: 'streaming', createdAt: now() }).run()
+    asstId = appendTurns({ db, turnTable: schema.featureTurns, fkField: 'taskId', fkValue: taskId, now, message }).assistantId
     db.update(schema.featureTasks).set({ status: 'analyzing', error: null, updatedAt: now() }).where(eq(schema.featureTasks.id, taskId)).run()
     emit('chat', 'user')
 
@@ -160,17 +158,14 @@ export async function runFeatureImplJob(ctx: FeatureImplJobCtx, message: string)
 
   if (jobLocks.has(taskId)) return
   jobLocks.add(taskId)
-  const asstId = nanoid()
+  let asstId = '' // appendTurns 里赋值；flush 闭包按变量捕获（赋值在流式开始前完成）。
   let acc = ''
   let lastWrite = 0
   const flush = (status: string) => db.update(schema.featureTurns).set({ content: acc, status }).where(eq(schema.featureTurns.id, asstId)).run()
 
   // 整段放进 try/finally：建轮/写库即使抛了也保证释放锁。
   try {
-    const maxSeq = (db.select().from(schema.featureTurns).where(eq(schema.featureTurns.taskId, taskId)).all() as any[])
-      .reduce((m: number, t: any) => Math.max(m, t.seq), 0)
-    db.insert(schema.featureTurns).values({ id: nanoid(), taskId, seq: maxSeq + 1, role: 'user', content: message, status: 'done', createdAt: now() }).run()
-    db.insert(schema.featureTurns).values({ id: asstId, taskId, seq: maxSeq + 2, role: 'assistant', content: '', status: 'streaming', createdAt: now() }).run()
+    asstId = appendTurns({ db, turnTable: schema.featureTurns, fkField: 'taskId', fkValue: taskId, now, message }).assistantId
     db.update(schema.featureTasks).set({ status: 'building', error: null, updatedAt: now() }).where(eq(schema.featureTasks.id, taskId)).run()
     emit('chat', 'user')
 
