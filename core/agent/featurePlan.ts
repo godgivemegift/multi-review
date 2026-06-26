@@ -187,22 +187,29 @@ export function runFeaturePlanAgent(opts: FeaturePlanOptions): Promise<{ plan: P
   return opts.provider === 'codex' ? runCodexPlan(opts) : runClaudePlan(opts)
 }
 
-// 把方案渲染成可读文本（无 UI 时也能看；UI 来了再用 plan_json 渲染卡片）。
+// AI 爱把整套方案塞进一句话、用内联圈数字（①②③…）列举且不换行。
+// 拆成换行的有序列表项，markdown 才好排版（否则一坨不换行）。① = U+2460 → 1。
+function softenEnumerations(s: string): string {
+  return s.replace(/[①-⑳]/g, (c) => `\n${(c.codePointAt(0)! - 0x2460) + 1}. `).trim()
+}
+
+// 把方案渲染成**规范 markdown**（## 标题 + 真列表，行首不缩进以免被当代码块），交给 MarkdownBody 渲染。
 export function renderPlanText(plan: Plan): string {
-  const lines: string[] = []
-  if (plan.requirementRestated) lines.push(`需求：${plan.requirementRestated}`)
-  if (plan.scopeWarning) lines.push(`\n⚠️ 范围：${plan.scopeWarning}`)
-  if (plan.approach) lines.push(`\n方案：${plan.approach}`)
-  if (plan.plannedSteps.length) lines.push('\n步骤：\n' + plan.plannedSteps.map((s, i) => `  ${i + 1}. ${s}`).join('\n'))
+  const out: string[] = []
+  if (plan.requirementRestated) out.push(`## 需求\n${plan.requirementRestated}`)
+  if (plan.scopeWarning) out.push(`## ⚠️ 范围\n${softenEnumerations(plan.scopeWarning)}`)
+  if (plan.approach) out.push(`## 方案\n${softenEnumerations(plan.approach)}`)
+  if (plan.plannedSteps.length) out.push('## 步骤\n' + plan.plannedSteps.map((s, i) => `${i + 1}. ${s}`).join('\n'))
   if (plan.decisionPoints.length) {
-    lines.push('\n决策点（待你拍板）：')
+    const ds = ['## 决策点（待你拍板）']
     for (const d of plan.decisionPoints) {
-      lines.push(`  • [${d.blocking ? '必选' : '可选'}] ${d.question}`)
-      for (const o of d.options) lines.push(`      - ${o.label}${o.tradeoff ? `（${o.tradeoff}）` : ''}`)
-      if (d.recommendation) lines.push(`      推荐：${d.recommendation}`)
+      ds.push(`\n**[${d.blocking ? '必选' : '可选'}] ${d.question}**`)
+      for (const o of d.options) ds.push(`- ${o.label}${o.tradeoff ? `（${o.tradeoff}）` : ''}`)
+      if (d.recommendation) ds.push(`- **推荐**：${d.recommendation}`)
     }
+    out.push(ds.join('\n'))
   }
-  if (plan.testPlan) lines.push(`\n测试：${plan.testPlan}`)
-  if (plan.outOfScope.length) lines.push('\n不在本次范围：\n' + plan.outOfScope.map((s) => `  - ${s}`).join('\n'))
-  return lines.join('\n').trim()
+  if (plan.testPlan) out.push(`## 测试\n${softenEnumerations(plan.testPlan)}`)
+  if (plan.outOfScope.length) out.push('## 不在本次范围\n' + plan.outOfScope.map((s) => `- ${s}`).join('\n'))
+  return out.join('\n\n').trim()
 }
