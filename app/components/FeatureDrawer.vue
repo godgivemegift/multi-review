@@ -21,8 +21,7 @@ const view = ref<'main' | 'pr'>('main')
 const input = ref('')
 const liveAssistant = ref('')
 const logLines = ref<string[]>([])
-const showLog = ref(false)
-const confirming = ref('') // '' | 'discard'（抽屉内联确认，不用弹窗）
+const { confirming } = useInlineConfirm() // '' | 'discard'（抽屉内联确认，不用弹窗）
 const busy = ref(false)
 const decisions = reactive<Record<string, string>>({})
 let es: EventSource | null = null
@@ -74,7 +73,7 @@ function openSSE() {
 function closeSSE() { es?.close(); es = null }
 
 watch([open, () => props.featureId], ([o]) => {
-  if (o && props.featureId) { view.value = 'main'; logLines.value = []; showLog.value = false; confirming.value = ''; for (const k in decisions) delete decisions[k]; load(); openSSE() }
+  if (o && props.featureId) { view.value = 'main'; logLines.value = []; confirming.value = ''; for (const k in decisions) delete decisions[k]; load(); openSSE() }
   else closeSSE()
 })
 onBeforeUnmount(closeSSE)
@@ -87,8 +86,8 @@ watch([running, open], ([r, o]) => {
 })
 onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
 
-const scrollEl = ref<HTMLElement | null>(null)
-watch([() => data.value?.turns.length, liveAssistant], () => { nextTick(() => { const el = scrollEl.value; if (el) el.scrollTop = el.scrollHeight }) })
+const { scrollEl, scrollToBottom } = useScrollToBottom()
+watch([() => data.value?.turns.length, liveAssistant], scrollToBottom)
 
 async function sendChat() {
   const msg = input.value.trim()
@@ -173,10 +172,7 @@ async function confirmPr() {
         </div>
 
         <!-- 运行日志（思考/分析过程，可展开；同 fix）-->
-        <div v-if="logLines.length" class="shrink-0 text-[11px] text-dimmed mb-2">
-          <button class="hover:text-highlighted" @click="showLog = !showLog">{{ showLog ? $t('review.collapseLog') : $t('review.expandLog', { count: logLines.length }) }}</button>
-          <pre v-if="showLog" class="mt-1 max-h-48 overflow-auto bg-neutral-900 text-neutral-300 rounded p-2 leading-relaxed font-mono whitespace-pre-wrap">{{ logLines.join('\n') }}</pre>
-        </div>
+        <ChatLogPanel :lines="logLines" />
 
         <!-- PR 已开:交接提示 -->
         <div v-if="status === 'opened'" class="shrink-0 mb-3 text-xs rounded border border-success/30 bg-success/5 p-3 leading-relaxed">
