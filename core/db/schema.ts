@@ -218,6 +218,86 @@ export const fixEvents = sqliteTable('fix_events', {
   message: text('message'),
 })
 
+// ── 全局 chatbot 抽屉：独立于 PR/项目的自由会话（bypassPermissions「啥都能干」助手）。
+export const globalSessions = sqliteTable('global_sessions', {
+  id: text('id').primaryKey(),
+  title: text('title'),
+  provider: text('provider', { enum: ['claude', 'codex'] }).notNull().default('claude'),
+  model: text('model'),
+  cwd: text('cwd'),
+  sessionId: text('session_id'),
+  codexSessionId: text('codex_session_id'),
+  status: text('status', { enum: ['idle', 'streaming', 'error'] }).notNull().default('idle'),
+  error: text('error'),
+  createdAt: text('created_at').notNull(),
+  lastUsedAt: text('last_used_at').notNull(),
+})
+
+export const globalTurns = sqliteTable('global_turns', {
+  id: text('id').primaryKey(),
+  sessionId: text('session_id')
+    .notNull()
+    .references(() => globalSessions.id, { onDelete: 'cascade' }),
+  seq: integer('seq').notNull(),
+  role: text('role', { enum: ['user', 'assistant'] }).notNull(),
+  content: text('content').notNull().default(''),
+  status: text('status', { enum: ['streaming', 'done', 'error', 'stopped'] }).notNull().default('done'),
+  createdAt: text('created_at').notNull(),
+})
+
+// ── Feature 开发闭环。
+export const featureTasks = sqliteTable('feature_tasks', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  title: text('title'),
+  description: text('description').notNull(),
+  provider: text('provider', { enum: ['claude', 'codex'] }).notNull().default('claude'),
+  model: text('model'),
+  lang: text('lang').notNull().default('en'),
+  status: text('status', {
+    enum: ['analyzing', 'planned', 'building', 'built', 'opened', 'error'],
+  })
+    .notNull()
+    .default('analyzing'),
+  planJson: text('plan_json'),
+  decisions: text('decisions'),
+  baseBranch: text('base_branch'),
+  branch: text('branch'),
+  worktreePath: text('worktree_path'),
+  baseHeadSha: text('base_head_sha'),
+  prNumber: integer('pr_number'),
+  prUrl: text('pr_url'),
+  sessionId: text('session_id'),
+  codexSessionId: text('codex_session_id'),
+  error: text('error'),
+  createdAt: text('created_at').notNull(),
+  updatedAt: text('updated_at').notNull(),
+})
+
+export const featureTurns = sqliteTable('feature_turns', {
+  id: text('id').primaryKey(),
+  taskId: text('task_id')
+    .notNull()
+    .references(() => featureTasks.id, { onDelete: 'cascade' }),
+  seq: integer('seq').notNull(),
+  role: text('role', { enum: ['user', 'assistant'] }).notNull(),
+  content: text('content').notNull().default(''),
+  status: text('status', { enum: ['streaming', 'done', 'error', 'stopped'] }).notNull().default('done'),
+  createdAt: text('created_at').notNull(),
+})
+
+export const featureEvents = sqliteTable('feature_events', {
+  id: text('id').primaryKey(),
+  taskId: text('task_id')
+    .notNull()
+    .references(() => featureTasks.id, { onDelete: 'cascade' }),
+  ts: text('ts').notNull(),
+  kind: text('kind').notNull(),
+  message: text('message'),
+})
+
 export type Project = typeof projects.$inferSelect
 export type Skill = typeof skills.$inferSelect
 export type Review = typeof reviews.$inferSelect
@@ -228,3 +308,8 @@ export type ReviewEvent = typeof events.$inferSelect
 export type Fix = typeof fixes.$inferSelect
 export type FixTurn = typeof fixTurns.$inferSelect
 export type FixEvent = typeof fixEvents.$inferSelect
+export type GlobalSession = typeof globalSessions.$inferSelect
+export type GlobalTurn = typeof globalTurns.$inferSelect
+export type FeatureTask = typeof featureTasks.$inferSelect
+export type FeatureTurn = typeof featureTurns.$inferSelect
+export type FeatureEvent = typeof featureEvents.$inferSelect
