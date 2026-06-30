@@ -23,6 +23,11 @@ type Pull = {
   authorUpdated: boolean
   reviewerUpdated: boolean
   hasWorktree: boolean
+  autoReviewOn: boolean
+  autoFixOn: boolean
+  autoNote: string | null
+  autoRound: number
+  autoMaxRounds: number
 }
 
 const { t, te } = useI18n()
@@ -32,6 +37,7 @@ const { data: project, refresh: refreshProject } = await useFetch<Project>(() =>
 
 const tab = ref<'pulls' | 'feature' | 'config'>('pulls')
 const msg = ref('')
+const automationOpen = ref(false)
 
 async function onProjectChanged() {
   await Promise.all([refreshProject(), refreshNuxtData('/api/projects')])
@@ -54,6 +60,8 @@ function openDetail(prNumber: number, reviewId: string | null = null, fixId: str
   drawerTab.value = tab
   drawerOpen.value = true
 }
+// 抽屉里的两个自动化开关跟着列表实时数据走（每 8s 轮询会刷新有效状态/note/轮数）
+const drawerPull = computed(() => (drawerPr.value != null ? pullsResp.value?.pulls.find((p) => p.number === drawerPr.value) ?? null : null))
 async function onTaskCreated() {
   await refreshPulls()
   // drawer 开着时，把这个 PR 最新的 fixId 同步回来（验证表单刚建的 fix，重开 drawer 时别丢成空表单）
@@ -302,7 +310,8 @@ const filterDims = computed(() => [
           </template>
         </UPopover>
         <button v-if="anyFilter" class="text-xs text-dimmed hover:text-highlighted ml-1" @click="clearFilters">{{ $t('project.clearFilter') }}</button>
-        <UButton class="ml-auto" variant="ghost" color="neutral" size="sm" :loading="pullsPending" icon="i-lucide-refresh-cw" @click="refreshPulls()">{{ $t('project.refreshList') }}</UButton>
+        <UButton class="ml-auto" variant="ghost" color="neutral" size="sm" icon="i-lucide-settings-2" @click="automationOpen = true">{{ $t('automation.configBtn') }}</UButton>
+        <UButton variant="ghost" color="neutral" size="sm" :loading="pullsPending" icon="i-lucide-refresh-cw" @click="refreshPulls()">{{ $t('project.refreshList') }}</UButton>
       </div>
 
       <!-- PR 列表：PR | 标题(固定宽·换行) | 作者 | PR状态 | 审核 | 修复 -->
@@ -368,6 +377,13 @@ const filterDims = computed(() => [
       </div>
     </div>
 
-    <PrDetailDrawer v-model:open="drawerOpen" :project-id="projectId" :pr-number="drawerPr" :review-id="drawerReviewId" :fix-id="drawerFixId" :initial-tab="drawerTab" @task-created="onTaskCreated" />
+    <PrDetailDrawer
+      v-model:open="drawerOpen" :project-id="projectId" :pr-number="drawerPr"
+      :review-id="drawerReviewId" :fix-id="drawerFixId" :initial-tab="drawerTab"
+      :auto-review-on="drawerPull?.autoReviewOn ?? false" :auto-fix-on="drawerPull?.autoFixOn ?? false"
+      :auto-note="drawerPull?.autoNote ?? null" :auto-round="drawerPull?.autoRound ?? 0" :auto-max-rounds="drawerPull?.autoMaxRounds ?? 2"
+      @task-created="onTaskCreated"
+    />
+    <AutomationDialog v-model:open="automationOpen" :project-id="projectId" :authors="authors" @saved="refreshPulls()" />
   </div>
 </template>

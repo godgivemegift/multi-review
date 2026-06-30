@@ -1,8 +1,32 @@
 <script setup lang="ts">
-const props = defineProps<{ projectId: string; prNumber: number | null; reviewId: string | null; fixId: string | null; initialTab?: string }>()
+const props = defineProps<{
+  projectId: string; prNumber: number | null; reviewId: string | null; fixId: string | null; initialTab?: string
+  autoReviewOn?: boolean; autoFixOn?: boolean; autoNote?: string | null; autoRound?: number; autoMaxRounds?: number
+}>()
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ taskCreated: [] }>()
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
+
+// 两个实例级自动化开关（自动审核 / 自动修复）：状态跟列表数据走，翻一下就 POST 覆盖 + 刷新列表。
+const togglingAuto = ref(false)
+async function toggleAuto(field: 'reviewOn' | 'fixOn', value: boolean) {
+  if (props.prNumber == null || togglingAuto.value) return
+  togglingAuto.value = true
+  try {
+    await $fetch(`/api/projects/${props.projectId}/pulls/${props.prNumber}/automation`, { method: 'POST', body: { [field]: value } })
+    emit('taskCreated') // 复用：触发父级 refreshPulls，把有效状态/轮数刷新回来
+  } catch (e: any) {
+    // 失败静默：下次轮询会把真实状态拉回来
+  } finally {
+    togglingAuto.value = false
+  }
+}
+// 引擎停手原因 → 一行提示（capped/converged/cant_fix/...）
+const autoNoteText = computed(() => {
+  if (!props.autoNote) return ''
+  const k = `automation.note.${props.autoNote}`
+  return te(k) ? t(k, { round: props.autoRound ?? 0, max: props.autoMaxRounds ?? 0 }) : ''
+})
 
 type Detail = {
   number: number; title: string; body: string; author: string; createdAt: string
@@ -22,10 +46,47 @@ const nodes = ref<Node[]>([])
 const pending = ref(false)
 const error = ref('')
 
-const activeTab = ref<'review' | 'fix' | 'timeline' | 'changes'>('timeline')
+const activeTab = ref<'review' | 'fix' | 'timeline' | 'changes' | 'workflow'>('timeline')
 const diff = ref<string | null>(null)
 const diffTruncated = ref(false)
 const diffPending = ref(false)
+
+// ── 自动化工作流时间线（引擎对这条 PR 做了什么）──
+type WfEvent = { id: string; kind: string; ts: string; message: string | null }
+const wfEvents = ref<WfEvent[]>([])
+const wfPending = ref(false)
+let wfTimer: ReturnType<typeof setInterval> | null = null
+async function loadWf() {
+  if (!props.prNumber) return
+  wfPending.value = true
+  try {
+    const r = await $fetch<{ events: WfEvent[] }>(`/api/projects/${props.projectId}/pulls/${props.prNumber}/automation-events`)
+    wfEvents.value = r.events
+  } catch { /* 静默：下次轮询再拉 */ } finally {
+    wfPending.value = false
+  }
+}
+function stopWfPoll() { if (wfTimer) { clearInterval(wfTimer); wfTimer = null } }
+// 在「自动化」tab 时每 5s 拉一次，工作流进展实时冒出来
+watch([activeTab, open], ([tabNow, isOpen]) => {
+  stopWfPoll()
+  if (isOpen && tabNow === 'workflow') {
+    loadWf()
+    wfTimer = setInterval(() => { if (typeof document === 'undefined' || document.visibilityState !== 'hidden') loadWf() }, 5000)
+  }
+})
+onBeforeUnmount(stopWfPoll)
+// 自动化事件 i18n：kind → 文案（fix_started/capped 带 message 插值）
+const WF_DOT: Record<string, string> = {
+  review_created: 'bg-inverted', recheck: 'bg-inverted', posted: 'bg-accented',
+  fix_started: 'bg-inverted', pushed: 'bg-accented',
+  capped: 'bg-warning', converged: 'bg-success', cant_fix: 'bg-error', fix_error: 'bg-error', post_error: 'bg-error',
+}
+function wfLabel(ev: WfEvent) {
+  const k = `automation.event.${ev.kind}`
+  if (!te(k)) return ev.message ? `${ev.kind} ${ev.message}` : ev.kind
+  return t(k, { round: ev.message ?? '', info: ev.message ?? '' })
+}
 
 // ── markdown 渲染（客户端动态加载 marked + dompurify）──
 let _render: ((s: string) => string) | null = null
@@ -49,7 +110,7 @@ watch(
   async ([isOpen, num]) => {
     if (!isOpen || !num) return
     if (detail.value?.number === num) return
-    detail.value = null; nodes.value = []; openingHtml.value = ''; diff.value = null
+    detail.value = null; nodes.value = []; openingHtml.value = ''; diff.value = null; wfEvents.value = []
     activeTab.value = (props.initialTab as any) || (props.reviewId ? 'review' : 'timeline'); error.value = ''; pending.value = true
     try {
       const res = await $fetch<{ detail: Detail; nodes: Node[] }>(
@@ -168,12 +229,26 @@ const lineCls: Record<DiffLine['t'], string> = {
             <button class="text-dimmed hover:text-highlighted text-lg leading-none" @click="open = false">✕</button>
           </div>
 
+          <!-- 实例级自动化开关：自动审核 / 自动修复（覆盖项目配置；翻开即重置该 PR 的回合数） -->
+          <div v-if="detail" class="flex items-center flex-wrap gap-x-5 gap-y-1 mt-3 text-xs">
+            <label class="flex items-center gap-2 cursor-pointer">
+              <USwitch :model-value="autoReviewOn" :disabled="togglingAuto" size="sm" @update:model-value="(v: boolean) => toggleAuto('reviewOn', v)" />
+              <span :class="autoReviewOn ? 'text-highlighted' : 'text-dimmed'">{{ $t('automation.prAutoReview') }}</span>
+            </label>
+            <label class="flex items-center gap-2 cursor-pointer">
+              <USwitch :model-value="autoFixOn" :disabled="togglingAuto" size="sm" @update:model-value="(v: boolean) => toggleAuto('fixOn', v)" />
+              <span :class="autoFixOn ? 'text-highlighted' : 'text-dimmed'">{{ $t('automation.prAutoFix') }}</span>
+            </label>
+            <span v-if="autoNoteText" class="text-highlighted">· {{ autoNoteText }}</span>
+          </div>
+
           <!-- 子 tab -->
           <div v-if="detail" class="flex gap-6 mt-4 text-sm">
             <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'review' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'review'">{{ $t('prDrawer.tabReview') }}</button>
             <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'fix' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'fix'">{{ $t('prDrawer.tabFix') }}</button>
             <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'timeline' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'timeline'">{{ $t('prDrawer.tabTimeline') }}</button>
             <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'changes' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'changes'">{{ $t('prDrawer.tabChanges') }} <span class="text-dimmed">{{ detail.changedFiles }}</span></button>
+            <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'workflow' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'workflow'">{{ $t('automation.tab') }}</button>
           </div>
         </div>
 
@@ -260,6 +335,20 @@ const lineCls: Record<DiffLine['t'], string> = {
             <p v-if="diffPending" class="py-6 text-sm text-dimmed">{{ $t('prDrawer.loadingDiff') }}</p>
             <DiffView v-else :diff="diff || ''" :truncated="diffTruncated" />
           </section>
+        </div>
+
+        <!-- ── 自动化工作流时间线 ── -->
+        <div v-else-if="detail && activeTab === 'workflow'" class="flex-1 overflow-y-auto px-6 py-5">
+          <p v-if="!wfEvents.length" class="py-16 text-center text-xs text-dimmed">
+            {{ wfPending ? $t('common.loading') : $t('automation.noEvents') }}
+          </p>
+          <ol v-else class="relative border-l border-default ml-3 space-y-4">
+            <li v-for="ev in wfEvents" :key="ev.id" class="pl-6 relative">
+              <span class="absolute -left-[6px] top-1.5 w-2.5 h-2.5 rounded-full" :class="WF_DOT[ev.kind] || 'bg-accented'" />
+              <div class="text-sm text-toned">{{ wfLabel(ev) }}</div>
+              <div class="text-[11px] text-dimmed mt-0.5">{{ rel(ev.ts) }}</div>
+            </li>
+          </ol>
         </div>
       </div>
     </template>

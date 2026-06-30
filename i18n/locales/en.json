@@ -347,7 +347,9 @@
       "title": "New review skill",
       "contentLabel": "Content (methodology, can stay empty for later / paste an existing one)",
       "contentPlaceholder": "# Review methodology\n..."
-    }
+    },
+    "autoMaxRounds": "Auto-fix round limit",
+    "autoMaxRoundsHint": "Max fix↔re-review rounds per PR before automation pauses for you."
   },
   "review": {
     "noTask": "This PR has no review task yet",
@@ -526,5 +528,42 @@
     "chatPlaceholder": "Ask for more changes…",
     "discard": "Delete task",
     "discardConfirm": "Delete this task? (incl. worktree, irreversible)"
+  },
+  "automation": {
+    "configBtn": "Automation",
+    "title": "Automation config",
+    "reviewSystem": "Auto-review",
+    "fixSystem": "Auto-fix feedback",
+    "modeOnce": "Once after PR",
+    "modeEveryPush": "Every push",
+    "noAuthors": "No authors yet",
+    "masterEnabled": "Enable system",
+    "masterHint": "Master switch for the whole automation.",
+    "start": "Start",
+    "fixHint": "Each PR runs at most {n} fix↔re-review rounds, then pauses for you.",
+    "prAutoReview": "Auto-review",
+    "prAutoFix": "Auto-fix",
+    "note": {
+      "capped": "Paused (reached {max}-round limit)",
+      "converged": "Done (all fixed)",
+      "cant_fix": "Can't auto-fix — needs you",
+      "fix_error": "Fix failed — needs you",
+      "stopped": "Paused (you stopped it)",
+      "deleted": "Off (task deleted)"
+    },
+    "tab": "Workflow",
+    "noEvents": "No automation activity yet",
+    "event": {
+      "review_created": "Review started",
+      "recheck": "Re-reviewed author changes",
+      "posted": "Posted review to GitHub",
+      "fix_started": "Auto-fix started (round {round})",
+      "pushed": "Pushed fix",
+      "capped": "Paused — round limit reached ({info})",
+      "converged": "Done — all findings addressed",
+      "cant_fix": "Couldn't auto-fix — needs you",
+      "fix_error": "Fix failed — needs you",
+      "post_error": "Post failed: {info}"
+    }
   }
 }

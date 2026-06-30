@@ -347,7 +347,9 @@
       "title": "新建审核 skill",
       "contentLabel": "内容（方法学，可留空稍后写 / 直接粘贴现成的）",
       "contentPlaceholder": "# 审核方法学\n..."
-    }
+    },
+    "autoMaxRounds": "自动修复回合上限",
+    "autoMaxRoundsHint": "每条 PR「修复↔复查」最多来回几轮，到顶就暂停等你。"
   },
   "review": {
     "noTask": "该 PR 还没有审核任务",
@@ -526,5 +528,42 @@
     "chatPlaceholder": "继续让它改 / 补充…",
     "discard": "删除任务",
     "discardConfirm": "删除这个任务？（含 worktree，不可恢复）"
+  },
+  "automation": {
+    "configBtn": "自动化配置",
+    "title": "自动化配置",
+    "reviewSystem": "自动审核系统",
+    "fixSystem": "自动修复系统",
+    "modeOnce": "PR 创建后一次",
+    "modeEveryPush": "每次 push",
+    "noAuthors": "暂无作者",
+    "masterEnabled": "是否开启系统",
+    "masterHint": "整套自动化的总开关。",
+    "start": "启动",
+    "fixHint": "每条 PR 最多跑 {n} 轮「修复↔复查」，到顶暂停等你。",
+    "prAutoReview": "自动审核",
+    "prAutoFix": "自动修复",
+    "note": {
+      "capped": "已暂停（达 {max} 轮上限）",
+      "converged": "已完成（都修好了）",
+      "cant_fix": "无法自动修复 · 待人工",
+      "fix_error": "修复失败 · 待人工",
+      "stopped": "已暂停（你点了停止）",
+      "deleted": "已关闭（任务已删）"
+    },
+    "tab": "自动化",
+    "noEvents": "暂无自动化记录",
+    "event": {
+      "review_created": "创建审核任务",
+      "recheck": "复查作者改动",
+      "posted": "发布评论到 GitHub",
+      "fix_started": "开始自动修复（第 {round} 轮）",
+      "pushed": "上传修复",
+      "capped": "已暂停 · 达回合上限（{info}）",
+      "converged": "已完成 · 问题都处理了",
+      "cant_fix": "无法自动修复 · 待人工",
+      "fix_error": "修复失败 · 待人工",
+      "post_error": "发评论失败：{info}"
+    }
   }
 }

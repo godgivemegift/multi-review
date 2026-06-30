@@ -51,6 +51,11 @@ export default defineNuxtConfig({
     dbPath: process.env.DB_PATH || './data/cockpit.db',
     reposDir: process.env.REPOS_DIR || './data/worktrees',
     maxConcurrency: Number(process.env.MAX_CONCURRENCY || 3),
+    // PR 自动化引擎（自动审核 / 自动修复的常驻轮询）。AUTOMATION_ENABLED=false 整体关停。
+    automationEnabled: process.env.AUTOMATION_ENABLED !== 'false',
+    automationIntervalMs: Number(process.env.AUTOMATION_INTERVAL_MS || 45000),
+    // 引擎由定时器驱动、没有发起请求的用户上下文，故无法从 cookie 取 locale；用这个中心默认决定自动审核/修复的工作语言。
+    automationLang: process.env.AUTOMATION_LANG || 'zh',
     public: {
       appName: 'Multi Review',
     },

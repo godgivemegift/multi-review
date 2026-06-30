@@ -33,6 +33,7 @@ function ensureColumns(sqlite: Database.Database) {
     ['projects', 'provider', "TEXT NOT NULL DEFAULT 'claude'"],
     ['projects', 'model', 'TEXT'],
     ['projects', 'effort', 'TEXT'],
+    ['projects', 'auto_max_rounds', 'INTEGER NOT NULL DEFAULT 2'],
     ['reviews', 'preview_json', 'TEXT'],
     ['reviews', 'preview_sig', 'TEXT'],
     ['reviews', 'author_updated', 'INTEGER NOT NULL DEFAULT 0'],
@@ -303,6 +304,45 @@ function ensureSchema(sqlite: Database.Database) {
       message TEXT
     );
     CREATE INDEX IF NOT EXISTS feature_events_task_idx ON feature_events(task_id);
+
+    CREATE TABLE IF NOT EXISTS project_automation (
+      project_id TEXT PRIMARY KEY REFERENCES projects(id) ON DELETE CASCADE,
+      master_enabled INTEGER NOT NULL DEFAULT 0,
+      review_enabled INTEGER NOT NULL DEFAULT 0,
+      review_mode TEXT NOT NULL DEFAULT 'once',
+      review_authors TEXT NOT NULL DEFAULT '[]',
+      review_statuses TEXT NOT NULL DEFAULT '["open","draft"]',
+      fix_enabled INTEGER NOT NULL DEFAULT 0,
+      fix_authors TEXT NOT NULL DEFAULT '[]',
+      fix_statuses TEXT NOT NULL DEFAULT '["open","draft"]',
+      updated_at TEXT NOT NULL
+    );
+
+    CREATE TABLE IF NOT EXISTS pr_automation (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      pr_number INTEGER NOT NULL,
+      review_on INTEGER,
+      fix_on INTEGER,
+      round INTEGER NOT NULL DEFAULT 0,
+      last_fix_review_sha TEXT,
+      pending_fix INTEGER NOT NULL DEFAULT 0,
+      opt_out INTEGER NOT NULL DEFAULT 0,
+      note TEXT,
+      updated_at TEXT NOT NULL
+    );
+    CREATE INDEX IF NOT EXISTS pr_automation_project_idx ON pr_automation(project_id);
+    CREATE UNIQUE INDEX IF NOT EXISTS pr_automation_project_pr_uq ON pr_automation(project_id, pr_number);
+
+    CREATE TABLE IF NOT EXISTS automation_events (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
+      pr_number INTEGER NOT NULL,
+      ts TEXT NOT NULL,
+      kind TEXT NOT NULL,
+      message TEXT
+    );
+    CREATE INDEX IF NOT EXISTS automation_events_pr_idx ON automation_events(project_id, pr_number);
   `)
 }
 

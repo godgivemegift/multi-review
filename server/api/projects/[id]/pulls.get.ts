@@ -2,6 +2,8 @@ import { existsSync } from 'node:fs'
 import { eq } from 'drizzle-orm'
 import { schema } from '~core/db/client'
 import { listPulls } from '~core/github/gh'
+import { getProjectAutomation, getPrAutomationMap, pullStatusKey } from '~core/automation/state'
+import { effectiveReviewOn, effectiveFixOn } from '~core/automation/decide'
 
 // 分页拉该项目仓库的 PR（GraphQL cursor），标注哪些已建审核任务。
 export default defineEventHandler(async (event) => {
@@ -69,10 +71,20 @@ export default defineEventHandler(async (event) => {
       .map((r: any) => r.fixId),
   )
 
+  // 自动化：项目级配置 + 每条 PR 的有效开关 / 运行态（喂 PR 抽屉的两个 switch + 列表「已暂停」提示）
+  const autoCfg = getProjectAutomation(d, schema, id)
+  const autoRowByPr = getPrAutomationMap(d, schema, id) // 一次拉全，避免 .map() 里 N+1 点查
+  const autoMaxRounds = project.autoMaxRounds ?? 2
+
   return {
     pulls: page.pulls.map((p) => {
       const task = taskByPr.get(p.number)
       const fix = fixByPr.get(p.number)
+      // 自动化有效开关：实例覆盖优先，否则继承项目配置 + 作者/状态过滤
+      const autoRow = autoRowByPr.get(p.number) ?? null
+      const prKey = { author: p.author, status: pullStatusKey(p) }
+      const autoReviewOn = effectiveReviewOn(autoCfg, autoRow, prKey)
+      const autoFixOn = effectiveFixOn(autoCfg, autoRow, prKey)
       // 作者已更新：我「看过」的 sha 之后 PR head 又变了。基线用 review.headSha——审核/复审完成都会推进它，
       // 所以点了复审看过新 commit 后红点自动清，作者在复审基线之后再 push 才重新点亮（与抽屉/refresh 口径统一）。
       // 副作用：首次审核后即便还没发评论，作者 push 也会点亮——这正是「有我没看过的新改动」的本意。
@@ -89,6 +101,7 @@ export default defineEventHandler(async (event) => {
         fixId: fix?.id ?? null, fixStatus: fix?.status ?? null,
         fixChatting: fix ? chattingFixIds.has(fix.id) : false,
         authorUpdated, reviewerUpdated, hasWorktree,
+        autoReviewOn, autoFixOn, autoNote: autoRow?.note ?? null, autoRound: autoRow?.round ?? 0, autoMaxRounds,
       }
     }),
     totalCount: page.totalCount,

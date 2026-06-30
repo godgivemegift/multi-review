@@ -27,6 +27,7 @@ const form = reactive({
   provider: ((props.project as Project & { provider?: Provider }).provider || 'claude') as Provider,
   model: props.project.model || '',
   effort: props.project.effort || '',
+  autoMaxRounds: (props.project as Project & { autoMaxRounds?: number }).autoMaxRounds ?? 2,
 })
 const savingInfo = ref(false)
 const msg = ref('')
@@ -75,6 +76,7 @@ async function saveInfo() {
       body: {
         name: form.name, repo: form.repo, localPath: form.localPath || null,
         defaultBranch: form.defaultBranch, provider: form.provider, model: form.model || null, effort: form.effort || null,
+        autoMaxRounds: Math.min(10, Math.max(1, Number(form.autoMaxRounds) || 2)),
       },
     })
     msg.value = t('config.saved'); emit('changed')
@@ -387,14 +389,25 @@ function codexAuthClass(status: CodexSdkStatus | null) {
         </button>
       </div>
 
-      <div v-if="effortOptions.length" class="mt-4">
-        <span class="text-xs text-dimmed">{{ $t('config.effortLabel') }}</span>
-        <select v-model="form.effort" class="block text-sm border-b border-default py-1 bg-transparent outline-none min-w-32">
-          <option value="">{{ $t('config.effortNone') }}</option>
-          <option v-for="e in effortOptions" :key="e" :value="e">{{ e }}</option>
-        </select>
+      <div class="mt-4 flex flex-wrap items-end gap-8">
+        <div v-if="effortOptions.length">
+          <span class="text-xs text-dimmed">{{ $t('config.effortLabel') }}</span>
+          <select v-model="form.effort" class="block text-sm border-b border-default py-1 bg-transparent outline-none min-w-32">
+            <option value="">{{ $t('config.effortNone') }}</option>
+            <option v-for="e in effortOptions" :key="e" :value="e">{{ e }}</option>
+          </select>
+        </div>
+        <p v-else class="text-xs text-dimmed self-center">{{ $t('config.noEffortSupport') }}</p>
+        <!-- 自动化「修复↔复查」回合上限：放模型选择同处，和 effort 并排 -->
+        <label class="block">
+          <span class="text-xs text-dimmed">{{ $t('config.autoMaxRounds') }}</span>
+          <input
+            v-model.number="form.autoMaxRounds" type="number" min="1" max="10"
+            class="block w-20 text-sm border-b border-default py-1 bg-transparent outline-none focus:border-inverted"
+          />
+          <span class="block text-[11px] text-dimmed mt-1 max-w-64">{{ $t('config.autoMaxRoundsHint') }}</span>
+        </label>
       </div>
-      <p v-else class="text-xs text-dimmed mt-3">{{ $t('config.noEffortSupport') }}</p>
     </section>
 
     <div class="mt-6 flex items-center gap-4">

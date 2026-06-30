@@ -347,7 +347,9 @@
       "title": "Nouveau skill de revue",
       "contentLabel": "Contenu (méthodologie, peut rester vide pour plus tard / coller un existant)",
       "contentPlaceholder": "# Méthodologie de revue\n..."
-    }
+    },
+    "autoMaxRounds": "Limite de tours d'auto-correction",
+    "autoMaxRoundsHint": "Tours max correction↔re-revue par PR avant la mise en pause de l'automatisation."
   },
   "review": {
     "noTask": "Cette PR n'a pas encore de tâche de revue",
@@ -526,5 +528,42 @@
     "chatPlaceholder": "Demandez d'autres changements…",
     "discard": "Supprimer",
     "discardConfirm": "Supprimer cette tâche ? (worktree inclus, irréversible)"
+  },
+  "automation": {
+    "configBtn": "Automatisation",
+    "title": "Configuration de l'automatisation",
+    "reviewSystem": "Auto-revue",
+    "fixSystem": "Auto-correction",
+    "modeOnce": "Une fois après la PR",
+    "modeEveryPush": "À chaque push",
+    "noAuthors": "Aucun auteur",
+    "masterEnabled": "Activer le système",
+    "masterHint": "Interrupteur principal de toute l'automatisation.",
+    "start": "Démarrer",
+    "fixHint": "Chaque PR fait au plus {n} tours correction↔re-revue, puis se met en pause.",
+    "prAutoReview": "Auto-revue",
+    "prAutoFix": "Auto-correction",
+    "note": {
+      "capped": "En pause (limite de {max} tours atteinte)",
+      "converged": "Terminé (tout corrigé)",
+      "cant_fix": "Correction auto impossible — à vous",
+      "fix_error": "Échec de la correction — à vous",
+      "stopped": "En pause (arrêté par vous)",
+      "deleted": "Désactivé (tâche supprimée)"
+    },
+    "tab": "Automatisation",
+    "noEvents": "Aucune activité d'automatisation",
+    "event": {
+      "review_created": "Revue lancée",
+      "recheck": "Re-revue des changements de l'auteur",
+      "posted": "Commentaire publié sur GitHub",
+      "fix_started": "Auto-correction lancée (tour {round})",
+      "pushed": "Correction poussée",
+      "capped": "En pause — limite de tours atteinte ({info})",
+      "converged": "Terminé — tout est traité",
+      "cant_fix": "Auto-correction impossible — à vous",
+      "fix_error": "Échec de la correction — à vous",
+      "post_error": "Échec de publication : {info}"
+    }
   }
 }
