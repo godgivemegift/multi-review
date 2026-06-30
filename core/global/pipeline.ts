@@ -27,6 +27,13 @@ export function stopGlobalChat(id: string): boolean {
   return true
 }
 
+// 进程退出(app 关闭)时把所有在跑的全局会话停掉,别把 detached agent 留成孤儿。
+export function stopAllGlobalChats(): boolean {
+  let any = false
+  for (const id of [...activeChats.keys()]) any = stopGlobalChat(id) || any
+  return any
+}
+
 export type GlobalChatJobCtx = {
   db: any
   schema: any

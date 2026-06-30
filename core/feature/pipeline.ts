@@ -138,6 +138,13 @@ export function stopFeatureImpl(taskId: string): boolean {
   return true
 }
 
+// 进程退出(app 关闭)时把所有在跑的 feature 实现停掉(plan SDK abort + impl 子进程组),别留孤儿。
+export function stopAllFeatureImpl(): boolean {
+  let any = false
+  for (const id of new Set([...activeFeatureChats.keys(), ...featureStops.keys()])) any = stopFeatureImpl(id) || any
+  return any
+}
+
 function slugify(s: string): string {
   return (s || 'feature').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'feature'
 }

@@ -1,0 +1,99 @@
+name: desktop-release
+
+# 手动触发(可选平台)或推送 desktop-v* tag 时,跨平台打包 Electron 桌面应用。
+# 与 SuiSui 的 desktop-release 流程一致:matrix 跨 linux/mac/win → electron-builder → 上传 artifacts。
+# 推 tag 时额外汇总所有产物建一个 GitHub Release。
+on:
+  workflow_dispatch:
+    inputs:
+      platform:
+        description: "Platform to build"
+        type: choice
+        required: false
+        default: "all"
+        options:
+          - all
+          - linux
+          - mac
+          - win
+  push:
+    tags:
+      - "desktop-v*"
+
+# 默认最小权限；只有 release job 需要写(建 Release)。
+permissions:
+  contents: read
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJson((github.event_name != 'workflow_dispatch' || github.event.inputs.platform == 'all') && '{"include":[{"os":"ubuntu-latest","platform":"linux"},{"os":"macos-latest","platform":"mac"},{"os":"windows-latest","platform":"win"}]}' || github.event.inputs.platform == 'linux' && '{"include":[{"os":"ubuntu-latest","platform":"linux"}]}' || github.event.inputs.platform == 'mac' && '{"include":[{"os":"macos-latest","platform":"mac"}]}' || '{"include":[{"os":"windows-latest","platform":"win"}]}') }}
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build and package desktop
+        shell: bash
+        env:
+          # 没有 Apple Developer 证书 → 不做 mac 代码签名(跳过证书自动发现)
+          CSC_IDENTITY_AUTO_DISCOVERY: false
+        run: |
+          # nuxt build(node-server 产物)+ 按 Electron ABI 替换 better-sqlite3 二进制
+          pnpm electron:build
+          pnpm exec electron-builder --${{ matrix.platform }} --publish=never
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: desktop-${{ matrix.platform }}
+          # 只上传可分发文件,不要中间产物
+          path: |
+            release/*.dmg
+            release/*.zip
+            release/*.exe
+            release/*.AppImage
+            release/*.deb
+            release/*.blockmap
+            release/latest*.yml
+          if-no-files-found: warn
+          # 手动构建留 1 天;tag 构建留 30 天(产物同时已进 GitHub Release,这里只是中间件备份)。
+          # 注意:GitHub Actions 表达式里 0 是 falsy,`'tag' && 0 || 1` 会恒为 1 —— 用非 0 值。
+          retention-days: ${{ github.ref_type == 'tag' && 30 || 1 }}
+
+  # 推 desktop-v* tag 时,把三平台产物汇总成一个 GitHub Release。
+  # 只在 tag push 上跑:手动 workflow_dispatch 即使选了某个 tag ref 也可能只构建单平台,
+  # 那样发出的 Release 会缺平台,所以这里同时要求 event_name == 'push'。
+  release:
+    if: github.event_name == 'push' && github.ref_type == 'tag'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-artifacts
+          merge-multiple: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: true
+          generate_release_notes: true
+          files: dist-artifacts/**/*
