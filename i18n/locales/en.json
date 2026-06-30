@@ -550,7 +550,9 @@
       "fix_error": "Fix failed — needs you",
       "stopped": "Paused (you stopped it)",
       "deleted": "Off (task deleted)",
-      "post_error": "Post failed — stopped"
+      "post_error": "Post failed — stopped",
+      "push_error": "Push failed — stopped",
+      "fix_unverified": "Fixed — needs re-review"
     },
     "tab": "Workflow",
     "noEvents": "No automation activity yet",
@@ -564,8 +566,11 @@
       "converged": "Done — all findings addressed",
       "cant_fix": "Couldn't auto-fix — needs you",
       "fix_error": "Fix failed — needs you",
-      "post_error": "Post failed: {info}"
+      "post_error": "Post failed: {info}",
+      "push_error": "Push failed: {info}",
+      "fix_unverified": "Fixed — needs manual re-review (once mode)"
     },
-    "modeLabel": "Review mode"
+    "modeLabel": "Review mode",
+    "fixAuthorHint": "Empty author = only your own PRs are auto-fixed. Add authors to auto-fix others' PRs (runs an agent + pushes)."
   }
 }

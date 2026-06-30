@@ -1,13 +1,13 @@
 import { eq, asc, inArray } from 'drizzle-orm'
 
-// 「待处理 finding」单一口径：severity 是 High/Medium（不追 Low/nit），且尚未解决——
-//   - 没有任何复查记录 = 刚审出来、还没修 → 算
-//   - 最新一轮复查判定是 unaddressed / partial / new → 算
-//   - fixed / retracted / replied（已修 / 已撤回 / 仅回复）→ 不算
+// 「待处理 finding」单一口径：severity 是 High/Medium（不追 Low/nit），且尚未解决。
+// 用「已解决」白名单反向判定：只有 fixed/retracted/replied 算解决，其余一律当未解决=待修——
+// 这样 kept（AI 维持该 finding，仍有效）、adjusted（调了 severity，仍有效）、discuss、new、unaddressed、partial
+// 都会被正确当成待修，不会被误判已解决而放弃 High / 误报 converged（防止用允许名单时漏掉新状态）。
 // 自动修复的「该不该再修 / 收敛没」(engine 用 actionable) 和「喂给 agent 的指令」(buildAutoFixMessage 用 actionableFindings)
 // 都依赖这一口径，所以统一在这里 reviewFindingStats，避免两处定义漂移。db/schema 由调用方注入（core 不直接依赖运行时 db）。
 const ACTIONABLE_SEVERITY = new Set(['High', 'Medium'])
-const UNRESOLVED_RECHECK = new Set(['unaddressed', 'partial', 'new'])
+const RESOLVED_RECHECK = new Set(['fixed', 'retracted', 'replied'])
 
 export type ReviewFindingStats = {
   total: number // 审核出的 finding 总数（0=干净 PR）
@@ -37,7 +37,7 @@ export function reviewFindingStats(db: any, schema: any, reviewId: string): Revi
   const actionableFindings = findings.filter((f) => {
     if (!ACTIONABLE_SEVERITY.has(f.severity)) return false
     const rc = latest.get(f.id)
-    return !rc || UNRESOLVED_RECHECK.has(rc.status) // 没复查过 = 待修
+    return !rc || !RESOLVED_RECHECK.has(rc.status) // 没复查过、或最新复查不是「已解决」→ 待修
   })
   return { total: findings.length, actionable: actionableFindings.length, actionableFindings }
 }

@@ -550,7 +550,9 @@
       "fix_error": "Échec de la correction — à vous",
       "stopped": "En pause (arrêté par vous)",
       "deleted": "Désactivé (tâche supprimée)",
-      "post_error": "Échec de publication — arrêté"
+      "post_error": "Échec de publication — arrêté",
+      "push_error": "Échec du push — arrêté",
+      "fix_unverified": "Corrigé — à re-vérifier"
     },
     "tab": "Automatisation",
     "noEvents": "Aucune activité d'automatisation",
@@ -564,8 +566,11 @@
       "converged": "Terminé — tout est traité",
       "cant_fix": "Auto-correction impossible — à vous",
       "fix_error": "Échec de la correction — à vous",
-      "post_error": "Échec de publication : {info}"
+      "post_error": "Échec de publication : {info}",
+      "push_error": "Échec du push : {info}",
+      "fix_unverified": "Corrigé — re-revue manuelle requise (mode once)"
     },
-    "modeLabel": "Mode de revue"
+    "modeLabel": "Mode de revue",
+    "fixAuthorHint": "Vide = seulement vos propres PR. Ajoutez des auteurs pour corriger celles des autres (lance un agent + push)."
   }
 }

@@ -64,6 +64,7 @@ function makeWorld(opts: { convergeAfter?: number; fixProducesChanges?: boolean 
     now,
     isChatting: () => false,
     log: () => {},
+    currentUser: 'alice', // 自动修复作者白名单默认值；PR 作者也是 alice，所以放行
     listPulls: async () => ({ pulls: [{ number: PR, author: 'alice', headSha: head(), state: 'open', isDraft: false }] }),
     dispatchReview: async (pid, pr) => {
       calls.review++; reviewRound++
@@ -186,6 +187,37 @@ async function runUntilStable(deps: EngineDeps, calls: any, max = 40) {
   const evs = d.select().from(schema.automationEvents).where(eq(schema.automationEvents.projectId, PID)).all() as any[]
   assert.ok(evs.some((e) => e.kind === 'post_error'), '时间线应有 post_error')
   console.log('automation-engine post-error-stops: ok')
+}
+
+// ── 7) push 失败（前置 4xx，如 worktree 被删）→ 清 pendingFix、停掉自动化、记 push_error，不无限热循环 ──
+{
+  resetWorld(); setConfig()
+  const { deps, calls } = makeWorld({ convergeAfter: Infinity })
+  // 覆盖 dispatchPush：模拟 push.post.ts 在设 fix=error 前就 throw（worktree 没了）
+  deps.dispatchPush = async () => { calls.push++; throw new Error('worktree 不在了') }
+  await runUntilStable(deps, calls)
+  assert.equal(calls.push, 1, 'push 失败后绝不能每轮重撞（热循环）')
+  const row = getPrAutomationRow(d, schema, PID, PR)!
+  assert.equal(row.pendingFix, false, 'push 失败必须清 pendingFix，否则 decide 第1步永久重选 push')
+  assert.equal(row.note, 'push_error')
+  assert.equal(row.reviewOn, false)
+  assert.equal(row.fixOn, false)
+  const evs = d.select().from(schema.automationEvents).where(eq(schema.automationEvents.projectId, PID)).all() as any[]
+  assert.ok(evs.some((e) => e.kind === 'push_error'), '时间线应有 push_error')
+  console.log('automation-engine push-error-stops: ok')
+}
+
+// ── 8) 自动修复作者白名单：currentUser=alice，PR 作者=bob，空作者过滤 → 不修 bob 的 PR（只审）──
+{
+  resetWorld(); setConfig() // fixAuthors 空
+  const { deps, calls } = makeWorld({ convergeAfter: Infinity })
+  deps.currentUser = 'alice'
+  deps.listPulls = async () => ({ pulls: [{ number: PR, author: 'bob', headSha: 'Hb', state: 'open', isDraft: false }] })
+  await runUntilStable(deps, calls)
+  assert.equal(calls.fix, 0, '空作者过滤不应自动修复他人(bob)的 PR')
+  assert.equal(calls.push, 0)
+  assert.ok(calls.review >= 1, '自动审核仍可对他人 PR 跑（只读）')
+  console.log('automation-engine fix-author-guard: ok')
 }
 
 // ── 5) 只开自动审核（不修）→ 审一次 + 发评论，永不进修复，自然停手 ──

@@ -141,9 +141,9 @@ async function save() {
 
       <!-- ── 自动修复系统 ── -->
       <section>
-        <div class="flex items-center gap-3 mb-3">
-          <USwitch v-model="fixEnabled" />
+        <div class="flex items-center justify-between gap-3 mb-3">
           <div class="text-sm font-medium text-highlighted">{{ $t('automation.fixSystem') }}</div>
+          <USwitch v-model="fixEnabled" />
         </div>
         <div class="flex items-start gap-2" :class="fixEnabled ? '' : 'opacity-50 pointer-events-none'">
           <div class="dd-root relative flex-1 min-w-0">
@@ -173,6 +173,7 @@ async function save() {
           </div>
         </div>
         <p class="text-[11px] text-dimmed mt-2">{{ $t('automation.fixHint', { n: autoMaxRounds }) }}</p>
+        <p class="text-[11px] text-warning/90 mt-1">{{ $t('automation.fixAuthorHint') }}</p>
       </section>
     </div>
 

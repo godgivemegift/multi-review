@@ -60,6 +60,22 @@ export function effectiveFixOn(cfg: AutoConfig, row: PrAutoRow | null, pr: { aut
   return cfg.masterEnabled && cfg.fixEnabled && matches(cfg.fixAuthors, cfg.fixStatuses, pr)
 }
 
+// 自动修复的有效开关（带安全护栏）。修复会对该 PR 跑 agent 并自动 push，风险远高于只读的审核，所以：
+// 项目级规则里「空作者过滤」绝不等于「所有人」——默认只对当前用户(机主)自己的 PR 生效（在别人/机器人的 PR 上
+// 跑 headless agent 执行其分支代码 + 自动 push 是危险的，且易受 prompt injection）。
+// 在某条 PR 上显式打开开关(row.fixOn===true) = 人工逐条授权，放行（不受作者白名单限制）。
+export function effectiveFixOnGuarded(
+  cfg: AutoConfig,
+  row: PrAutoRow | null,
+  pr: { author: string; status: PrStatusKey },
+  currentUser: string | null,
+): boolean {
+  if (!effectiveFixOn(cfg, row, pr)) return false
+  if (row && row.fixOn === true) return true // 显式 per-PR 授权，不受作者白名单约束
+  const allow = cfg.fixAuthors.length ? cfg.fixAuthors : currentUser ? [currentUser] : []
+  return allow.includes(pr.author) // 空白名单（且拿不到 currentUser）→ 谁都不修（安全默认）
+}
+
 export type ReviewSnapshot = { exists: boolean; status: string; headSha: string | null }
 export type FixSnapshot = { status: string; chatting: boolean } | null
 
@@ -168,6 +184,17 @@ export function decideAutoAction(s: PrSnapshot): AutoDecision {
       patch: { round: s.auto.round + 1, lastFixReviewSha: review!.headSha ?? null, pendingFix: true },
       reason: 'auto-fix',
     }
+  }
+
+  // 5.5 修复已推上去、但不会被自动复查（once 模式 / 没开自动审核）→ 这条修复永远不会被验证、PR 会一直 armed-idle 空转。
+  //     记 fix_unverified、关两开关停手（修复在 GitHub 上，等人工确认/复查）。every_push 模式不会到这（branch 3 会先复查）。
+  if (
+    fixOn && review?.exists && isTerminalReview(review.status) &&
+    s.actionableCount > 0 && s.fix?.status === 'pushed' &&
+    s.auto.lastFixReviewSha === review.headSha && s.auto.round > 0 &&
+    (s.reviewMode !== 'every_push' || !reviewOn)
+  ) {
+    return { action: { kind: 'none' }, patch: { reviewOn: false, fixOn: false, note: 'fix_unverified' }, reason: 'fix-unverified' }
   }
 
   // 6. 收敛：审过且没有可处理 finding（至少修过一轮）→ 记 converged、停手

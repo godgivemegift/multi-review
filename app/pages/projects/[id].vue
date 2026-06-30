@@ -310,7 +310,7 @@ const filterDims = computed(() => [
           </template>
         </UPopover>
         <button v-if="anyFilter" class="text-xs text-dimmed hover:text-highlighted ml-1" @click="clearFilters">{{ $t('project.clearFilter') }}</button>
-        <UButton class="ml-auto" variant="ghost" color="neutral" size="sm" icon="i-lucide-settings-2" @click="automationOpen = true">{{ $t('automation.configBtn') }}</UButton>
+        <UButton class="ml-auto" variant="ghost" color="neutral" size="sm" icon="i-lucide-settings-2" @click="() => { automationOpen = true }">{{ $t('automation.configBtn') }}</UButton>
         <UButton variant="ghost" color="neutral" size="sm" :loading="pullsPending" icon="i-lucide-refresh-cw" @click="refreshPulls()">{{ $t('project.refreshList') }}</UButton>
       </div>
 

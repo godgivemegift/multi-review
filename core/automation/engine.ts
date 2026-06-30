@@ -2,7 +2,7 @@ import { and, eq } from 'drizzle-orm'
 import {
   decideAutoAction,
   effectiveReviewOn,
-  effectiveFixOn,
+  effectiveFixOnGuarded,
   REVIEW_INFLIGHT,
   type AutoConfig,
   type PrSnapshot,
@@ -32,6 +32,7 @@ export type EngineDeps = {
   dispatchFix(projectId: string, prNumber: number, reviewId: string): Promise<void>
   dispatchPush(fixId: string): Promise<void>
   now(): string
+  currentUser?: string | null // 当前 gh 登录用户（自动修复作者白名单的默认值）
   log?(msg: string): void
 }
 
@@ -73,7 +74,7 @@ async function evaluatePr(db: any, schema: any, deps: EngineDeps, project: any, 
   const row = getPrAutomationRow(db, schema, project.id, p.number)
   const prKey = { author: p.author, status: pullStatusKey(p) }
   const reviewOn = effectiveReviewOn(cfg, row, prKey)
-  const fixOn = effectiveFixOn(cfg, row, prKey)
+  const fixOn = effectiveFixOnGuarded(cfg, row, prKey, deps.currentUser ?? null)
 
   if (!reviewOn && !fixOn) {
     // 自动化对这条 PR 已关：清掉残留 pendingFix，免得它一直把项目 arm 住空转
@@ -155,10 +156,17 @@ async function evaluatePr(db: any, schema: any, deps: EngineDeps, project: any, 
         break
       case 'push':
         if (fix) {
-          await deps.dispatchPush(fix.id)
-          // push 成功 → 清 pendingFix（head 已变，下一轮 every_push 会触发复查）
-          upsertPrAutomation(db, schema, project.id, p.number, { pendingFix: false }, deps.now())
-          rec('pushed')
+          try {
+            await deps.dispatchPush(fix.id)
+            // push 成功 → 清 pendingFix（head 已变，下一轮 every_push 会触发复查）
+            upsertPrAutomation(db, schema, project.id, p.number, { pendingFix: false }, deps.now())
+            rec('pushed')
+          } catch (e) {
+            // push 失败（含 push.post.ts 的前置 4xx：worktree 没了/分支非法/没改动等，它在设 fix=error 前就 throw）。
+            // 必须清 pendingFix——否则 decide 第 1 步会每轮无条件重选 push、永久热循环且短路回合上限。停掉该 PR 自动化 + 记 push_error。
+            upsertPrAutomation(db, schema, project.id, p.number, { reviewOn: false, fixOn: false, pendingFix: false, note: 'push_error' }, deps.now())
+            rec('push_error', (e as Error).message)
+          }
         }
         break
     }

@@ -3,6 +3,7 @@ import {
   decideAutoAction,
   effectiveReviewOn,
   effectiveFixOn,
+  effectiveFixOnGuarded,
   EMPTY_AUTO_ROW,
   type AutoConfig,
   type PrSnapshot,
@@ -60,6 +61,25 @@ function snap(over: Partial<PrSnapshot> = {}): PrSnapshot {
   assert.equal(effectiveReviewOn(CFG, { ...EMPTY_AUTO_ROW, reviewOn: true, optOut: true }, pr), false)
   assert.equal(effectiveFixOn(CFG, { ...EMPTY_AUTO_ROW, fixOn: true, optOut: true }, pr), false)
   console.log('automation-decide effective: ok')
+}
+
+// ── 1b) 自动修复作者白名单护栏（H2）────────────────────────────────
+{
+  const mine = { author: 'alice', status: 'open' as PrStatusKey }
+  const theirs = { author: 'bob', status: 'open' as PrStatusKey }
+  // 空作者过滤 + 继承：只对当前用户(alice)自己的 PR 生效，不碰 bob 的
+  assert.equal(effectiveFixOnGuarded(CFG, null, mine, 'alice'), true)
+  assert.equal(effectiveFixOnGuarded(CFG, null, theirs, 'alice'), false)
+  // 拿不到 currentUser（null）+ 空过滤 → 谁都不修（安全默认）
+  assert.equal(effectiveFixOnGuarded(CFG, null, mine, null), false)
+  // 显式选了作者 bob → 修 bob 的、不修 alice 的
+  assert.equal(effectiveFixOnGuarded({ ...CFG, fixAuthors: ['bob'] }, null, theirs, 'alice'), true)
+  assert.equal(effectiveFixOnGuarded({ ...CFG, fixAuthors: ['bob'] }, null, mine, 'alice'), false)
+  // 在某 PR 上显式打开开关 = 人工授权，绕过作者白名单（即便是 bob 的 PR）
+  assert.equal(effectiveFixOnGuarded(CFG, { ...EMPTY_AUTO_ROW, fixOn: true }, theirs, 'alice'), true)
+  // 显式关 → 关
+  assert.equal(effectiveFixOnGuarded(CFG, { ...EMPTY_AUTO_ROW, fixOn: false }, mine, 'alice'), false)
+  console.log('automation-decide fix-author-guard: ok')
 }
 
 // ── 2) 单步分支判定 ──────────────────────────────────────────────
@@ -272,13 +292,13 @@ function simulate(opts: {
   console.log(`automation-decide loop/converge: ok (修 ${r.fixDispatches} 次后收敛，${r.step} 步)`)
 }
 
-// 4c) once 模式：审一次 + 修一次，之后没有自动复查 → 不再继续（idle），且只修 1 次
+// 4c) once 模式 + fix：审一次 + 修一次 + push，之后没有自动复查 → 不空转，记 fix_unverified、关开关停手（M3）
 {
   const r = simulate({ reviewMode: 'once', maxRounds: 3, actionableAfter: () => 2 })
-  assert.equal(r.ended, 'idle', `期望 idle，实际 ${r.ended} · trace=${r.trace.join('>')}`)
   assert.equal(r.fixDispatches, 1, `once 模式期望只修 1 次，实际 ${r.fixDispatches}`)
+  assert.equal(r.auto.note, 'fix_unverified', `期望 fix_unverified，实际 ${r.auto.note} · trace=${r.trace.join('>')}`)
   assert.ok(!r.trace.includes('recheck'), 'once 模式不应有 recheck')
-  console.log(`automation-decide loop/once: ok (修 ${r.fixDispatches} 次，${r.step} 步)`)
+  console.log(`automation-decide loop/once: ok (修 ${r.fixDispatches} 次后记 fix_unverified 停手，${r.step} 步)`)
 }
 
 // 4d) maxRounds=3 同样在 3 次修复后封顶（参数化验证上限可配）

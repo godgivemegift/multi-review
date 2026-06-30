@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { getDb, schema } from '~core/db/client'
-import { listPulls } from '~core/github/gh'
+import { listPulls, getCurrentUserLogin } from '~core/github/gh'
 import { isChatting } from '~core/fix/pipeline'
 import { runAutomationTick, type EngineDeps } from '~core/automation/engine'
 import { buildAutoFixMessage } from '~core/automation/fixprompt'
@@ -10,7 +10,9 @@ import { buildAutoFixMessage } from '~core/automation/fixprompt'
 // 所有副作用都走内部 $fetch（保留各端点既有守卫：去重/并发锁/push 安全检查），引擎本身不直接动 GitHub/git。
 export default defineNitroPlugin((nitroApp) => {
   const cfg = useRuntimeConfig()
-  if ((cfg.automationEnabled as any) === false) return // 总开关（环境变量可关停整个引擎）
+  // 总开关（关停整个引擎）。runtimeConfig 是构建期求值，生产 .output 部署只认 NUXT_ 前缀；
+  // 这里额外在运行时直接读 process.env.AUTOMATION_ENABLED，让裸环境变量的紧急关停在部署里也生效。
+  if ((cfg.automationEnabled as any) === false || process.env.AUTOMATION_ENABLED === 'false') return
 
   const d = getDb(cfg.dbPath as string)
   const now = () => new Date().toISOString()
@@ -18,10 +20,13 @@ export default defineNitroPlugin((nitroApp) => {
   // 引擎由定时器驱动、无用户请求上下文，拿不到 cookie 的 mr-locale → 用中心默认决定工作语言（否则各端点一律回落 zh）。
   const lang = (cfg.automationLang as string) || 'zh'
   const cookieHeader = { cookie: `mr-locale=${lang}` }
+  // 当前 gh 登录用户：自动修复作者白名单的默认值（空过滤=只修自己的 PR，不碰别人的）。首个 tick 解析，gh 没就绪先留 null（=不修）。
+  let currentUser: string | null = null
 
   const deps: EngineDeps = {
     now,
     isChatting,
+    get currentUser() { return currentUser },
     log: (msg) => console.log(`[automation] ${msg}`),
     listPulls: (repo, state, first) => listPulls(repo, state, first),
 
@@ -71,6 +76,7 @@ export default defineNitroPlugin((nitroApp) => {
     if (running) return // 上一轮没跑完就跳过这一轮（better-sqlite3 是同步的，别叠着跑）
     running = true
     try {
+      if (!currentUser) currentUser = await getCurrentUserLogin().catch(() => null) // gh 就绪后解析一次并缓存
       await runAutomationTick(d, schema, deps)
     } catch (e) {
       console.error('[automation] tick failed', e)

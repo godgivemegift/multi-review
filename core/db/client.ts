@@ -88,6 +88,7 @@ function ensureSchema(sqlite: Database.Database) {
       provider TEXT NOT NULL DEFAULT 'claude',
       model TEXT,
       effort TEXT,
+      auto_max_rounds INTEGER NOT NULL DEFAULT 2,
       default_branch TEXT NOT NULL DEFAULT 'dev',
       created_at TEXT NOT NULL
     );

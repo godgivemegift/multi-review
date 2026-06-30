@@ -1,9 +1,9 @@
 import { existsSync } from 'node:fs'
 import { eq } from 'drizzle-orm'
 import { schema } from '~core/db/client'
-import { listPulls } from '~core/github/gh'
+import { listPulls, getCurrentUserLogin } from '~core/github/gh'
 import { getProjectAutomation, getPrAutomationMap, pullStatusKey } from '~core/automation/state'
-import { effectiveReviewOn, effectiveFixOn } from '~core/automation/decide'
+import { effectiveReviewOn, effectiveFixOnGuarded } from '~core/automation/decide'
 
 // 分页拉该项目仓库的 PR（GraphQL cursor），标注哪些已建审核任务。
 export default defineEventHandler(async (event) => {
@@ -75,6 +75,7 @@ export default defineEventHandler(async (event) => {
   const autoCfg = getProjectAutomation(d, schema, id)
   const autoRowByPr = getPrAutomationMap(d, schema, id) // 一次拉全，避免 .map() 里 N+1 点查
   const autoMaxRounds = project.autoMaxRounds ?? 2
+  const me = await getCurrentUserLogin().catch(() => null) // 自动修复作者白名单默认值（和引擎口径一致）
 
   return {
     pulls: page.pulls.map((p) => {
@@ -84,7 +85,7 @@ export default defineEventHandler(async (event) => {
       const autoRow = autoRowByPr.get(p.number) ?? null
       const prKey = { author: p.author, status: pullStatusKey(p) }
       const autoReviewOn = effectiveReviewOn(autoCfg, autoRow, prKey)
-      const autoFixOn = effectiveFixOn(autoCfg, autoRow, prKey)
+      const autoFixOn = effectiveFixOnGuarded(autoCfg, autoRow, prKey, me)
       // 作者已更新：我「看过」的 sha 之后 PR head 又变了。基线用 review.headSha——审核/复审完成都会推进它，
       // 所以点了复审看过新 commit 后红点自动清，作者在复审基线之后再 push 才重新点亮（与抽屉/refresh 口径统一）。
       // 副作用：首次审核后即便还没发评论，作者 push 也会点亮——这正是「有我没看过的新改动」的本意。
