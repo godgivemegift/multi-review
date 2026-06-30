@@ -29,6 +29,19 @@
       "repo": "Dépôt (owner/repo)",
       "localPath": "Chemin du clone local (les worktrees démarrent d'ici)",
       "defaultBranch": "Branche par défaut"
+    },
+    "picker": {
+      "browse": "Parcourir",
+      "title": "Choisir un dossier",
+      "select": "Choisir ce dossier",
+      "parent": "Dossier parent",
+      "home": "Dossier personnel",
+      "empty": "Aucun sous-dossier",
+      "pathPlaceholder": "Saisir un chemin, Entrée pour ouvrir",
+      "repoDetected": "dépôt",
+      "repoUnknown": "pas de remote origin",
+      "depotHint": "Parcourez un clone git local : son dépôt (owner/repo) est rempli automatiquement.",
+      "cloneHint": "Source des worktrees. Par défaut = le dépôt ci-dessus ; choisissez un autre clone local pour le changer."
     }
   },
   "home": {

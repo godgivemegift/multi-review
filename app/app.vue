@@ -13,9 +13,26 @@ const { data: projects, refresh } = await useFetch<Project[]>('/api/projects')
 const route = useRoute()
 
 const showCreate = ref(false)
+const showDepotPicker = ref(false)
+const showClonePicker = ref(false)
 const form = reactive({ name: '', repo: '', localPath: '', defaultBranch: 'dev', methodologyRef: '' })
 const creating = ref(false)
 const error = ref('')
+
+// 选 Dépôt：浏览到一个本地 git 克隆 → 由它的 origin 推出 owner/repo（PR 身份）。
+// 同时把这个本地克隆路径作为「Chemin du clone local」的默认值（worktree 来源，可再改）。
+function onPickDepot({ path, repo }: { path: string; repo: string | null }) {
+  if (repo) {
+    form.repo = repo
+    if (!form.name.trim()) form.name = repo.split('/')[1] ?? ''
+  }
+  if (!form.localPath.trim()) form.localPath = path // 仅在未填时作为默认；已填则保留用户已选的 clone 路径
+}
+
+// 选 worktree 来源的本地克隆：只改路径，不动 Dépôt 身份（可指向另一个本地克隆）。
+function onPickClone({ path }: { path: string; repo: string | null }) {
+  form.localPath = path
+}
 
 async function createProject() {
   error.value = ''
@@ -104,11 +121,19 @@ async function createProject() {
         </label>
         <label class="block">
           <span class="text-xs text-dimmed">{{ $t('layout.form.repo') }}</span>
-          <input v-model="form.repo" placeholder="Stakimo/stakimo-app" class="w-full text-sm border-b border-default focus:border-inverted outline-none py-1 placeholder:text-dimmed" />
+          <div class="flex items-center gap-2">
+            <input v-model="form.repo" placeholder="Stakimo/stakimo-app" class="flex-1 min-w-0 text-sm border-b border-default focus:border-inverted outline-none py-1 placeholder:text-dimmed" />
+            <button type="button" class="shrink-0 text-xs text-muted hover:text-highlighted border border-default rounded px-2.5 py-1.5" @click="showDepotPicker = true">{{ $t('layout.picker.browse') }}</button>
+          </div>
+          <span class="text-[11px] text-dimmed mt-1 block">{{ $t('layout.picker.depotHint') }}</span>
         </label>
         <label class="block">
           <span class="text-xs text-dimmed">{{ $t('layout.form.localPath') }}</span>
-          <input v-model="form.localPath" placeholder="/Users/you/work/stakimo-appli" class="w-full text-sm font-mono border-b border-default focus:border-inverted outline-none py-1 placeholder:text-dimmed" />
+          <div class="flex items-center gap-2">
+            <input v-model="form.localPath" placeholder="/Users/you/work/stakimo-appli" class="flex-1 min-w-0 text-sm font-mono border-b border-default focus:border-inverted outline-none py-1 placeholder:text-dimmed" />
+            <button type="button" class="shrink-0 text-xs text-muted hover:text-highlighted border border-default rounded px-2.5 py-1.5" @click="showClonePicker = true">{{ $t('layout.picker.browse') }}</button>
+          </div>
+          <span class="text-[11px] text-dimmed mt-1 block">{{ $t('layout.picker.cloneHint') }}</span>
         </label>
         <label class="block">
           <span class="text-xs text-dimmed">{{ $t('layout.form.defaultBranch') }}</span>
@@ -121,5 +146,11 @@ async function createProject() {
         <button class="text-sm bg-inverted text-inverted px-4 py-2 hover:bg-inverted/90 disabled:opacity-40" :disabled="creating" @click="createProject">{{ creating ? $t('layout.creating') : $t('layout.create') }}</button>
       </template>
     </BaseModal>
+
+    <!-- 选 Dépôt：浏览本地 git 克隆 → 推出 owner/repo，并把路径作为 clone 路径默认值 -->
+    <DirectoryPicker v-model:open="showDepotPicker" :initial-path="form.localPath" @select="onPickDepot" />
+
+    <!-- 选 worktree 来源的本地克隆路径（默认跟随 Dépôt，可改） -->
+    <DirectoryPicker v-model:open="showClonePicker" :initial-path="form.localPath" @select="onPickClone" />
   </UApp>
 </template>

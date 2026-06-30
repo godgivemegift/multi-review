@@ -29,6 +29,19 @@
       "repo": "仓库 (owner/repo)",
       "localPath": "本地 clone 路径（worktree 从这里开）",
       "defaultBranch": "默认分支"
+    },
+    "picker": {
+      "browse": "浏览",
+      "title": "选择文件夹",
+      "select": "选择此文件夹",
+      "parent": "上级目录",
+      "home": "主目录",
+      "empty": "没有子目录",
+      "pathPlaceholder": "输入路径，回车打开",
+      "repoDetected": "仓库",
+      "repoUnknown": "没有 origin 远程",
+      "depotHint": "浏览到一个本地 git 克隆——它的仓库 (owner/repo) 会自动填好。",
+      "cloneHint": "worktree 的来源。默认 = 上面的仓库；选另一个本地克隆即可更改。"
     }
   },
   "home": {
