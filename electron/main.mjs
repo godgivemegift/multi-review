@@ -16,6 +16,8 @@ let mainWindow = null
 let serverProc = null
 let serverUrl = '' // 已起的 Nitro 地址(打包态)；重开窗口时复用
 let lastStderr = '' // Nitro 最近的 stderr，启动失败时显示给用户
+let startPromise = null // 进行中的 startNitro()，冷启动期间重入时复用,避免双开 Nitro
+let openingPromise = null // 进行中的 openMainWindow()，避免并发重入双开窗口
 
 // macOS/Linux GUI 启动的 app 不继承登录 shell 的 PATH,会导致子进程找不到
 // git / gh / claude / codex / node。用登录 shell 取一次真实 PATH 注入。
@@ -145,7 +147,16 @@ async function startNitro() {
 async function resolveAppUrl() {
   if (DEV_URL) return DEV_URL
   if (serverProc && serverUrl) return serverUrl
-  return await startNitro()
+  // serverUrl 要等 waitForServer(几秒)才赋值,但 serverProc 在 spawn 时就有 —— 冷启动
+  // 窗口里 `serverProc && serverUrl` 仍是 false。若此时重入(macOS 首次启动的 activate)
+  // 会再 startNitro 一次,两个 Nitro 打在同一个 userData DB/worktrees 上。用进行中的
+  // promise 兜住,整个启动期只会有一个 startNitro。
+  if (!startPromise) {
+    startPromise = startNitro().finally(() => {
+      startPromise = null
+    })
+  }
+  return await startPromise
 }
 
 function createWindow(url) {
@@ -206,8 +217,11 @@ function stopNitro() {
   if (!child) return
   serverProc = null
   try {
+    // SIGTERM → Nitro 的 shutdown 插件(server/plugins/shutdown.ts)拦下来,先把在跑的
+    // claude/codex agent 进程组逐个停掉(它们是 detached 起的,独立进程组,kill 父进程到不了),
+    // 再退出。SIGKILL 只是兜底:3s 还没退就强杀 Nitro 本身。
+    // 注意:SIGKILL 杀的只是 Nitro 的 pid,杀不到孙进程 —— 真正回收 agent 靠的是上面的 SIGTERM 优雅退出。
     child.kill('SIGTERM')
-    // 兜底强杀：3s 没退就 SIGKILL，避免 Nitro 及其 git/gh/claude 孙进程被孤儿化
     const t = setTimeout(() => {
       try {
         child.kill('SIGKILL')
@@ -223,8 +237,24 @@ function stopNitro() {
 }
 
 async function openMainWindow() {
-  const url = await resolveAppUrl()
-  createWindow(url)
+  if (mainWindow) {
+    mainWindow.focus()
+    return
+  }
+  // 并发重入(whenReady 还在 await resolveAppUrl 时 activate 又触发一次):复用同一个
+  // promise,且 await 之后再查一次 mainWindow,确保只建一个窗口。
+  if (openingPromise) return openingPromise
+  openingPromise = (async () => {
+    const url = await resolveAppUrl()
+    if (mainWindow) {
+      mainWindow.focus()
+      return
+    }
+    createWindow(url)
+  })().finally(() => {
+    openingPromise = null
+  })
+  return openingPromise
 }
 
 // 单实例锁：随机端口去掉了旧固定端口的 EADDRINUSE 天然单例保护。两个实例会共用同一个

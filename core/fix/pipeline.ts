@@ -55,6 +55,13 @@ export function stopFixChat(fixId: string): boolean {
   return true
 }
 
+// 进程退出(app 关闭)时把所有在跑的修复会话停掉(CLI 子进程组 + SDK runner),别留孤儿。
+export function stopAllFixChats(): boolean {
+  let any = false
+  for (const id of new Set([...activeChats.keys(), ...activeChatStops.keys()])) any = stopFixChat(id) || any
+  return any
+}
+
 // db/schema 由调用方注入（core 不直接依赖运行时 db）。
 export type FixJobCtx = {
   db: any
