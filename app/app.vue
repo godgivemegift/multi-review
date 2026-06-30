@@ -26,7 +26,7 @@ function onPickDepot({ path, repo }: { path: string; repo: string | null }) {
     form.repo = repo
     if (!form.name.trim()) form.name = repo.split('/')[1] ?? ''
   }
-  form.localPath = path // 默认跟随 Dépôt
+  if (!form.localPath.trim()) form.localPath = path // 仅在未填时作为默认；已填则保留用户已选的 clone 路径
 }
 
 // 选 worktree 来源的本地克隆：只改路径，不动 Dépôt 身份（可指向另一个本地克隆）。

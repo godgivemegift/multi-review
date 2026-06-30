@@ -32,6 +32,8 @@ const error = ref('')
 async function load(p?: string) {
   loading.value = true
   error.value = ''
+  currentIsGit.value = false // 先清掉上一目录的 git 提示，避免加载中显示过期的 owner/repo
+  repo.value = null
   try {
     const r = await $fetch<BrowseResult>('/api/fs/browse', { query: { path: p ?? '' } })
     current.value = r.path
@@ -53,7 +55,13 @@ watch(open, (v) => {
   if (v) load(props.initialPath || current.value || undefined)
 })
 
-function choose() {
+// 路径框里可能手敲了路径却没回车 → 点「选择」时先按它加载校验，确认有效再保存；
+// 无效（404 等）就停在错误态、不把上一个目录当成选择结果。
+async function choose() {
+  if (pathInput.value.trim() && pathInput.value !== current.value) {
+    await load(pathInput.value)
+    if (error.value) return
+  }
   emit('select', { path: current.value, repo: repo.value })
   open.value = false
 }
