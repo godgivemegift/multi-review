@@ -15,10 +15,10 @@ function modeLabel(m: string) { return m === 'every_push' ? t('automation.modeEv
 // 审核模式多选：['once','every_push'] 子集。空=自动审核不开。每次push 含首审，所以选了 every_push 回显会自动带上 once。
 const reviewModes = ref<string[]>([])
 const reviewAuthors = ref<string[]>([])
-const reviewStatuses = ref<string[]>(['open', 'draft'])
+const reviewStatuses = ref<string[]>(['open'])
 const fixEnabled = ref(false)
 const fixAuthors = ref<string[]>([])
-const fixStatuses = ref<string[]>(['open', 'draft'])
+const fixStatuses = ref<string[]>(['open'])
 const autoMaxRounds = ref(2)
 
 const loading = ref(false)
@@ -31,10 +31,10 @@ async function load() {
     const r = await $fetch<any>(`/api/projects/${props.projectId}/automation`)
     reviewModes.value = !r.reviewEnabled ? [] : r.reviewMode === 'every_push' ? ['once', 'every_push'] : ['once']
     reviewAuthors.value = r.reviewAuthors ?? []
-    reviewStatuses.value = r.reviewStatuses ?? ['open', 'draft']
+    reviewStatuses.value = r.reviewStatuses ?? ['open']
     fixEnabled.value = !!r.fixEnabled
     fixAuthors.value = r.fixAuthors ?? []
-    fixStatuses.value = r.fixStatuses ?? ['open', 'draft']
+    fixStatuses.value = r.fixStatuses ?? ['open']
     autoMaxRounds.value = r.autoMaxRounds ?? 2
   } catch (e: any) {
     msg.value = e?.data?.statusMessage || e?.message || 'load failed'

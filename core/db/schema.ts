@@ -312,10 +312,10 @@ export const projectAutomation = sqliteTable('project_automation', {
   reviewEnabled: integer('review_enabled', { mode: 'boolean' }).notNull().default(false), // 自动审核系统开关
   reviewMode: text('review_mode', { enum: ['once', 'every_push'] }).notNull().default('once'), // 一次 / 每次push（每次push=作者更新后自动复查）
   reviewAuthors: text('review_authors').notNull().default('[]'), // JSON string[]，空=不限作者
-  reviewStatuses: text('review_statuses').notNull().default('["open","draft"]'), // JSON string[]（pullKey: open/draft/merged/closed），默认进行中
+  reviewStatuses: text('review_statuses').notNull().default('["open"]'), // JSON string[]（pullKey: open/draft/merged/closed），默认 open（草稿默认不勾）
   fixEnabled: integer('fix_enabled', { mode: 'boolean' }).notNull().default(false), // 自动修复系统开关
   fixAuthors: text('fix_authors').notNull().default('[]'),
-  fixStatuses: text('fix_statuses').notNull().default('["open","draft"]'),
+  fixStatuses: text('fix_statuses').notNull().default('["open"]'),
   updatedAt: text('updated_at').notNull(),
 })
 

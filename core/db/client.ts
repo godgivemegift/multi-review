@@ -312,10 +312,10 @@ function ensureSchema(sqlite: Database.Database) {
       review_enabled INTEGER NOT NULL DEFAULT 0,
       review_mode TEXT NOT NULL DEFAULT 'once',
       review_authors TEXT NOT NULL DEFAULT '[]',
-      review_statuses TEXT NOT NULL DEFAULT '["open","draft"]',
+      review_statuses TEXT NOT NULL DEFAULT '["open"]',
       fix_enabled INTEGER NOT NULL DEFAULT 0,
       fix_authors TEXT NOT NULL DEFAULT '[]',
-      fix_statuses TEXT NOT NULL DEFAULT '["open","draft"]',
+      fix_statuses TEXT NOT NULL DEFAULT '["open"]',
       updated_at TEXT NOT NULL
     );
 

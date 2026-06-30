@@ -79,9 +79,9 @@ const pullsResp = ref<PullsResp | null>(null)
 const pullsPending = ref(false)
 const page = ref(0)
 
-// PR status 是后端分页维度：只在 open/draft 范围内时让后端拉 open（默认进行中，不会被一堆 merged 淹没）；
+// PR status 是后端分页维度：只在 open/draft 范围内时让后端拉 open（默认只 open、草稿不勾，不会被一堆 merged 淹没）；
 // 一旦勾了 merged/closed 就拉 all，再前端按 fPr 细分。其它三维（作者/审核/修复）纯前端过滤当前页。
-const fPr = ref<string[]>(['open', 'draft'])
+const fPr = ref<string[]>(['open'])
 const backendState = computed(() => {
   const f = fPr.value
   if (!f.length) return 'all'

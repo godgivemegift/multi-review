@@ -9,10 +9,10 @@ const Body = z.object({
   reviewEnabled: z.boolean(),
   reviewMode: z.enum(['once', 'every_push']),
   reviewAuthors: z.array(z.string()).default([]),
-  reviewStatuses: z.array(Status).default(['open', 'draft']),
+  reviewStatuses: z.array(Status).default(['open']),
   fixEnabled: z.boolean(),
   fixAuthors: z.array(z.string()).default([]),
-  fixStatuses: z.array(Status).default(['open', 'draft']),
+  fixStatuses: z.array(Status).default(['open']),
 })
 
 export default defineEventHandler(async (event) => {

@@ -28,8 +28,8 @@ export function getProjectAutomation(db: any, schema: any, projectId: string): A
   const row = db.select().from(schema.projectAutomation).where(eq(schema.projectAutomation.projectId, projectId)).get()
   if (!row) {
     return {
-      masterEnabled: false, reviewEnabled: false, reviewMode: 'once', reviewAuthors: [], reviewStatuses: ['open', 'draft'],
-      fixEnabled: false, fixAuthors: [], fixStatuses: ['open', 'draft'],
+      masterEnabled: false, reviewEnabled: false, reviewMode: 'once', reviewAuthors: [], reviewStatuses: ['open'],
+      fixEnabled: false, fixAuthors: [], fixStatuses: ['open'],
     }
   }
   return {
