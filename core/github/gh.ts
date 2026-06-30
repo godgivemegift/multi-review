@@ -121,6 +121,20 @@ export async function ghToken(): Promise<string> {
   return _ghToken
 }
 
+// PR 与目标分支是否能干净合并（自动审核据此追加「解决合并冲突」项）。
+// GitHub 的 mergeable 是异步计算的：刚 push 完可能短暂为 UNKNOWN → 那种情况当「未知」不误报。
+export async function fetchPrMergeable(repo: string, prNumber: number): Promise<'mergeable' | 'conflicting' | 'unknown'> {
+  try {
+    const out = await gh(['pr', 'view', String(prNumber), '--repo', repo, '--json', 'mergeable'])
+    const m = String(JSON.parse(out)?.mergeable || '').toUpperCase()
+    if (m === 'CONFLICTING') return 'conflicting'
+    if (m === 'MERGEABLE') return 'mergeable'
+    return 'unknown'
+  } catch {
+    return 'unknown'
+  }
+}
+
 // PR 当前已提交的 review 总数（「审核已更新」基线：push 时记一份，之后变多 = reviewer 又审了）
 export async function fetchReviewsCount(repo: string, prNumber: number): Promise<number> {
   const [owner, name] = repo.split('/')

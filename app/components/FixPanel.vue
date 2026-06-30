@@ -72,11 +72,11 @@ function openSSE() {
 }
 function closeSSE() { es?.close(); es = null }
 
-// tab 激活时连 SSE / load；切走时断开。切回 tab 总是回到对话视图。
-watch(() => [props.active, currentFixId.value] as const, ([on, id]) => {
+// tab 激活时连 SSE / load；切走时断开。切回 tab 总是回到对话视图。load 完滚到底（看最新一条）。
+watch(() => [props.active, currentFixId.value] as const, async ([on, id]) => {
   if (on) {
     view.value = 'chat'
-    if (id) { load(); openSSE() } else { data.value = null; closeSSE() }
+    if (id) { await load(); openSSE(); scrollChatToBottom() } else { data.value = null; closeSSE() }
   } else { closeSSE() }
 }, { immediate: true })
 onBeforeUnmount(() => { closeSSE(); if (chatTimer) clearInterval(chatTimer); if (pollTimer) clearInterval(pollTimer) })
@@ -88,7 +88,9 @@ const liveAssistant = ref('')
 // 进对话 / 来新消息时自动滚到最底
 const chatScroll = ref<HTMLElement | null>(null)
 function scrollChatToBottom() {
-  nextTick(() => { const el = chatScroll.value; if (el) el.scrollTop = el.scrollHeight })
+  const go = () => { const el = chatScroll.value; if (el) el.scrollTop = el.scrollHeight }
+  // 二次补滚：MarkdownBody 渲染后内容高度可能再变（首次滚不到真正的底）
+  nextTick(() => { go(); setTimeout(go, 80) })
 }
 watch([view, () => data.value?.turns.length, liveAssistant], ([v]) => { if (v === 'chat') scrollChatToBottom() })
 

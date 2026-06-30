@@ -8,18 +8,23 @@ const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ taskCreated: [] }>()
 const { t, te, locale } = useI18n()
 
-// 两个实例级自动化开关（自动审核 / 自动修复）：状态跟列表数据走，翻一下就 POST 覆盖 + 刷新列表。
-const togglingAuto = ref(false)
+// 两个实例级自动化开关（自动审核 / 自动修复）。本地乐观状态：点了立刻动，不等 8s 轮询回来（顺滑）；
+// 失败或下次轮询再用真实值校正。只有 switch 本身可点（模板里用 div 而非 label，文字不触发切换）。
+const reviewOnLocal = ref(props.autoReviewOn ?? false)
+const fixOnLocal = ref(props.autoFixOn ?? false)
+watch(() => props.autoReviewOn, (v) => { reviewOnLocal.value = v ?? false })
+watch(() => props.autoFixOn, (v) => { fixOnLocal.value = v ?? false })
 async function toggleAuto(field: 'reviewOn' | 'fixOn', value: boolean) {
-  if (props.prNumber == null || togglingAuto.value) return
-  togglingAuto.value = true
+  if (props.prNumber == null) return
+  if (field === 'reviewOn') reviewOnLocal.value = value
+  else fixOnLocal.value = value
   try {
     await $fetch(`/api/projects/${props.projectId}/pulls/${props.prNumber}/automation`, { method: 'POST', body: { [field]: value } })
-    emit('taskCreated') // 复用：触发父级 refreshPulls，把有效状态/轮数刷新回来
-  } catch (e: any) {
-    // 失败静默：下次轮询会把真实状态拉回来
-  } finally {
-    togglingAuto.value = false
+    emit('taskCreated') // 触发父级 refreshPulls，把有效状态/轮数刷新回来
+  } catch {
+    // 失败 → 回退本地乐观值
+    if (field === 'reviewOn') reviewOnLocal.value = !value
+    else fixOnLocal.value = !value
   }
 }
 // 引擎停手原因 → 一行提示（capped/converged/cant_fix/...）
@@ -239,14 +244,14 @@ const lineCls: Record<DiffLine['t'], string> = {
 
           <!-- 实例级自动化开关：自动审核 / 自动修复（覆盖项目配置；翻开即重置该 PR 的回合数） -->
           <div v-if="detail" class="flex items-center flex-wrap gap-x-5 gap-y-1 mt-3 text-xs">
-            <label class="flex items-center gap-2 cursor-pointer">
-              <USwitch :model-value="autoReviewOn" :disabled="togglingAuto" size="sm" @update:model-value="(v: boolean) => toggleAuto('reviewOn', v)" />
-              <span :class="autoReviewOn ? 'text-highlighted' : 'text-dimmed'">{{ $t('automation.prAutoReview') }}</span>
-            </label>
-            <label class="flex items-center gap-2 cursor-pointer">
-              <USwitch :model-value="autoFixOn" :disabled="togglingAuto" size="sm" @update:model-value="(v: boolean) => toggleAuto('fixOn', v)" />
-              <span :class="autoFixOn ? 'text-highlighted' : 'text-dimmed'">{{ $t('automation.prAutoFix') }}</span>
-            </label>
+            <div class="flex items-center gap-2">
+              <USwitch :model-value="reviewOnLocal" size="sm" @update:model-value="(v: boolean) => toggleAuto('reviewOn', v)" />
+              <span class="select-none" :class="reviewOnLocal ? 'text-highlighted' : 'text-dimmed'">{{ $t('automation.prAutoReview') }}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <USwitch :model-value="fixOnLocal" size="sm" @update:model-value="(v: boolean) => toggleAuto('fixOn', v)" />
+              <span class="select-none" :class="fixOnLocal ? 'text-highlighted' : 'text-dimmed'">{{ $t('automation.prAutoFix') }}</span>
+            </div>
             <span v-if="coolingMinLeft" class="text-warning">· {{ $t('automation.coolingHint', { n: coolingMinLeft }) }}</span>
             <span v-else-if="autoNoteText" class="text-highlighted">· {{ autoNoteText }}</span>
           </div>

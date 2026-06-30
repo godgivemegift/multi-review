@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm'
 import { reviewQueue } from './queue'
 import { cockpitBus } from './events'
 import { prepareWorktree } from './git/worktree'
+import { fetchPrMergeable } from './github/gh'
 import { claudeReviewRunner } from './agent/claudeRunners'
 import { codexReviewRunner } from './agent/codexReview'
 import type { ReviewProvider, ReviewRunner } from './agent/runners'
@@ -151,6 +152,25 @@ async function runReviewJob(ctx: ReviewJobCtx) {
           }).run()
         })
       })
+
+      // 合并冲突检测：PR 与目标分支冲突 → 追加一条 High「解决合并冲突」（自动修复会尝试解冲突）。
+      // GitHub mergeable 取数失败 / UNKNOWN 不误报。
+      try {
+        if ((await fetchPrMergeable(ctx.repo, ctx.prNumber)) === 'conflicting' && !taskGone()) {
+          const zh = ctx.lang !== 'en'
+          const n = result.findings.length
+          db.insert(schema.findings).values({
+            id: nanoid(), reviewId, fid: `F${n + 1}`, severity: 'High',
+            title: zh ? '解决与目标分支的合并冲突' : 'Resolve merge conflicts with the base branch',
+            location: null,
+            problem: zh ? '该 PR 与目标分支存在合并冲突，当前无法干净合并。' : 'This PR has merge conflicts with its base branch and cannot be merged as-is.',
+            detail: null,
+            fix: zh ? '把目标分支 merge/rebase 进来并解决所有冲突标记（<<<<<<< / ======= / >>>>>>>）。' : 'Merge/rebase the base branch in and resolve all conflict markers (<<<<<<< / ======= / >>>>>>>).',
+            introducedByPr: true, checked: false, notes: null, sortOrder: n, createdAt: now(),
+          }).run()
+          emit('stage', zh ? '检测到合并冲突，已加入需解决项' : 'Merge conflicts detected, added as a finding')
+        }
+      } catch { /* mergeable 取数失败不影响审核 */ }
     }
 
     setStatus('draft', {
