@@ -6,6 +6,7 @@ import { schema } from '~core/db/client'
 const Body = z.object({
   provider: z.enum(['claude', 'codex']).optional(),
   model: z.string().optional(),
+  effort: z.string().optional(),
   cwd: z.string().optional(),
   title: z.string().max(200).optional(),
 })
@@ -18,6 +19,7 @@ export default defineEventHandler(async (event) => {
     title: b.title?.trim() || null,
     provider: (b.provider ?? 'claude') as 'claude' | 'codex',
     model: b.model?.trim() || null,
+    effort: b.effort?.trim() || null,
     cwd: b.cwd?.trim() || null,
     sessionId: null,
     codexSessionId: null,

@@ -149,6 +149,15 @@ async function handleSlash(raw: string): Promise<boolean> {
 
 const pendingCwd = ref<string | null>(null)
 
+// ultracode 便捷开关：在输入开头切换 `ultracode: ` 前缀（method ① —— 让这条用 xhigh + 多代理 workflow 跑）。
+const ULTRA_PREFIX = 'ultracode: '
+const ultracodeActive = computed(() => /^ultracode:/i.test(input.value))
+function toggleUltracode() {
+  input.value = ultracodeActive.value
+    ? input.value.replace(/^ultracode:\s*/i, '')
+    : ULTRA_PREFIX + input.value
+}
+
 async function send() {
   const msg = input.value.trim()
   if (!msg || chatting.value || busy.value) return
@@ -291,7 +300,22 @@ function hhmmss(iso?: string) { return new Date(iso ?? new Date().toISOString())
               v-model="input" rows="2" :placeholder="$t('global.placeholder')"
               class="w-full text-sm border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-inverted"
             />
-            <div class="flex justify-end mt-1.5">
+            <div class="flex items-center justify-between gap-2 mt-1.5">
+              <!-- ultracode 便捷按钮：紫色 + 左→右光效；点击在输入开头切换「ultracode:」前缀 -->
+              <button
+                type="button"
+                class="ultra-btn relative overflow-hidden shrink-0 text-xs rounded px-2.5 py-1.5 font-medium text-white shadow-sm transition"
+                :class="ultracodeActive ? 'bg-purple-600 ring-2 ring-purple-300' : 'bg-purple-600/90 hover:bg-purple-600'"
+                :title="$t('global.ultracodeHint')"
+                @click="toggleUltracode"
+              >
+                <span class="relative z-10 flex items-center gap-1">
+                  <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
+                    <path d="M12 3l1.6 3.9L17.5 8.5l-3.9 1.6L12 14l-1.6-3.9L6.5 8.5l3.9-1.6L12 3Z" />
+                  </svg>
+                  {{ $t('global.ultracode') }}
+                </span>
+              </button>
               <button v-if="chatting" class="w-24 text-sm border border-accented rounded py-1.5 hover:bg-muted" @click="stop">{{ $t('fix.stop') }}</button>
               <button v-else class="w-24 text-sm bg-inverted text-inverted rounded py-1.5 hover:bg-inverted/90 disabled:opacity-40" :disabled="!input.trim() || busy" @click="send">{{ $t('global.send') }}</button>
             </div>
@@ -301,3 +325,23 @@ function hhmmss(iso?: string) { return new Date(iso ?? new Date().toISOString())
     </template>
   </USlideover>
 </template>
+
+<style scoped>
+/* ultracode 按钮：一束高光从左到右扫过（扫完停一下再来）*/
+.ultra-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.6) 50%, transparent 75%);
+  transform: translateX(-100%);
+  animation: ultra-shine 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes ultra-shine {
+  0% { transform: translateX(-100%); }
+  60%, 100% { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ultra-btn::after { animation: none; }
+}
+</style>

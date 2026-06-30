@@ -1,6 +1,7 @@
 import { nanoid } from 'nanoid'
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
+import { dirname, resolve } from 'node:path'
 import { schema } from '~core/db/client'
 import { runFeaturePlanJob, type FeaturePlanJobCtx } from '~core/feature/pipeline'
 
@@ -16,6 +17,9 @@ export default defineEventHandler(async (event) => {
   if (!project.localPath) throw createError({ statusCode: 400, statusMessage: '项目未配置本地 clone 路径（分析需要读代码）' })
 
   const rc = resolveReviewConfig(d, project)
+  const cfg = useRuntimeConfig()
+  // issue/PR 配图落到 data 目录下（dbPath 同级），用绝对路径，agent 的 Read 工具才找得到。
+  const assetsDir = resolve(process.cwd(), dirname(cfg.dbPath as string), 'issue-assets')
   const lang = getCookie(event, 'mr-locale') || 'zh'
   const now = new Date().toISOString()
   const id = nanoid()
@@ -48,7 +52,7 @@ export default defineEventHandler(async (event) => {
   // 用内置功能开发方法学(methodology: null)，不要用项目的「审核」方法学。
   const ctx: FeaturePlanJobCtx = {
     db: d, schema, taskId: id, cwd: project.localPath,
-    provider: rc.provider, model: rc.model, effort: rc.effort, lang, methodology: null,
+    provider: rc.provider, model: rc.model, effort: rc.effort, lang, methodology: null, assetsDir,
   }
   void runFeaturePlanJob(ctx, description).catch((e) => console.error('[feature-plan] job failed', e))
   return { id }

@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
+import { dirname, resolve } from 'node:path'
 import { schema } from '~core/db/client'
 import { runFeaturePlanJob, runFeatureImplJob, isFeatureBusy, type FeaturePlanJobCtx, type FeatureImplJobCtx } from '~core/feature/pipeline'
 
@@ -32,9 +33,10 @@ export default defineEventHandler(async (event) => {
     void runFeatureImplJob(ctx, message).catch((e) => console.error('[feature-impl] job failed', e))
   } else {
     // 阶段1：重新出方案（用内置功能方法学，不用项目审核方法学）
+    const assetsDir = resolve(process.cwd(), dirname(cfg.dbPath as string), 'issue-assets')
     const ctx: FeaturePlanJobCtx = {
       db: d, schema, taskId: id, cwd: project.localPath,
-      provider: rc.provider, model: rc.model, effort: rc.effort, lang: task.lang || 'zh', methodology: null,
+      provider: rc.provider, model: rc.model, effort: rc.effort, lang: task.lang || 'zh', methodology: null, assetsDir,
     }
     void runFeaturePlanJob(ctx, message).catch((e) => console.error('[feature-plan] job failed', e))
   }

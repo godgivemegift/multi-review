@@ -104,10 +104,12 @@ export type FeaturePlanOptions = {
   effort?: string
   lang: string
   methodology?: string | null
-  description: string // 需求原文
+  description: string // 需求原文（已含后端抓好的 issue/PR 正文）
   instruction?: string // 本轮用户消息（细化 / 对上一版方案的反馈）；首轮可空
+  imagePaths?: string[] // 后端抓好的 issue/PR 配图本地路径（claude 用 Read 看图）
   onTool?: (name: string, info: string) => void
   onText?: (chunk: string) => void // 调研阶段的思考/叙述文字流（实时展示，不落库）
+  onStop?: (stop: () => void) => void // 暴露中断回调给调用方（停止按钮 → abort SDK query）
 }
 
 export function buildFeaturePlanPrompt(opts: FeaturePlanOptions): string {
@@ -136,8 +138,16 @@ ${outputLangClause(opts.lang)}`
 
 // ── claude：SDK query + 只读门控(reviewCanUseTool) + salvageJson ──
 async function runClaudePlan(opts: FeaturePlanOptions): Promise<{ plan: Plan; costUsd: number; raw: string }> {
+  // 配图清单拼在 prompt 末尾（只有 claude 能看图；codex 不传，见 runCodexPlan）。
+  const basePrompt = buildFeaturePlanPrompt(opts)
+  const prompt = opts.imagePaths?.length
+    ? `${basePrompt}\n\n**配图（需求关键，先看再动手）**：需求引用的 issue/PR 截图已下载到本地，**务必先用 Read 工具逐张打开查看**再出方案（截图通常标了要改的字段 / 位置 / 现状选项，是需求的关键部分）：\n${opts.imagePaths.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
+    : basePrompt
+  // 停止按钮：abort 这个 controller 即可中断 SDK query（分析阶段也能真停）。
+  const ac = new AbortController()
+  opts.onStop?.(() => ac.abort())
   const stream = query({
-    prompt: buildFeaturePlanPrompt(opts),
+    prompt,
     options: {
       model: opts.model,
       effort: (opts.effort || 'high') as any,
@@ -145,6 +155,7 @@ async function runClaudePlan(opts: FeaturePlanOptions): Promise<{ plan: Plan; co
       cwd: opts.cwd,
       allowedTools: ['Read', 'Grep', 'Glob'],
       canUseTool: reviewCanUseTool,
+      abortController: ac,
       ...ISOLATED,
       maxTurns: 80,
     },
@@ -165,7 +176,8 @@ async function runClaudePlan(opts: FeaturePlanOptions): Promise<{ plan: Plan; co
       if (typeof c === 'number') costUsd += c
     }
   }
-  return { plan: PlanSchema.parse(await salvageJson(text, opts.model)), costUsd, raw: text }
+  // salvage 超时给到 240s：plan 往往跑了好几分钟，最后修 JSON 不该被 120s 砍掉、整轮白跑。
+  return { plan: PlanSchema.parse(await salvageJson(text, opts.model, 240_000)), costUsd, raw: text }
 }
 
 // ── codex：只读读本地仓 + outputSchema 结构化 ──

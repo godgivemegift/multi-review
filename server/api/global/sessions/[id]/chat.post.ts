@@ -24,7 +24,14 @@ export default defineEventHandler(async (event) => {
     d.update(schema.globalSessions).set({ cwd: workdir }).where(eq(schema.globalSessions.id, id)).run()
   }
 
-  const ctx: GlobalChatJobCtx = { db: d, schema, sessionId: id, cwd: workdir, model: session.model || '', allowDanger: !!allowDanger }
+  // 助手项目无关：model/effort 优先用会话自带的，没有就回退到中心默认配置（与项目类模块同源的默认）。
+  const cfg = useRuntimeConfig()
+  const ctx: GlobalChatJobCtx = {
+    db: d, schema, sessionId: id, cwd: workdir,
+    model: session.model || (cfg.anthropicModel as string) || '',
+    effort: session.effort || (cfg.globalEffort as string) || undefined,
+    allowDanger: !!allowDanger,
+  }
   void runGlobalChatJob(ctx, message).catch((e) => console.error('[global-chat] job failed', e))
   return { ok: true, cwd: workdir }
 })

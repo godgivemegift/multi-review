@@ -471,7 +471,9 @@
     },
     "dangerOff": "危险命令已拦截（rm -rf / git push 等需放行）",
     "dangerOn": "⚠️ 已允许危险命令（rm -rf / git push 等不再拦）",
-    "rename": "重命名"
+    "rename": "重命名",
+    "ultracode": "ultracode模式",
+    "ultracodeHint": "点一下在开头加 ultracode: —— 让助手用 xhigh + 多代理 workflow 跑这条（更强，但更慢更贵）"
   },
   "feature": {
     "tab": "Feature 开发",

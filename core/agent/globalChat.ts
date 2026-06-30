@@ -5,6 +5,7 @@ import { runClaudeStream } from './claudeCli'
 export type GlobalChatOptions = {
   cwd: string
   model: string // 空 = claude 默认
+  effort?: string // 空 = claude 默认；否则透传 --effort
   sessionId: string | null // 有就 --resume
   message: string
   allowDanger?: boolean // true = 放行危险命令（用户在 UI 开了开关）
@@ -60,6 +61,7 @@ export async function runGlobalChat(opts: GlobalChatOptions): Promise<GlobalChat
   })
   const args = ['-p', '--verbose', '--output-format', 'stream-json', '--permission-mode', 'bypassPermissions', '--settings', settings]
   if (opts.model) args.push('--model', opts.model)
+  if (opts.effort) args.push('--effort', opts.effort)
   if (opts.sessionId) args.push('--resume', opts.sessionId)
 
   let text = ''

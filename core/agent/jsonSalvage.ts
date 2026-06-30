@@ -11,7 +11,9 @@ function tryParse(s: string): { ok: true; value: unknown } | { ok: false } {
 // 把 agent 输出解析成 JSON 对象。模型偶尔产出非法 JSON（如 fix 字段里塞了未转义的代码）。
 // 1) 直接 parse → 2) 抽取最外层 {...} → 3) 兜底用 claude -p 修成合法 JSON（不重跑整个审核）。
 // 注意：修复是机械活，固定用快模型 + 低 effort，**不能跟项目的重模型/effort 走**（否则修个 JSON 也几分钟，会超时被杀）。
-export async function salvageJson(raw: string, _model?: string): Promise<unknown> {
+// timeoutMs：兜底修复调用的超时。默认 120s（审核/复审够用）；feature plan 那种「analysis 跑很久、
+// 收尾才修 JSON」的路径传更长，避免大半天分析在最后一步修 JSON 时被 120s 砍掉、整轮白跑。
+export async function salvageJson(raw: string, _model?: string, timeoutMs = 120_000): Promise<unknown> {
   const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim()
 
   let r = tryParse(cleaned)
@@ -26,7 +28,7 @@ export async function salvageJson(raw: string, _model?: string): Promise<unknown
   // 兜底：快模型 + 低 effort 修成合法 JSON
   const target = m ? m[0] : cleaned
   const prompt = `The following is meant to be a single JSON object but is malformed (likely unescaped quotes/newlines inside string values). Fix it into ONE valid JSON object. Output ONLY the JSON — no code fences, no commentary. Preserve all content; just make it valid JSON.\n\n${target}`
-  const stdout = await runClaude(['--print', '--model', 'sonnet', '--effort', 'low'], { input: prompt, timeout: 120_000 })
+  const stdout = await runClaude(['--print', '--model', 'sonnet', '--effort', 'low'], { input: prompt, timeout: timeoutMs })
   const fixed = String(stdout).trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim()
   const fm = fixed.match(/\{[\s\S]*\}/)
   const final = tryParse(fm ? fm[0] : fixed)
