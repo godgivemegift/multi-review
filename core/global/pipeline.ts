@@ -33,6 +33,7 @@ export type GlobalChatJobCtx = {
   sessionId: string
   cwd: string
   model: string
+  effort?: string // 空 = claude 默认
   allowDanger?: boolean // 用户开了「允许危险命令」开关 → 放行 PreToolUse 守卫
 }
 
@@ -66,6 +67,7 @@ export async function runGlobalChatJob(ctx: GlobalChatJobCtx, message: string): 
       const r = await runGlobalChat({
         cwd: ctx.cwd,
         model: ctx.model,
+        effort: ctx.effort,
         allowDanger: ctx.allowDanger,
         sessionId: cur?.sessionId ?? null,
         message,

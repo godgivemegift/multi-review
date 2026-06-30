@@ -41,6 +41,8 @@ export default defineNuxtConfig({
     recheckModel: process.env.RECHECK_MODEL || process.env.ANTHROPIC_MODEL || 'sonnet',
     // 发评论时把中文翻成英文——机械活，用快模型，不跟审核的重模型/effort 走
     translateModel: process.env.TRANSLATE_MODEL || 'sonnet',
+    // 助手(global)默认 effort：它不属于任何 project，读不到 project.effort，用这个中心默认兜底（按会话可覆盖）
+    globalEffort: process.env.GLOBAL_EFFORT || 'high',
     anthropicApiKey: process.env.ANTHROPIC_API_KEY || '',
     // github (defaults to local `gh` CLI auth; token optional)
     githubToken: process.env.GITHUB_TOKEN || '',

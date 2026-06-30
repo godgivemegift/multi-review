@@ -224,6 +224,7 @@ export const globalSessions = sqliteTable('global_sessions', {
   title: text('title'),
   provider: text('provider', { enum: ['claude', 'codex'] }).notNull().default('claude'),
   model: text('model'),
+  effort: text('effort'),
   cwd: text('cwd'),
   sessionId: text('session_id'),
   codexSessionId: text('codex_session_id'),

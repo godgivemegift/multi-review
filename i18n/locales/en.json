@@ -471,7 +471,9 @@
     },
     "dangerOff": "Dangerous commands blocked (rm -rf / git push need allow)",
     "dangerOn": "⚠️ Dangerous commands ALLOWED (rm -rf / git push not blocked)",
-    "rename": "Rename"
+    "rename": "Rename",
+    "ultracode": "ultracode mode",
+    "ultracodeHint": "Prepend \"ultracode:\" — run this message with xhigh reasoning + multi-agent workflow (stronger, but slower and pricier)"
   },
   "feature": {
     "tab": "Feature dev",

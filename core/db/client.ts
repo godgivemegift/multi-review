@@ -50,6 +50,8 @@ function ensureColumns(sqlite: Database.Database) {
     ['fixes', 'last_push_sha', 'TEXT'],
     ['fixes', 'last_action_kind', 'TEXT'],
     ['fixes', 'reviews_at_push', 'INTEGER'],
+    // 助手(global)按会话存 effort（和 model/provider 对称），旧库补列
+    ['global_sessions', 'effort', 'TEXT'],
   ]
   for (const [table, col, type] of adds) {
     const cols = sqlite.prepare(`PRAGMA table_info(${table})`).all() as { name: string }[]
@@ -235,6 +237,7 @@ function ensureSchema(sqlite: Database.Database) {
       title TEXT,
       provider TEXT NOT NULL DEFAULT 'claude',
       model TEXT,
+      effort TEXT,
       cwd TEXT,
       session_id TEXT,
       codex_session_id TEXT,
