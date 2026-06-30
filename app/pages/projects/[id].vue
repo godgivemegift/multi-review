@@ -264,14 +264,14 @@ const filterDims = computed(() => [
     <div class="mt-8 sm:mt-10 flex gap-6 sm:gap-8 border-b border-default text-sm overflow-x-auto overflow-y-hidden">
       <button
         class="pb-3 -mb-px border-b-2 transition-colors"
-        :class="tab === 'pulls' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'"
-        @click="tab = 'pulls'"
-      >{{ $t('project.tabs.pulls') }}</button>
-      <button
-        class="pb-3 -mb-px border-b-2 transition-colors"
         :class="tab === 'feature' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'"
         @click="tab = 'feature'"
       >{{ $t('feature.tab') }}</button>
+      <button
+        class="pb-3 -mb-px border-b-2 transition-colors"
+        :class="tab === 'pulls' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'"
+        @click="tab = 'pulls'"
+      >{{ $t('project.tabs.pulls') }}</button>
       <button
         class="pb-3 -mb-px border-b-2 transition-colors"
         :class="tab === 'config' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'"
