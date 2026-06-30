@@ -20,8 +20,9 @@ on:
     tags:
       - "desktop-v*"
 
+# 默认最小权限；只有 release job 需要写(建 Release)。
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -78,6 +79,8 @@ jobs:
     if: github.ref_type == 'tag'
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v4
