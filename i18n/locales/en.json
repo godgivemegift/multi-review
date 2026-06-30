@@ -29,6 +29,19 @@
       "repo": "Repository (owner/repo)",
       "localPath": "Local clone path (worktrees branch from here)",
       "defaultBranch": "Default branch"
+    },
+    "picker": {
+      "browse": "Browse",
+      "title": "Choose a folder",
+      "select": "Select this folder",
+      "parent": "Parent folder",
+      "home": "Home folder",
+      "empty": "No subfolders",
+      "pathPlaceholder": "Type a path, Enter to open",
+      "repoDetected": "repository",
+      "repoUnknown": "no origin remote",
+      "depotHint": "Browse to a local git clone — its repository (owner/repo) is filled in automatically.",
+      "cloneHint": "Worktree source. Defaults to the repository above; pick another local clone to change it."
     }
   },
   "home": {
