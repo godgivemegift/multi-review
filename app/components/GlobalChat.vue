@@ -14,11 +14,10 @@ const data = ref<Detail | null>(null)
 const view = ref<'chat' | 'history'>('chat')
 const input = ref('')
 const liveAssistant = ref('')
-const logLines = ref<string[]>([]) // 工具/阶段日志（实时；同 fix 的可展开日志面板）
-const showLog = ref(false)
+const logLines = ref<string[]>([]) // 工具/阶段日志（实时；面板状态在 ChatLogPanel 内部）
 const busy = ref(false)
 const allowDanger = ref(false) // 「允许危险命令」开关 → 放行 PreToolUse 守卫
-const confirming = ref('') // '' | 'delete'（抽屉内联确认，不用弹窗）
+const { confirming } = useInlineConfirm() // '' | 'delete'（抽屉内联确认，不用弹窗）
 const renaming = ref(false)
 const renameVal = ref('')
 let es: EventSource | null = null
@@ -52,7 +51,6 @@ function newSession() {
   data.value = null
   liveAssistant.value = ''
   logLines.value = []
-  showLog.value = false
   view.value = 'chat'
   confirming.value = ''
 }
@@ -89,14 +87,13 @@ function closeSSE() { es?.close(); es = null }
 
 watch(open, (on) => {
   // 懒创建：打开抽屉不建 session；有历史 session 才加载。新对话由第一条消息触发创建。
-  if (on) { confirming.value = ''; logLines.value = []; showLog.value = false; if (sessionId.value) { load(); openSSE() } }
+  if (on) { confirming.value = ''; logLines.value = []; if (sessionId.value) { load(); openSSE() } }
   else closeSSE()
 })
 onBeforeUnmount(() => { closeSSE(); if (timer) clearInterval(timer) })
 
 // 自动滚到底 + 进行中计时
-const scrollEl = ref<HTMLElement | null>(null)
-function scrollToBottom() { nextTick(() => { const el = scrollEl.value; if (el) el.scrollTop = el.scrollHeight }) }
+const { scrollEl, scrollToBottom } = useScrollToBottom()
 watch([() => data.value?.turns.length, liveAssistant, open], () => { if (open.value) scrollToBottom() })
 const elapsed = ref(0)
 let timer: ReturnType<typeof setInterval> | null = null
@@ -241,10 +238,7 @@ function hhmmss(iso?: string) { return new Date(iso ?? new Date().toISOString())
         </label>
 
         <!-- 运行日志（工具调用 / 阶段，可展开；同 fix）-->
-        <div v-if="view === 'chat' && logLines.length" class="shrink-0 text-[11px] text-dimmed mb-2">
-          <button class="hover:text-highlighted" @click="showLog = !showLog">{{ showLog ? $t('review.collapseLog') : $t('review.expandLog', { count: logLines.length }) }}</button>
-          <pre v-if="showLog" class="mt-1 max-h-48 overflow-auto bg-neutral-900 text-neutral-300 rounded p-2 leading-relaxed font-mono whitespace-pre-wrap">{{ logLines.join('\n') }}</pre>
-        </div>
+        <ChatLogPanel v-if="view === 'chat'" :lines="logLines" />
 
         <!-- 历史列表 -->
         <div v-if="view === 'history'" class="flex-1 min-h-0 overflow-y-auto">

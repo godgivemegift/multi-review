@@ -1,6 +1,6 @@
-import { nanoid } from 'nanoid'
 import { eq } from 'drizzle-orm'
-import { cockpitBus } from '../events'
+import { appendTurns } from '../db/turns'
+import { makeEmit } from '../streaming/emit'
 import { runGlobalChat } from '../agent/globalChat'
 import type { ChildProcess } from 'node:child_process'
 
@@ -39,14 +39,14 @@ export type GlobalChatJobCtx = {
 export async function runGlobalChatJob(ctx: GlobalChatJobCtx, message: string): Promise<void> {
   const { db, schema, sessionId } = ctx
   const now = () => new Date().toISOString()
-  const emit = (kind: string, msg?: string) => cockpitBus.emit({ reviewId: globalChan(sessionId), ts: now(), kind, message: msg })
+  const emit = makeEmit({ channel: globalChan(sessionId), now }) // global 不落库（不传 eventTable）
   const row = () => db.select().from(schema.globalSessions).where(eq(schema.globalSessions.id, sessionId)).get()
 
   // 并发锁：进函数立即占，整个 job 结束才释放。
   if (chatLocks.has(sessionId)) return
   chatLocks.add(sessionId)
 
-  const asstId = nanoid()
+  let asstId = '' // appendTurns 里赋值；flush 闭包按变量捕获（赋值在流式开始前完成）。
   let acc = ''
   let lastWrite = 0
   const flush = (status: string) =>
@@ -55,10 +55,7 @@ export async function runGlobalChatJob(ctx: GlobalChatJobCtx, message: string): 
   // 整段放进 try/finally：建轮/写库即使抛了也保证释放锁（否则会话永久卡 busy）。
   try {
     // append-only：user 轮 + assistant 占位轮（流式写入）。
-    const maxSeq = (db.select().from(schema.globalTurns).where(eq(schema.globalTurns.sessionId, sessionId)).all() as any[])
-      .reduce((m: number, t: any) => Math.max(m, t.seq), 0)
-    db.insert(schema.globalTurns).values({ id: nanoid(), sessionId, seq: maxSeq + 1, role: 'user', content: message, status: 'done', createdAt: now() }).run()
-    db.insert(schema.globalTurns).values({ id: asstId, sessionId, seq: maxSeq + 2, role: 'assistant', content: '', status: 'streaming', createdAt: now() }).run()
+    asstId = appendTurns({ db, turnTable: schema.globalTurns, fkField: 'sessionId', fkValue: sessionId, now, message }).assistantId
     db.update(schema.globalSessions).set({ status: 'streaming', lastUsedAt: now() }).where(eq(schema.globalSessions.id, sessionId)).run()
     emit('chat', 'user')
 

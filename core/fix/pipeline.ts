@@ -3,11 +3,14 @@ import { eq } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
-import { cockpitBus } from '../events'
 import { prepareWorktree, removeWorktree } from '../git/worktree'
 import { claudeChatRunner } from '../agent/claudeRunners'
 import { codexChatRunner } from '../agent/codexChat'
 import { hasUploadable } from './changes'
+import { computeFixNextStatus } from './status'
+import { appendTurns } from '../db/turns'
+import { makeEmit } from '../streaming/emit'
+import { sessionFields } from '../agent/session'
 import { fetchReviewsCount } from '../github/gh'
 import type { ChildProcess } from 'node:child_process'
 import type { ChatRunner, ReviewProvider } from '../agent/runners'
@@ -73,15 +76,8 @@ export type FixJobCtx = {
 function helpers(ctx: FixJobCtx) {
   const { db, schema, fixId } = ctx
   const now = () => new Date().toISOString()
-  // 事件走实时总线 + 落 fix_events（供打开任务时回填历史日志，同审核 drawer）。
-  // 'text' 是对话 token 流（高频），只实时不落库，否则一句话几十行垃圾。
-  const emit = (kind: string, message?: string) => {
-    const ts = now()
-    cockpitBus.emit({ reviewId: fixId, ts, kind, message })
-    if (kind !== 'text') {
-      try { db.insert(schema.fixEvents).values({ id: nanoid(), fixId, ts, kind, message: message ?? null }).run() } catch { /* 落库失败不影响主流程 */ }
-    }
-  }
+  // 事件走实时总线 + 落 fix_events（供打开任务时回填历史日志，同审核 drawer）。频道=裸 fixId。
+  const emit = makeEmit({ channel: fixId, now, db, eventTable: schema.fixEvents, fkField: 'fixId', fkValue: fixId })
   const row = () => db.select().from(schema.fixes).where(eq(schema.fixes.id, fixId)).get()
   return { now, emit, row }
 }
@@ -128,11 +124,7 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
   chatLocks.add(fixId)
 
   // append-only 轮次：user 轮 + assistant 占位轮（流式写入）
-  const maxSeq = (db.select().from(schema.fixTurns).where(eq(schema.fixTurns.fixId, fixId)).all() as any[])
-    .reduce((m: number, t: any) => Math.max(m, t.seq), 0)
-  db.insert(schema.fixTurns).values({ id: nanoid(), fixId, seq: maxSeq + 1, role: 'user', content: message, status: 'done', createdAt: h.now() }).run()
-  const asstId = nanoid()
-  db.insert(schema.fixTurns).values({ id: asstId, fixId, seq: maxSeq + 2, role: 'assistant', content: '', status: 'streaming', createdAt: h.now() }).run()
+  const { assistantId: asstId } = appendTurns({ db, turnTable: schema.fixTurns, fkField: 'fixId', fkValue: fixId, now: h.now, message })
   h.emit('chat', 'user')
 
   // 我介入对话 = 已回应这一轮审核 → 在对话起点把「审核已更新」基线（reviewsAtPush）抬到当前 review 数，清掉红点。
@@ -158,8 +150,7 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
       let stopped = false
       // session 按 provider 各存各的列：claude→session_id，codex→codex_session_id。
       // 切换 provider 时各自 resume 自己的线程，不会拿对方的 id 去 resume（避免报错 / 串上下文 / 混用）。
-      const saveSession = (sid: string | null): { sessionId?: string | null; codexSessionId?: string | null } =>
-        ctx.provider === 'codex' ? { codexSessionId: sid } : { sessionId: sid }
+      const saveSession = (sid: string | null) => sessionFields(ctx.provider, sid)
       const resumeId: string | null = (ctx.provider === 'codex' ? fix?.codexSessionId : fix?.sessionId) ?? null
       let newSessionId: string | null = resumeId
       const headBeforeCodex = ctx.provider === 'codex' ? await currentHead(wt.path) : null
@@ -211,7 +202,7 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
       // 只更新 sessionId 供下次续聊；改动统计由 [id].get 用 fixChangesStat 从（含未提交的）worktree 实时算。
       const up = await hasUploadable(wt.path, ctx.branch).catch(() => ({ dirty: false, ahead: false }))
       const cur = h.row()
-      const nextStatus = (up.dirty || up.ahead) ? 'ready' : (cur?.status === 'pushed' ? 'pushed' : 'open')
+      const nextStatus = computeFixNextStatus({ dirty: up.dirty, ahead: up.ahead, currentStatus: cur?.status })
       db.update(schema.fixes).set({ status: nextStatus, error: null, ...saveSession(newSessionId), updatedAt: h.now() }).where(eq(schema.fixes.id, fixId)).run()
       h.emit('chat', stopped ? 'stopped' : 'done')
     } catch (e) {
