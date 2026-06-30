@@ -1,6 +1,8 @@
 <script setup lang="ts">
-// 自动化配置弹窗：上半「自动审核系统」(模式+作者+PR状态过滤+开关)，灰线分割，下半「自动修复系统」(开关+作者+PR状态过滤)，
-// 底部总闸「是否开启系统」+ 启动。作者/PR状态都是和列表一样的多选。autoMaxRounds 不在这里（在项目配置里）。
+// 自动化配置弹窗。
+// 自动审核系统：模式「PR创建后一次 / 每次push」可多选（选了就开，啥都没选=不开，所以不再有单独的开启开关）+ 作者/PR状态过滤。
+// 灰线。自动修复系统：左边 switch + 作者/PR状态过滤。底部不再有「是否开启系统」总闸（冗余）。
+// 作者/PR状态是内联下拉（不传送到 body，避免被模态框盖住点不开）。
 const props = defineProps<{ projectId: string; authors: string[] }>()
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ saved: [] }>()
@@ -8,21 +10,15 @@ const { t } = useI18n()
 
 const STATUS_OPTS = ['open', 'draft', 'merged', 'closed']
 
-type Cfg = {
-  masterEnabled: boolean
-  reviewEnabled: boolean
-  reviewMode: 'once' | 'every_push'
-  reviewAuthors: string[]
-  reviewStatuses: string[]
-  fixEnabled: boolean
-  fixAuthors: string[]
-  fixStatuses: string[]
-  autoMaxRounds: number
-}
-const cfg = reactive<Cfg>({
-  masterEnabled: false, reviewEnabled: false, reviewMode: 'once', reviewAuthors: [], reviewStatuses: ['open', 'draft'],
-  fixEnabled: false, fixAuthors: [], fixStatuses: ['open', 'draft'], autoMaxRounds: 2,
-})
+// 审核模式多选：['once','every_push'] 子集。空=自动审核不开。每次push 含首审，所以选了 every_push 回显会自动带上 once。
+const reviewModes = ref<string[]>([])
+const reviewAuthors = ref<string[]>([])
+const reviewStatuses = ref<string[]>(['open', 'draft'])
+const fixEnabled = ref(false)
+const fixAuthors = ref<string[]>([])
+const fixStatuses = ref<string[]>(['open', 'draft'])
+const autoMaxRounds = ref(2)
+
 const loading = ref(false)
 const saving = ref(false)
 const msg = ref('')
@@ -30,19 +26,37 @@ const msg = ref('')
 async function load() {
   loading.value = true; msg.value = ''
   try {
-    const r = await $fetch<Cfg>(`/api/projects/${props.projectId}/automation`)
-    Object.assign(cfg, r)
+    const r = await $fetch<any>(`/api/projects/${props.projectId}/automation`)
+    reviewModes.value = !r.reviewEnabled ? [] : r.reviewMode === 'every_push' ? ['once', 'every_push'] : ['once']
+    reviewAuthors.value = r.reviewAuthors ?? []
+    reviewStatuses.value = r.reviewStatuses ?? ['open', 'draft']
+    fixEnabled.value = !!r.fixEnabled
+    fixAuthors.value = r.fixAuthors ?? []
+    fixStatuses.value = r.fixStatuses ?? ['open', 'draft']
+    autoMaxRounds.value = r.autoMaxRounds ?? 2
   } catch (e: any) {
     msg.value = e?.data?.statusMessage || e?.message || 'load failed'
   } finally {
     loading.value = false
   }
 }
-watch(open, (v) => { if (v) load() })
+watch(open, (v) => { if (v) { openDd.value = null; load() } })
 
-function toggleIn(list: string[], v: string): string[] {
-  return list.includes(v) ? list.filter((x) => x !== v) : [...list, v]
+// 按 key 切换多选项（模板里 ref 会被自动解包，所以不直接传 ref，改用 key 查表）
+const lists: Record<string, Ref<string[]>> = { reviewModes, reviewAuthors, reviewStatuses, fixAuthors, fixStatuses }
+function toggle(key: string, v: string) {
+  const r = lists[key]!
+  r.value = r.value.includes(v) ? r.value.filter((x) => x !== v) : [...r.value, v]
 }
+
+// 内联下拉：同一时刻只开一个，点外面关掉
+const openDd = ref<string | null>(null)
+function toggleDd(id: string) { openDd.value = openDd.value === id ? null : id }
+function onDocClick(e: MouseEvent) {
+  if (openDd.value && !(e.target as HTMLElement)?.closest?.('.dd-root')) openDd.value = null
+}
+onMounted(() => document.addEventListener('click', onDocClick))
+onBeforeUnmount(() => document.removeEventListener('click', onDocClick))
 
 async function save() {
   saving.value = true; msg.value = ''
@@ -50,14 +64,14 @@ async function save() {
     await $fetch(`/api/projects/${props.projectId}/automation`, {
       method: 'PUT',
       body: {
-        masterEnabled: cfg.masterEnabled,
-        reviewEnabled: cfg.reviewEnabled,
-        reviewMode: cfg.reviewMode,
-        reviewAuthors: cfg.reviewAuthors,
-        reviewStatuses: cfg.reviewStatuses,
-        fixEnabled: cfg.fixEnabled,
-        fixAuthors: cfg.fixAuthors,
-        fixStatuses: cfg.fixStatuses,
+        masterEnabled: true, // 总闸已并入各系统自身开关
+        reviewEnabled: reviewModes.value.length > 0,
+        reviewMode: reviewModes.value.includes('every_push') ? 'every_push' : 'once',
+        reviewAuthors: reviewAuthors.value,
+        reviewStatuses: reviewStatuses.value,
+        fixEnabled: fixEnabled.value,
+        fixAuthors: fixAuthors.value,
+        fixStatuses: fixStatuses.value,
       },
     })
     emit('saved')
@@ -76,53 +90,48 @@ async function save() {
     <div v-else class="space-y-5">
       <!-- ── 自动审核系统 ── -->
       <section>
-        <div class="flex items-center justify-between mb-3">
-          <div class="text-sm font-medium text-highlighted">{{ $t('automation.reviewSystem') }}</div>
-          <USwitch v-model="cfg.reviewEnabled" />
-        </div>
-        <div class="flex flex-wrap items-center gap-2" :class="cfg.reviewEnabled ? '' : 'opacity-50 pointer-events-none'">
-          <!-- 审核模式 -->
+        <div class="text-sm font-medium text-highlighted mb-3">{{ $t('automation.reviewSystem') }}</div>
+        <div class="flex flex-wrap items-center gap-2">
+          <!-- 审核模式：多选（一次 / 每次push，可单选可都选；空=不开） -->
           <div class="inline-flex border border-default rounded overflow-hidden text-sm">
             <button
               class="px-3 py-1.5 border-r border-default"
-              :class="cfg.reviewMode === 'once' ? 'bg-muted text-highlighted' : 'hover:bg-muted'"
-              @click="cfg.reviewMode = 'once'"
+              :class="reviewModes.includes('once') ? 'bg-muted text-highlighted' : 'hover:bg-muted'"
+              @click="toggle('reviewModes', 'once')"
             >{{ $t('automation.modeOnce') }}</button>
             <button
               class="px-3 py-1.5"
-              :class="cfg.reviewMode === 'every_push' ? 'bg-muted text-highlighted' : 'hover:bg-muted'"
-              @click="cfg.reviewMode = 'every_push'"
+              :class="reviewModes.includes('every_push') ? 'bg-muted text-highlighted' : 'hover:bg-muted'"
+              @click="toggle('reviewModes', 'every_push')"
             >{{ $t('automation.modeEveryPush') }}</button>
           </div>
-          <!-- 作者多选 -->
-          <UPopover :content="{ align: 'start' }">
-            <UButton variant="outline" color="neutral" size="sm" trailing-icon="i-lucide-chevron-down" class="w-36 justify-between">
-              <span class="truncate">{{ $t('project.col.author') }}<span v-if="cfg.reviewAuthors.length" class="ml-1 text-dimmed">({{ cfg.reviewAuthors.length }})</span></span>
-            </UButton>
-            <template #content>
-              <div class="w-52 p-2 max-h-72 overflow-auto">
-                <p v-if="!authors.length" class="text-xs text-dimmed px-1.5 py-1">{{ $t('automation.noAuthors') }}</p>
-                <label v-for="a in authors" :key="a" class="flex items-center gap-2 cursor-pointer text-sm py-1 px-1.5 rounded hover:bg-elevated/50">
-                  <input type="checkbox" class="accent-neutral-900 dark:accent-neutral-100" :checked="cfg.reviewAuthors.includes(a)" @change="cfg.reviewAuthors = toggleIn(cfg.reviewAuthors, a)" />
-                  <span :class="cfg.reviewAuthors.includes(a) ? 'text-highlighted' : 'text-toned'">{{ a }}</span>
-                </label>
-              </div>
-            </template>
-          </UPopover>
-          <!-- PR 状态多选 -->
-          <UPopover :content="{ align: 'start' }">
-            <UButton variant="outline" color="neutral" size="sm" trailing-icon="i-lucide-chevron-down" class="w-40 justify-between">
-              <span class="truncate">{{ $t('project.col.prStatus') }}<span v-if="cfg.reviewStatuses.length" class="ml-1 text-dimmed">({{ cfg.reviewStatuses.length }})</span></span>
-            </UButton>
-            <template #content>
-              <div class="w-44 p-2">
-                <label v-for="s in STATUS_OPTS" :key="s" class="flex items-center gap-2 cursor-pointer text-sm py-1 px-1.5 rounded hover:bg-elevated/50">
-                  <input type="checkbox" class="accent-neutral-900 dark:accent-neutral-100" :checked="cfg.reviewStatuses.includes(s)" @change="cfg.reviewStatuses = toggleIn(cfg.reviewStatuses, s)" />
-                  <span :class="cfg.reviewStatuses.includes(s) ? 'text-highlighted' : 'text-toned'">{{ $t('status.pr.' + s) }}</span>
-                </label>
-              </div>
-            </template>
-          </UPopover>
+          <!-- 作者多选（内联下拉） -->
+          <div class="dd-root relative">
+            <button class="flex items-center gap-1 px-3 py-1.5 text-sm border border-default rounded hover:bg-muted w-36 justify-between" @click="toggleDd('rev-author')">
+              <span class="truncate">{{ $t('project.col.author') }}<span v-if="reviewAuthors.length" class="ml-1 text-dimmed">({{ reviewAuthors.length }})</span></span>
+              <span class="text-dimmed">▾</span>
+            </button>
+            <div v-if="openDd === 'rev-author'" class="absolute top-full left-0 mt-1 z-20 w-52 bg-default border border-default rounded shadow-lg p-2 max-h-60 overflow-auto">
+              <p v-if="!authors.length" class="text-xs text-dimmed px-1.5 py-1">{{ $t('automation.noAuthors') }}</p>
+              <label v-for="a in authors" :key="a" class="flex items-center gap-2 cursor-pointer text-sm py-1 px-1.5 rounded hover:bg-elevated/50">
+                <input type="checkbox" class="accent-neutral-900 dark:accent-neutral-100" :checked="reviewAuthors.includes(a)" @change="toggle('reviewAuthors', a)" />
+                <span :class="reviewAuthors.includes(a) ? 'text-highlighted' : 'text-toned'">{{ a }}</span>
+              </label>
+            </div>
+          </div>
+          <!-- PR 状态多选（内联下拉） -->
+          <div class="dd-root relative">
+            <button class="flex items-center gap-1 px-3 py-1.5 text-sm border border-default rounded hover:bg-muted w-40 justify-between" @click="toggleDd('rev-status')">
+              <span class="truncate">{{ $t('project.col.prStatus') }}<span v-if="reviewStatuses.length" class="ml-1 text-dimmed">({{ reviewStatuses.length }})</span></span>
+              <span class="text-dimmed">▾</span>
+            </button>
+            <div v-if="openDd === 'rev-status'" class="absolute top-full left-0 mt-1 z-20 w-44 bg-default border border-default rounded shadow-lg p-2">
+              <label v-for="s in STATUS_OPTS" :key="s" class="flex items-center gap-2 cursor-pointer text-sm py-1 px-1.5 rounded hover:bg-elevated/50">
+                <input type="checkbox" class="accent-neutral-900 dark:accent-neutral-100" :checked="reviewStatuses.includes(s)" @change="toggle('reviewStatuses', s)" />
+                <span :class="reviewStatuses.includes(s) ? 'text-highlighted' : 'text-toned'">{{ $t('status.pr.' + s) }}</span>
+              </label>
+            </div>
+          </div>
         </div>
       </section>
 
@@ -131,49 +140,38 @@ async function save() {
       <!-- ── 自动修复系统 ── -->
       <section>
         <div class="flex items-center gap-3 mb-3">
-          <USwitch v-model="cfg.fixEnabled" />
+          <USwitch v-model="fixEnabled" />
           <div class="text-sm font-medium text-highlighted">{{ $t('automation.fixSystem') }}</div>
         </div>
-        <div class="flex flex-wrap items-center gap-2" :class="cfg.fixEnabled ? '' : 'opacity-50 pointer-events-none'">
-          <UPopover :content="{ align: 'start' }">
-            <UButton variant="outline" color="neutral" size="sm" trailing-icon="i-lucide-chevron-down" class="w-36 justify-between">
-              <span class="truncate">{{ $t('project.col.author') }}<span v-if="cfg.fixAuthors.length" class="ml-1 text-dimmed">({{ cfg.fixAuthors.length }})</span></span>
-            </UButton>
-            <template #content>
-              <div class="w-52 p-2 max-h-72 overflow-auto">
-                <p v-if="!authors.length" class="text-xs text-dimmed px-1.5 py-1">{{ $t('automation.noAuthors') }}</p>
-                <label v-for="a in authors" :key="a" class="flex items-center gap-2 cursor-pointer text-sm py-1 px-1.5 rounded hover:bg-elevated/50">
-                  <input type="checkbox" class="accent-neutral-900 dark:accent-neutral-100" :checked="cfg.fixAuthors.includes(a)" @change="cfg.fixAuthors = toggleIn(cfg.fixAuthors, a)" />
-                  <span :class="cfg.fixAuthors.includes(a) ? 'text-highlighted' : 'text-toned'">{{ a }}</span>
-                </label>
-              </div>
-            </template>
-          </UPopover>
-          <UPopover :content="{ align: 'start' }">
-            <UButton variant="outline" color="neutral" size="sm" trailing-icon="i-lucide-chevron-down" class="w-40 justify-between">
-              <span class="truncate">{{ $t('project.col.prStatus') }}<span v-if="cfg.fixStatuses.length" class="ml-1 text-dimmed">({{ cfg.fixStatuses.length }})</span></span>
-            </UButton>
-            <template #content>
-              <div class="w-44 p-2">
-                <label v-for="s in STATUS_OPTS" :key="s" class="flex items-center gap-2 cursor-pointer text-sm py-1 px-1.5 rounded hover:bg-elevated/50">
-                  <input type="checkbox" class="accent-neutral-900 dark:accent-neutral-100" :checked="cfg.fixStatuses.includes(s)" @change="cfg.fixStatuses = toggleIn(cfg.fixStatuses, s)" />
-                  <span :class="cfg.fixStatuses.includes(s) ? 'text-highlighted' : 'text-toned'">{{ $t('status.pr.' + s) }}</span>
-                </label>
-              </div>
-            </template>
-          </UPopover>
+        <div class="flex flex-wrap items-center gap-2" :class="fixEnabled ? '' : 'opacity-50 pointer-events-none'">
+          <div class="dd-root relative">
+            <button class="flex items-center gap-1 px-3 py-1.5 text-sm border border-default rounded hover:bg-muted w-36 justify-between" @click="toggleDd('fix-author')">
+              <span class="truncate">{{ $t('project.col.author') }}<span v-if="fixAuthors.length" class="ml-1 text-dimmed">({{ fixAuthors.length }})</span></span>
+              <span class="text-dimmed">▾</span>
+            </button>
+            <div v-if="openDd === 'fix-author'" class="absolute top-full left-0 mt-1 z-20 w-52 bg-default border border-default rounded shadow-lg p-2 max-h-60 overflow-auto">
+              <p v-if="!authors.length" class="text-xs text-dimmed px-1.5 py-1">{{ $t('automation.noAuthors') }}</p>
+              <label v-for="a in authors" :key="a" class="flex items-center gap-2 cursor-pointer text-sm py-1 px-1.5 rounded hover:bg-elevated/50">
+                <input type="checkbox" class="accent-neutral-900 dark:accent-neutral-100" :checked="fixAuthors.includes(a)" @change="toggle('fixAuthors', a)" />
+                <span :class="fixAuthors.includes(a) ? 'text-highlighted' : 'text-toned'">{{ a }}</span>
+              </label>
+            </div>
+          </div>
+          <div class="dd-root relative">
+            <button class="flex items-center gap-1 px-3 py-1.5 text-sm border border-default rounded hover:bg-muted w-40 justify-between" @click="toggleDd('fix-status')">
+              <span class="truncate">{{ $t('project.col.prStatus') }}<span v-if="fixStatuses.length" class="ml-1 text-dimmed">({{ fixStatuses.length }})</span></span>
+              <span class="text-dimmed">▾</span>
+            </button>
+            <div v-if="openDd === 'fix-status'" class="absolute top-full left-0 mt-1 z-20 w-44 bg-default border border-default rounded shadow-lg p-2">
+              <label v-for="s in STATUS_OPTS" :key="s" class="flex items-center gap-2 cursor-pointer text-sm py-1 px-1.5 rounded hover:bg-elevated/50">
+                <input type="checkbox" class="accent-neutral-900 dark:accent-neutral-100" :checked="fixStatuses.includes(s)" @change="toggle('fixStatuses', s)" />
+                <span :class="fixStatuses.includes(s) ? 'text-highlighted' : 'text-toned'">{{ $t('status.pr.' + s) }}</span>
+              </label>
+            </div>
+          </div>
         </div>
-        <p class="text-[11px] text-dimmed mt-2">{{ $t('automation.fixHint', { n: cfg.autoMaxRounds }) }}</p>
+        <p class="text-[11px] text-dimmed mt-2">{{ $t('automation.fixHint', { n: autoMaxRounds }) }}</p>
       </section>
-
-      <div class="border-t border-default" />
-
-      <!-- ── 总闸 ── -->
-      <div class="flex items-center gap-3">
-        <USwitch v-model="cfg.masterEnabled" />
-        <span class="text-sm text-highlighted">{{ $t('automation.masterEnabled') }}</span>
-        <span class="text-xs text-dimmed">{{ $t('automation.masterHint') }}</span>
-      </div>
     </div>
 
     <template #footer>

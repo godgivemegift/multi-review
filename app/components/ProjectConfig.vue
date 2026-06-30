@@ -279,17 +279,30 @@ function codexAuthClass(status: CodexSdkStatus | null) {
           <p class="text-xs text-dimmed mt-1">{{ $t('config.selectedProvider', { provider: selectedProviderLabel }) }}</p>
         </div>
       </div>
-      <div class="inline-flex border border-default rounded overflow-hidden">
-        <button
-          class="px-3 py-1.5 text-sm border-r border-default"
-          :class="form.provider === 'claude' ? 'bg-muted text-highlighted' : 'hover:bg-muted'"
-          @click="form.provider = 'claude'"
-        >{{ $t('config.providerClaude') }}</button>
-        <button
-          class="px-3 py-1.5 text-sm"
-          :class="form.provider === 'codex' ? 'bg-muted text-highlighted' : 'hover:bg-muted'"
-          @click="form.provider = 'codex'"
-        >{{ $t('config.providerCodex') }}</button>
+      <div class="flex flex-wrap items-end gap-8">
+        <div class="inline-flex border border-default rounded overflow-hidden">
+          <button
+            class="px-3 py-1.5 text-sm border-r border-default"
+            :class="form.provider === 'claude' ? 'bg-muted text-highlighted' : 'hover:bg-muted'"
+            @click="form.provider = 'claude'"
+          >{{ $t('config.providerClaude') }}</button>
+          <button
+            class="px-3 py-1.5 text-sm"
+            :class="form.provider === 'codex' ? 'bg-muted text-highlighted' : 'hover:bg-muted'"
+            @click="form.provider = 'codex'"
+          >{{ $t('config.providerCodex') }}</button>
+        </div>
+        <!-- 自动化「修复↔复查」回合上限：放在 provider 选择右边 -->
+        <label class="block">
+          <span class="text-xs text-dimmed">{{ $t('config.autoMaxRounds') }}</span>
+          <div class="flex items-center gap-2">
+            <input
+              v-model.number="form.autoMaxRounds" type="number" min="1" max="10"
+              class="w-16 text-sm border-b border-default py-1 bg-transparent outline-none focus:border-inverted"
+            />
+            <span class="text-[11px] text-dimmed max-w-[16rem] leading-snug">{{ $t('config.autoMaxRoundsHint') }}</span>
+          </div>
+        </label>
       </div>
 
       <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] max-w-4xl min-w-0">
@@ -389,25 +402,14 @@ function codexAuthClass(status: CodexSdkStatus | null) {
         </button>
       </div>
 
-      <div class="mt-4 flex flex-wrap items-end gap-8">
-        <div v-if="effortOptions.length">
-          <span class="text-xs text-dimmed">{{ $t('config.effortLabel') }}</span>
-          <select v-model="form.effort" class="block text-sm border-b border-default py-1 bg-transparent outline-none min-w-32">
-            <option value="">{{ $t('config.effortNone') }}</option>
-            <option v-for="e in effortOptions" :key="e" :value="e">{{ e }}</option>
-          </select>
-        </div>
-        <p v-else class="text-xs text-dimmed self-center">{{ $t('config.noEffortSupport') }}</p>
-        <!-- 自动化「修复↔复查」回合上限：放模型选择同处，和 effort 并排 -->
-        <label class="block">
-          <span class="text-xs text-dimmed">{{ $t('config.autoMaxRounds') }}</span>
-          <input
-            v-model.number="form.autoMaxRounds" type="number" min="1" max="10"
-            class="block w-20 text-sm border-b border-default py-1 bg-transparent outline-none focus:border-inverted"
-          />
-          <span class="block text-[11px] text-dimmed mt-1 max-w-64">{{ $t('config.autoMaxRoundsHint') }}</span>
-        </label>
+      <div v-if="effortOptions.length" class="mt-4">
+        <span class="text-xs text-dimmed">{{ $t('config.effortLabel') }}</span>
+        <select v-model="form.effort" class="block text-sm border-b border-default py-1 bg-transparent outline-none min-w-32">
+          <option value="">{{ $t('config.effortNone') }}</option>
+          <option v-for="e in effortOptions" :key="e" :value="e">{{ e }}</option>
+        </select>
       </div>
+      <p v-else class="text-xs text-dimmed mt-3">{{ $t('config.noEffortSupport') }}</p>
     </section>
 
     <div class="mt-6 flex items-center gap-4">
