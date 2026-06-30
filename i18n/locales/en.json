@@ -565,6 +565,7 @@
       "cant_fix": "Couldn't auto-fix — needs you",
       "fix_error": "Fix failed — needs you",
       "post_error": "Post failed: {info}"
-    }
+    },
+    "modeLabel": "Review mode"
   }
 }

@@ -565,6 +565,7 @@
       "cant_fix": "无法自动修复 · 待人工",
       "fix_error": "修复失败 · 待人工",
       "post_error": "发评论失败：{info}"
-    }
+    },
+    "modeLabel": "审核模式"
   }
 }

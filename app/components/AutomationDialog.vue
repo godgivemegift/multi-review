@@ -9,6 +9,8 @@ const emit = defineEmits<{ saved: [] }>()
 const { t } = useI18n()
 
 const STATUS_OPTS = ['open', 'draft', 'merged', 'closed']
+const MODE_OPTS = ['once', 'every_push']
+function modeLabel(m: string) { return m === 'every_push' ? t('automation.modeEveryPush') : t('automation.modeOnce') }
 
 // 审核模式多选：['once','every_push'] 子集。空=自动审核不开。每次push 含首审，所以选了 every_push 回显会自动带上 once。
 const reviewModes = ref<string[]>([])
@@ -91,23 +93,23 @@ async function save() {
       <!-- ── 自动审核系统 ── -->
       <section>
         <div class="text-sm font-medium text-highlighted mb-3">{{ $t('automation.reviewSystem') }}</div>
-        <div class="flex flex-wrap items-center gap-2">
-          <!-- 审核模式：多选（一次 / 每次push，可单选可都选；空=不开） -->
-          <div class="inline-flex border border-default rounded overflow-hidden text-sm">
-            <button
-              class="px-3 py-1.5 border-r border-default"
-              :class="reviewModes.includes('once') ? 'bg-muted text-highlighted' : 'hover:bg-muted'"
-              @click="toggle('reviewModes', 'once')"
-            >{{ $t('automation.modeOnce') }}</button>
-            <button
-              class="px-3 py-1.5"
-              :class="reviewModes.includes('every_push') ? 'bg-muted text-highlighted' : 'hover:bg-muted'"
-              @click="toggle('reviewModes', 'every_push')"
-            >{{ $t('automation.modeEveryPush') }}</button>
+        <div class="flex items-start gap-2">
+          <!-- 审核模式：多选下拉（一次 / 每次push，可单选可都选；空=不开） -->
+          <div class="dd-root relative flex-1 min-w-0">
+            <button class="flex items-center gap-1 px-3 py-1.5 text-sm border border-default rounded hover:bg-muted w-full justify-between" @click="toggleDd('rev-mode')">
+              <span class="truncate">{{ $t('automation.modeLabel') }}<span v-if="reviewModes.length" class="ml-1 text-dimmed">({{ reviewModes.length }})</span></span>
+              <span class="text-dimmed">▾</span>
+            </button>
+            <div v-if="openDd === 'rev-mode'" class="absolute top-full left-0 mt-1 z-20 w-48 bg-default border border-default rounded shadow-lg p-2">
+              <label v-for="m in MODE_OPTS" :key="m" class="flex items-center gap-2 cursor-pointer text-sm py-1 px-1.5 rounded hover:bg-elevated/50">
+                <input type="checkbox" class="accent-neutral-900 dark:accent-neutral-100" :checked="reviewModes.includes(m)" @change="toggle('reviewModes', m)" />
+                <span :class="reviewModes.includes(m) ? 'text-highlighted' : 'text-toned'">{{ modeLabel(m) }}</span>
+              </label>
+            </div>
           </div>
           <!-- 作者多选（内联下拉） -->
-          <div class="dd-root relative">
-            <button class="flex items-center gap-1 px-3 py-1.5 text-sm border border-default rounded hover:bg-muted w-36 justify-between" @click="toggleDd('rev-author')">
+          <div class="dd-root relative flex-1 min-w-0">
+            <button class="flex items-center gap-1 px-3 py-1.5 text-sm border border-default rounded hover:bg-muted w-full justify-between" @click="toggleDd('rev-author')">
               <span class="truncate">{{ $t('project.col.author') }}<span v-if="reviewAuthors.length" class="ml-1 text-dimmed">({{ reviewAuthors.length }})</span></span>
               <span class="text-dimmed">▾</span>
             </button>
@@ -120,12 +122,12 @@ async function save() {
             </div>
           </div>
           <!-- PR 状态多选（内联下拉） -->
-          <div class="dd-root relative">
-            <button class="flex items-center gap-1 px-3 py-1.5 text-sm border border-default rounded hover:bg-muted w-40 justify-between" @click="toggleDd('rev-status')">
+          <div class="dd-root relative flex-1 min-w-0">
+            <button class="flex items-center gap-1 px-3 py-1.5 text-sm border border-default rounded hover:bg-muted w-full justify-between" @click="toggleDd('rev-status')">
               <span class="truncate">{{ $t('project.col.prStatus') }}<span v-if="reviewStatuses.length" class="ml-1 text-dimmed">({{ reviewStatuses.length }})</span></span>
               <span class="text-dimmed">▾</span>
             </button>
-            <div v-if="openDd === 'rev-status'" class="absolute top-full left-0 mt-1 z-20 w-44 bg-default border border-default rounded shadow-lg p-2">
+            <div v-if="openDd === 'rev-status'" class="absolute top-full right-0 mt-1 z-20 w-44 bg-default border border-default rounded shadow-lg p-2">
               <label v-for="s in STATUS_OPTS" :key="s" class="flex items-center gap-2 cursor-pointer text-sm py-1 px-1.5 rounded hover:bg-elevated/50">
                 <input type="checkbox" class="accent-neutral-900 dark:accent-neutral-100" :checked="reviewStatuses.includes(s)" @change="toggle('reviewStatuses', s)" />
                 <span :class="reviewStatuses.includes(s) ? 'text-highlighted' : 'text-toned'">{{ $t('status.pr.' + s) }}</span>
@@ -143,9 +145,9 @@ async function save() {
           <USwitch v-model="fixEnabled" />
           <div class="text-sm font-medium text-highlighted">{{ $t('automation.fixSystem') }}</div>
         </div>
-        <div class="flex flex-wrap items-center gap-2" :class="fixEnabled ? '' : 'opacity-50 pointer-events-none'">
-          <div class="dd-root relative">
-            <button class="flex items-center gap-1 px-3 py-1.5 text-sm border border-default rounded hover:bg-muted w-36 justify-between" @click="toggleDd('fix-author')">
+        <div class="flex items-start gap-2" :class="fixEnabled ? '' : 'opacity-50 pointer-events-none'">
+          <div class="dd-root relative flex-1 min-w-0">
+            <button class="flex items-center gap-1 px-3 py-1.5 text-sm border border-default rounded hover:bg-muted w-full justify-between" @click="toggleDd('fix-author')">
               <span class="truncate">{{ $t('project.col.author') }}<span v-if="fixAuthors.length" class="ml-1 text-dimmed">({{ fixAuthors.length }})</span></span>
               <span class="text-dimmed">▾</span>
             </button>
@@ -157,8 +159,8 @@ async function save() {
               </label>
             </div>
           </div>
-          <div class="dd-root relative">
-            <button class="flex items-center gap-1 px-3 py-1.5 text-sm border border-default rounded hover:bg-muted w-40 justify-between" @click="toggleDd('fix-status')">
+          <div class="dd-root relative flex-1 min-w-0">
+            <button class="flex items-center gap-1 px-3 py-1.5 text-sm border border-default rounded hover:bg-muted w-full justify-between" @click="toggleDd('fix-status')">
               <span class="truncate">{{ $t('project.col.prStatus') }}<span v-if="fixStatuses.length" class="ml-1 text-dimmed">({{ fixStatuses.length }})</span></span>
               <span class="text-dimmed">▾</span>
             </button>

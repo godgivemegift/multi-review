@@ -565,6 +565,7 @@
       "cant_fix": "Auto-correction impossible — à vous",
       "fix_error": "Échec de la correction — à vous",
       "post_error": "Échec de publication : {info}"
-    }
+    },
+    "modeLabel": "Mode de revue"
   }
 }
