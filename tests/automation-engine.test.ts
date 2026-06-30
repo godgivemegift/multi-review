@@ -256,4 +256,19 @@ async function runUntilStable(deps: EngineDeps, calls: any, max = 40) {
   console.log('automation-engine cooldown: ok')
 }
 
+// ── 10) 中途关掉自动修复（auto-review 仍开）+ 修复已 ready + pendingFix → 不替用户 push，清 pendingFix ──
+{
+  resetWorld(); setConfig()
+  const { deps, calls } = makeWorld({ convergeAfter: Infinity })
+  // 铺状态：已发布的审核 + 2 条 High finding + 一个 ready 的修复 + pr_automation(fixOn 显式关、reviewOn 继承开、pendingFix=true)
+  d.insert(schema.reviews).values({ id: 'R1', projectId: PID, prNumber: PR, prUrl: 'u', branch: 'b', headSha: 'H0', status: 'posted', prState: 'open', createdAt: now(), updatedAt: now() }).run()
+  for (let i = 0; i < 2; i++) d.insert(schema.findings).values({ id: nanoid(), reviewId: 'R1', fid: `F${i}`, severity: 'High', title: 'x', introducedByPr: true, checked: false, sortOrder: i, createdAt: now() }).run()
+  d.insert(schema.fixes).values({ id: 'FX1', projectId: PID, prNumber: PR, branch: 'b', status: 'ready', createdAt: now(), updatedAt: now() }).run()
+  d.insert(schema.prAutomation).values({ id: nanoid(), projectId: PID, prNumber: PR, reviewOn: null, fixOn: false, pendingFix: true, round: 1, optOut: false, updatedAt: now() }).run()
+  await runAutomationTick(d, schema, deps)
+  assert.equal(calls.push, 0, '关了自动修复就不该 push 那次进行中的修复')
+  assert.equal(getPrAutomationRow(d, schema, PID, PR)!.pendingFix, false, 'pendingFix 应被清掉')
+  console.log('automation-engine off-autofix-no-push: ok')
+}
+
 console.log('automation-engine: all ok')

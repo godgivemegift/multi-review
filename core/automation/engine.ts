@@ -84,6 +84,14 @@ async function evaluatePr(db: any, schema: any, deps: EngineDeps, project: any, 
     return
   }
 
+  // 自动修复被单独关掉（auto-review 可能还开着）时，别再替用户 push 那次进行中的修复——
+  // 用户关了就是不想要它继续，改动留在 worktree（status=ready 仍可手动上传）。清掉 pendingFix。
+  let pendingFix = row?.pendingFix ?? false
+  if (!fixOn && pendingFix) {
+    upsertPrAutomation(db, schema, project.id, p.number, { pendingFix: false }, now)
+    pendingFix = false
+  }
+
   // 冷却期：某条 PR 的 head 第一次被看到就开始计时，没过冷却期一律不动手——给用户时间进去关掉不想跑的。
   // head 变了（新 PR / 别人 push / 我们自己修复 push）就重置计时。0 分钟=不冷却。
   const cooldownMin = project.autoCooldownMinutes ?? 5
@@ -121,7 +129,7 @@ async function evaluatePr(db: any, schema: any, deps: EngineDeps, project: any, 
       fixOn,
       round: row?.round ?? 0,
       lastFixReviewSha: row?.lastFixReviewSha ?? null,
-      pendingFix: row?.pendingFix ?? false,
+      pendingFix,
       optOut: row?.optOut ?? false,
       note: row?.note ?? null,
     },
