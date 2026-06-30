@@ -16,7 +16,7 @@ const PR = 7
 
 d.insert(schema.projects).values({
   id: PID, name: 'p', slug: 'p', repo: 'o/r', localPath: '/tmp/clone', defaultBranch: 'main',
-  provider: 'claude', autoMaxRounds: 2, createdAt: now(),
+  provider: 'claude', autoMaxRounds: 2, autoCooldownMinutes: 0, createdAt: now(), // 冷却关，单独测试见末尾
 }).run()
 
 function setConfig(over: Partial<any> = {}) {
@@ -229,6 +229,31 @@ async function runUntilStable(deps: EngineDeps, calls: any, max = 40) {
   assert.equal(calls.post, 1)
   assert.equal(calls.fix, 0, '没开自动修复就不该修')
   console.log('automation-engine review-only: ok')
+}
+
+// ── 9) 冷却期：head 第一次被看到后 5 分钟内不动手，过了才开审（可控时钟模拟时间流逝）──
+{
+  resetWorld(); setConfig()
+  d.update(schema.projects).set({ autoCooldownMinutes: 5 }).where(eq(schema.projects.id, PID)).run()
+  let clockMs = Date.UTC(2026, 0, 1, 0, 0, 0)
+  const isoNow = () => new Date(clockMs).toISOString()
+  const { deps, calls } = makeWorld({ convergeAfter: Infinity })
+  deps.now = isoNow
+
+  await runAutomationTick(d, schema, deps) // 第一次看到 head → 开始冷却
+  assert.equal(calls.review, 0, '冷却期内不应开审')
+  const evs = d.select().from(schema.automationEvents).where(eq(schema.automationEvents.projectId, PID)).all() as any[]
+  assert.ok(evs.some((e) => e.kind === 'cooldown'), '应记 cooldown 事件')
+
+  clockMs += 3 * 60_000 // 过 3 分钟（<5）
+  await runAutomationTick(d, schema, deps)
+  assert.equal(calls.review, 0, '3 分钟仍在冷却')
+
+  clockMs += 3 * 60_000 // 累计 6 分钟（>5）
+  await runAutomationTick(d, schema, deps)
+  assert.equal(calls.review, 1, '冷却期过后应开审')
+  d.update(schema.projects).set({ autoCooldownMinutes: 0 }).where(eq(schema.projects.id, PID)).run() // 收尾还原
+  console.log('automation-engine cooldown: ok')
 }
 
 console.log('automation-engine: all ok')

@@ -53,6 +53,8 @@ function parseRow(r: any): PrAutoRow {
     pendingFix: !!r.pendingFix,
     optOut: !!r.optOut,
     note: r.note ?? null,
+    headSeenSha: r.headSeenSha ?? null,
+    headSeenAt: r.headSeenAt ?? null,
   }
 }
 
@@ -81,6 +83,8 @@ export type PrAutoUpsert = Partial<{
   pendingFix: boolean
   optOut: boolean
   note: string | null
+  headSeenSha: string | null
+  headSeenAt: string | null
 }>
 
 // 记一条自动化工作流时间线事件（喂 PR 抽屉的「自动化」tab）。
@@ -127,6 +131,8 @@ export function upsertPrAutomation(db: any, schema: any, projectId: string, prNu
     pendingFix: patch.pendingFix ?? false,
     optOut: patch.optOut ?? false,
     note: patch.note ?? null,
+    headSeenSha: patch.headSeenSha ?? null,
+    headSeenAt: patch.headSeenAt ?? null,
     updatedAt: now,
   }).run()
   return id

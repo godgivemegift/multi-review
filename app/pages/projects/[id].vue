@@ -28,6 +28,7 @@ type Pull = {
   autoNote: string | null
   autoRound: number
   autoMaxRounds: number
+  autoCoolingUntil: string | null
 }
 
 const { t, te } = useI18n()
@@ -382,6 +383,7 @@ const filterDims = computed(() => [
       :review-id="drawerReviewId" :fix-id="drawerFixId" :initial-tab="drawerTab"
       :auto-review-on="drawerPull?.autoReviewOn ?? false" :auto-fix-on="drawerPull?.autoFixOn ?? false"
       :auto-note="drawerPull?.autoNote ?? null" :auto-round="drawerPull?.autoRound ?? 0" :auto-max-rounds="drawerPull?.autoMaxRounds ?? 2"
+      :auto-cooling-until="drawerPull?.autoCoolingUntil ?? null"
       @task-created="onTaskCreated"
     />
     <AutomationDialog v-model:open="automationOpen" :project-id="projectId" :authors="authors" @saved="refreshPulls()" />

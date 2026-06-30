@@ -15,6 +15,8 @@ export const projects = sqliteTable('projects', {
   effort: text('effort'), // 审核力度 low/medium/high/xhigh/max（空=不设）
   // 自动化「修复↔复查」每条 PR 的回合上限（防自驱闭环烧 token）。在项目配置里和模型选择同处编辑。
   autoMaxRounds: integer('auto_max_rounds').notNull().default(2),
+  // 自动化冷却期（分钟）：某条 PR 的 head 第一次被看到后等这么久才动手，给用户时间进去关掉不想跑的。0=不冷却。
+  autoCooldownMinutes: integer('auto_cooldown_minutes').notNull().default(5),
   defaultBranch: text('default_branch').notNull().default('dev'),
   createdAt: text('created_at').notNull(),
 })
@@ -349,6 +351,9 @@ export const prAutomation = sqliteTable('pr_automation', {
   pendingFix: integer('pending_fix', { mode: 'boolean' }).notNull().default(false), // 已派修复、等它跑完（push / 判定修不动）
   optOut: integer('opt_out', { mode: 'boolean' }).notNull().default(false), // 用户删任务 → 本 PR 退出自动化，直到手动再开
   note: text('note'), // 引擎最近一次的停手原因：capped/converged/cant_fix/fix_error/user_off（喂 UI 提示）
+  // 冷却期：引擎第一次看到这个 head 的 sha + 时间。head 变了就重置；未过 autoCooldownMinutes 不动手。
+  headSeenSha: text('head_seen_sha'),
+  headSeenAt: text('head_seen_at'),
   updatedAt: text('updated_at').notNull(),
 })
 

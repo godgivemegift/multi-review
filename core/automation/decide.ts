@@ -35,10 +35,13 @@ export type PrAutoRow = {
   pendingFix: boolean
   optOut: boolean
   note: string | null
+  headSeenSha: string | null // 冷却期：引擎第一次看到的 head + 时间（仅引擎用）
+  headSeenAt: string | null
 }
 
 export const EMPTY_AUTO_ROW: PrAutoRow = {
   reviewOn: null, fixOn: null, round: 0, lastFixReviewSha: null, pendingFix: false, optOut: false, note: null,
+  headSeenSha: null, headSeenAt: null,
 }
 
 function matches(authors: string[], statuses: PrStatusKey[], pr: { author: string; status: PrStatusKey }): boolean {

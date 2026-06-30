@@ -349,7 +349,9 @@
       "contentPlaceholder": "# Review methodology\n..."
     },
     "autoMaxRounds": "Auto-fix round limit",
-    "autoMaxRoundsHint": "Max fix↔re-review rounds per PR before automation pauses for you."
+    "autoMaxRoundsHint": "Max fix↔re-review rounds per PR before automation pauses for you.",
+    "autoCooldown": "Automation cooldown (min)",
+    "autoCooldownHint": "Wait this long after a new commit before automation acts, so you can cancel. 0 = off."
   },
   "review": {
     "noTask": "This PR has no review task yet",
@@ -568,9 +570,11 @@
       "fix_error": "Fix failed — needs you",
       "post_error": "Post failed: {info}",
       "push_error": "Push failed: {info}",
-      "fix_unverified": "Fixed — needs manual re-review (once mode)"
+      "fix_unverified": "Fixed — needs manual re-review (once mode)",
+      "cooldown": "Cooling down — starts in {info} min"
     },
     "modeLabel": "Review mode",
-    "fixAuthorHint": "Empty author = only your own PRs are auto-fixed. Add authors to auto-fix others' PRs (runs an agent + pushes)."
+    "fixAuthorHint": "Empty author = only your own PRs are auto-fixed. Add authors to auto-fix others' PRs (runs an agent + pushes).",
+    "coolingHint": "Cooling down · {n} min left (you can still turn it off)"
   }
 }

@@ -28,6 +28,7 @@ const form = reactive({
   model: props.project.model || '',
   effort: props.project.effort || '',
   autoMaxRounds: (props.project as Project & { autoMaxRounds?: number }).autoMaxRounds ?? 2,
+  autoCooldownMinutes: (props.project as Project & { autoCooldownMinutes?: number }).autoCooldownMinutes ?? 5,
 })
 const savingInfo = ref(false)
 const msg = ref('')
@@ -77,6 +78,7 @@ async function saveInfo() {
         name: form.name, repo: form.repo, localPath: form.localPath || null,
         defaultBranch: form.defaultBranch, provider: form.provider, model: form.model || null, effort: form.effort || null,
         autoMaxRounds: Math.min(10, Math.max(1, Number(form.autoMaxRounds) || 2)),
+        autoCooldownMinutes: Math.min(120, Math.max(0, Number(form.autoCooldownMinutes) ?? 5)),
       },
     })
     msg.value = t('config.saved'); emit('changed')
@@ -301,6 +303,17 @@ function codexAuthClass(status: CodexSdkStatus | null) {
               class="w-16 text-sm border-b border-default py-1 bg-transparent outline-none focus:border-inverted"
             />
             <span class="text-[11px] text-dimmed max-w-[16rem] leading-snug">{{ $t('config.autoMaxRoundsHint') }}</span>
+          </div>
+        </label>
+        <!-- 自动化冷却期（分钟）：head 第一次被看到后等这么久才动手，0=不冷却 -->
+        <label class="block">
+          <span class="text-xs text-dimmed">{{ $t('config.autoCooldown') }}</span>
+          <div class="flex items-center gap-2">
+            <input
+              v-model.number="form.autoCooldownMinutes" type="number" min="0" max="120"
+              class="w-16 text-sm border-b border-default py-1 bg-transparent outline-none focus:border-inverted"
+            />
+            <span class="text-[11px] text-dimmed max-w-[16rem] leading-snug">{{ $t('config.autoCooldownHint') }}</span>
           </div>
         </label>
       </div>

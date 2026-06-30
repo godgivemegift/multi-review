@@ -2,6 +2,7 @@
 const props = defineProps<{
   projectId: string; prNumber: number | null; reviewId: string | null; fixId: string | null; initialTab?: string
   autoReviewOn?: boolean; autoFixOn?: boolean; autoNote?: string | null; autoRound?: number; autoMaxRounds?: number
+  autoCoolingUntil?: string | null
 }>()
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ taskCreated: [] }>()
@@ -26,6 +27,12 @@ const autoNoteText = computed(() => {
   if (!props.autoNote) return ''
   const k = `automation.note.${props.autoNote}`
   return te(k) ? t(k, { round: props.autoRound ?? 0, max: props.autoMaxRounds ?? 0 }) : ''
+})
+// 冷却中：还有几分钟才会开始自动跑（用户可在此窗口关掉开关）
+const coolingMinLeft = computed(() => {
+  if (!props.autoCoolingUntil) return 0
+  const ms = Date.parse(props.autoCoolingUntil) - Date.now()
+  return ms > 0 ? Math.ceil(ms / 60000) : 0
 })
 
 type Detail = {
@@ -81,7 +88,7 @@ const WF_DOT: Record<string, string> = {
   review_created: 'bg-inverted', recheck: 'bg-inverted', posted: 'bg-accented',
   fix_started: 'bg-inverted', pushed: 'bg-accented',
   capped: 'bg-warning', converged: 'bg-success', cant_fix: 'bg-error', fix_error: 'bg-error', post_error: 'bg-error',
-  push_error: 'bg-error', fix_unverified: 'bg-warning',
+  push_error: 'bg-error', fix_unverified: 'bg-warning', cooldown: 'bg-accented',
 }
 function wfLabel(ev: WfEvent) {
   const k = `automation.event.${ev.kind}`
@@ -240,7 +247,8 @@ const lineCls: Record<DiffLine['t'], string> = {
               <USwitch :model-value="autoFixOn" :disabled="togglingAuto" size="sm" @update:model-value="(v: boolean) => toggleAuto('fixOn', v)" />
               <span :class="autoFixOn ? 'text-highlighted' : 'text-dimmed'">{{ $t('automation.prAutoFix') }}</span>
             </label>
-            <span v-if="autoNoteText" class="text-highlighted">· {{ autoNoteText }}</span>
+            <span v-if="coolingMinLeft" class="text-warning">· {{ $t('automation.coolingHint', { n: coolingMinLeft }) }}</span>
+            <span v-else-if="autoNoteText" class="text-highlighted">· {{ autoNoteText }}</span>
           </div>
 
           <!-- 子 tab -->

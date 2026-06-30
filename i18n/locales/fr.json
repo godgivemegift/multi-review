@@ -349,7 +349,9 @@
       "contentPlaceholder": "# Méthodologie de revue\n..."
     },
     "autoMaxRounds": "Limite de tours d'auto-correction",
-    "autoMaxRoundsHint": "Tours max correction↔re-revue par PR avant la mise en pause de l'automatisation."
+    "autoMaxRoundsHint": "Tours max correction↔re-revue par PR avant la mise en pause de l'automatisation.",
+    "autoCooldown": "Délai d'automatisation (min)",
+    "autoCooldownHint": "Attendre ce délai après un nouveau commit avant d'agir, pour pouvoir annuler. 0 = désactivé."
   },
   "review": {
     "noTask": "Cette PR n'a pas encore de tâche de revue",
@@ -568,9 +570,11 @@
       "fix_error": "Échec de la correction — à vous",
       "post_error": "Échec de publication : {info}",
       "push_error": "Échec du push : {info}",
-      "fix_unverified": "Corrigé — re-revue manuelle requise (mode once)"
+      "fix_unverified": "Corrigé — re-revue manuelle requise (mode once)",
+      "cooldown": "En attente — démarre dans {info} min"
     },
     "modeLabel": "Mode de revue",
-    "fixAuthorHint": "Vide = seulement vos propres PR. Ajoutez des auteurs pour corriger celles des autres (lance un agent + push)."
+    "fixAuthorHint": "Vide = seulement vos propres PR. Ajoutez des auteurs pour corriger celles des autres (lance un agent + push).",
+    "coolingHint": "En attente · {n} min restantes (vous pouvez encore désactiver)"
   }
 }

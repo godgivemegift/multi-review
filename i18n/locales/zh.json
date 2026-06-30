@@ -349,7 +349,9 @@
       "contentPlaceholder": "# 审核方法学\n..."
     },
     "autoMaxRounds": "自动修复回合上限",
-    "autoMaxRoundsHint": "每条 PR「修复↔复查」最多来回几轮，到顶就暂停等你。"
+    "autoMaxRoundsHint": "每条 PR「修复↔复查」最多来回几轮，到顶就暂停等你。",
+    "autoCooldown": "自动化冷却期(分钟)",
+    "autoCooldownHint": "PR 有新提交后等这么久才自动跑，给你时间进去关掉。0=不冷却。"
   },
   "review": {
     "noTask": "该 PR 还没有审核任务",
@@ -568,9 +570,11 @@
       "fix_error": "修复失败 · 待人工",
       "post_error": "发评论失败：{info}",
       "push_error": "上传失败：{info}",
-      "fix_unverified": "已修复，待人工复核（once 模式不自动复查）"
+      "fix_unverified": "已修复，待人工复核（once 模式不自动复查）",
+      "cooldown": "冷却中，{info} 分钟后开始"
     },
     "modeLabel": "审核模式",
-    "fixAuthorHint": "留空 = 只自动修复你自己的 PR。要对他人 PR 自动修复请显式选作者（会跑 agent 并自动 push）。"
+    "fixAuthorHint": "留空 = 只自动修复你自己的 PR。要对他人 PR 自动修复请显式选作者（会跑 agent 并自动 push）。",
+    "coolingHint": "冷却中 · 还有 {n} 分钟（仍可在此关闭）"
   }
 }

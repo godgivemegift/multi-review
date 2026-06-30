@@ -75,6 +75,8 @@ export default defineEventHandler(async (event) => {
   const autoCfg = getProjectAutomation(d, schema, id)
   const autoRowByPr = getPrAutomationMap(d, schema, id) // 一次拉全，避免 .map() 里 N+1 点查
   const autoMaxRounds = project.autoMaxRounds ?? 2
+  const autoCooldownMin = project.autoCooldownMinutes ?? 5
+  const nowMs = Date.now()
   const me = await getCurrentUserLogin().catch(() => null) // 自动修复作者白名单默认值（和引擎口径一致）
 
   return {
@@ -96,13 +98,19 @@ export default defineEventHandler(async (event) => {
       // 本地 fix worktree 是否还在磁盘上（review worktree 用完即弃，不会残留；只有 fix 保留到 push/discard）。
       // 合并后想找残留清理就靠它。检查实际目录，不是只看 DB 字段（DB 有路径但目录可能已被手动删）。
       const hasWorktree = !!fix?.worktreePath && existsSync(fix.worktreePath)
+      // 冷却中：引擎看到的 head 还是当前 head，且首见时间 + 冷却期 还没到 → 给 UI 显示「冷却中，剩 X」
+      let autoCoolingUntil: string | null = null
+      if (autoCooldownMin > 0 && (autoReviewOn || autoFixOn) && autoRow?.headSeenSha && autoRow.headSeenSha === p.headSha && autoRow.headSeenAt) {
+        const until = Date.parse(autoRow.headSeenAt) + autoCooldownMin * 60_000
+        if (until > nowMs) autoCoolingUntil = new Date(until).toISOString()
+      }
       return {
         ...p,
         hasTask: !!task, taskId: task?.id ?? null, taskStatus: task?.status ?? null,
         fixId: fix?.id ?? null, fixStatus: fix?.status ?? null,
         fixChatting: fix ? chattingFixIds.has(fix.id) : false,
         authorUpdated, reviewerUpdated, hasWorktree,
-        autoReviewOn, autoFixOn, autoNote: autoRow?.note ?? null, autoRound: autoRow?.round ?? 0, autoMaxRounds,
+        autoReviewOn, autoFixOn, autoNote: autoRow?.note ?? null, autoRound: autoRow?.round ?? 0, autoMaxRounds, autoCoolingUntil,
       }
     }),
     totalCount: page.totalCount,

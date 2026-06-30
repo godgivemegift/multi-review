@@ -75,11 +75,26 @@ async function evaluatePr(db: any, schema: any, deps: EngineDeps, project: any, 
   const prKey = { author: p.author, status: pullStatusKey(p) }
   const reviewOn = effectiveReviewOn(cfg, row, prKey)
   const fixOn = effectiveFixOnGuarded(cfg, row, prKey, deps.currentUser ?? null)
+  const rec = (kind: string, message: string | null = null) =>
+    recordAutomationEvent(db, schema, project.id, p.number, kind, message, deps.now())
 
   if (!reviewOn && !fixOn) {
     // 自动化对这条 PR 已关：清掉残留 pendingFix，免得它一直把项目 arm 住空转
     if (row?.pendingFix) upsertPrAutomation(db, schema, project.id, p.number, { pendingFix: false }, now)
     return
+  }
+
+  // 冷却期：某条 PR 的 head 第一次被看到就开始计时，没过冷却期一律不动手——给用户时间进去关掉不想跑的。
+  // head 变了（新 PR / 别人 push / 我们自己修复 push）就重置计时。0 分钟=不冷却。
+  const cooldownMin = project.autoCooldownMinutes ?? 5
+  if (cooldownMin > 0) {
+    const head = p.headSha || null
+    if ((row?.headSeenSha ?? null) !== head) {
+      upsertPrAutomation(db, schema, project.id, p.number, { headSeenSha: head, headSeenAt: now }, now)
+      rec('cooldown', String(cooldownMin)) // 进时间线：开始冷却，用户可在此窗口进去关掉
+      return
+    }
+    if (row?.headSeenAt && Date.parse(now) - Date.parse(row.headSeenAt) < cooldownMin * 60_000) return // 冷却中
   }
 
   const review = getReview(db, schema, project.id, p.number)
@@ -111,9 +126,6 @@ async function evaluatePr(db: any, schema: any, deps: EngineDeps, project: any, 
       note: row?.note ?? null,
     },
   }
-
-  const rec = (kind: string, message: string | null = null) =>
-    recordAutomationEvent(db, schema, project.id, p.number, kind, message, deps.now())
 
   const d = decideAutoAction(snap)
   if (d.patch) {

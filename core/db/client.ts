@@ -34,6 +34,9 @@ function ensureColumns(sqlite: Database.Database) {
     ['projects', 'model', 'TEXT'],
     ['projects', 'effort', 'TEXT'],
     ['projects', 'auto_max_rounds', 'INTEGER NOT NULL DEFAULT 2'],
+    ['projects', 'auto_cooldown_minutes', 'INTEGER NOT NULL DEFAULT 5'],
+    ['pr_automation', 'head_seen_sha', 'TEXT'],
+    ['pr_automation', 'head_seen_at', 'TEXT'],
     ['reviews', 'preview_json', 'TEXT'],
     ['reviews', 'preview_sig', 'TEXT'],
     ['reviews', 'author_updated', 'INTEGER NOT NULL DEFAULT 0'],
@@ -89,6 +92,7 @@ function ensureSchema(sqlite: Database.Database) {
       model TEXT,
       effort TEXT,
       auto_max_rounds INTEGER NOT NULL DEFAULT 2,
+      auto_cooldown_minutes INTEGER NOT NULL DEFAULT 5,
       default_branch TEXT NOT NULL DEFAULT 'dev',
       created_at TEXT NOT NULL
     );
@@ -330,6 +334,8 @@ function ensureSchema(sqlite: Database.Database) {
       pending_fix INTEGER NOT NULL DEFAULT 0,
       opt_out INTEGER NOT NULL DEFAULT 0,
       note TEXT,
+      head_seen_sha TEXT,
+      head_seen_at TEXT,
       updated_at TEXT NOT NULL
     );
     CREATE INDEX IF NOT EXISTS pr_automation_project_idx ON pr_automation(project_id);
