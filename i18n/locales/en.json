@@ -549,7 +549,8 @@
       "cant_fix": "Can't auto-fix — needs you",
       "fix_error": "Fix failed — needs you",
       "stopped": "Paused (you stopped it)",
-      "deleted": "Off (task deleted)"
+      "deleted": "Off (task deleted)",
+      "post_error": "Post failed — stopped"
     },
     "tab": "Workflow",
     "noEvents": "No automation activity yet",

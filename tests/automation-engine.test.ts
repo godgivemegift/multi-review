@@ -166,6 +166,28 @@ async function runUntilStable(deps: EngineDeps, calls: any, max = 40) {
   console.log('automation-engine cant-fix: ok')
 }
 
+// ── 6) 发评论失败 → 停掉整条 PR 自动化：不会继续 fix/push，两开关关、note=post_error，时间线有 post_error ──
+{
+  resetWorld(); setConfig()
+  const { deps, calls } = makeWorld({ convergeAfter: Infinity })
+  // 覆盖 dispatchPost：模拟发布失败（翻译超时），同 plugin 行为把 review 推出 draft 止损
+  deps.dispatchPost = async (rid) => {
+    calls.post++
+    d.update(schema.reviews).set({ status: 'ready_to_post', updatedAt: now() }).where(eq(schema.reviews.id, rid)).run()
+    return { posted: false, error: '翻译超时' }
+  }
+  await runUntilStable(deps, calls)
+  assert.equal(calls.fix, 0, 'post 失败后绝不能继续自动修复')
+  assert.equal(calls.push, 0, 'post 失败后绝不能 push')
+  const row = getPrAutomationRow(d, schema, PID, PR)!
+  assert.equal(row.note, 'post_error')
+  assert.equal(row.reviewOn, false)
+  assert.equal(row.fixOn, false)
+  const evs = d.select().from(schema.automationEvents).where(eq(schema.automationEvents.projectId, PID)).all() as any[]
+  assert.ok(evs.some((e) => e.kind === 'post_error'), '时间线应有 post_error')
+  console.log('automation-engine post-error-stops: ok')
+}
+
 // ── 5) 只开自动审核（不修）→ 审一次 + 发评论，永不进修复，自然停手 ──
 {
   resetWorld(); setConfig({ fixEnabled: false, reviewMode: 'once' })

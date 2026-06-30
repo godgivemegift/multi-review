@@ -549,7 +549,8 @@
       "cant_fix": "Correction auto impossible — à vous",
       "fix_error": "Échec de la correction — à vous",
       "stopped": "En pause (arrêté par vous)",
-      "deleted": "Désactivé (tâche supprimée)"
+      "deleted": "Désactivé (tâche supprimée)",
+      "post_error": "Échec de publication — arrêté"
     },
     "tab": "Automatisation",
     "noEvents": "Aucune activité d'automatisation",

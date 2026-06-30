@@ -137,11 +137,16 @@ async function evaluatePr(db: any, schema: any, deps: EngineDeps, project: any, 
         if (review) { await deps.dispatchRecheck(review.id); rec('recheck') }
         break
       case 'post': {
-        // 真发了→记 posted；发布失败→记 post_error（dispatchPost 已止损不重试）；无内容可发→静默跳过
+        // 真发了→记 posted；无内容可发→静默跳过；发布失败→停掉该 PR 全部自动化（关两开关 + 清 pendingFix）+ 记 post_error。
+        // 否则评论没发出去、代码却会被下一轮自动修复并 push（ready_to_post 仍是可修复终态）——和「发评论出错即停」不一致。
         if (review) {
           const r = await deps.dispatchPost(review.id)
-          if (r.posted) rec('posted')
-          else if (r.error) rec('post_error', r.error)
+          if (r.posted) {
+            rec('posted')
+          } else if (r.error) {
+            upsertPrAutomation(db, schema, project.id, p.number, { reviewOn: false, fixOn: false, pendingFix: false, note: 'post_error' }, deps.now())
+            rec('post_error', r.error)
+          }
         }
         break
       }
