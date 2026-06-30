@@ -1,12 +1,14 @@
 import { nanoid } from 'nanoid'
 import { eq } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { runFeaturePlanAgent, renderPlanText, type Plan } from '../agent/featurePlan'
 import { prepareFeatureWorktree } from '../git/worktree'
 import { selectChatRunner } from '../fix/pipeline'
 import { appendTurns } from '../db/turns'
 import { makeEmit } from '../streaming/emit'
 import { sessionFields } from '../agent/session'
+import { fetchIssueContext } from '../github/issueAssets'
 import type { ChildProcess } from 'node:child_process'
 import type { ReviewProvider } from '../agent/runners'
 
@@ -19,6 +21,14 @@ export function isFeatureBusy(id: string): boolean {
   return jobLocks.has(id)
 }
 
+// 停止状态（plan 阶段 abort SDK query、impl 阶段 kill 子进程都用它）：
+// - featureStops：runner 暴露的中断回调（plan=abort SDK query / impl=runner stop）
+// - activeFeatureChats：impl 子进程句柄（kill 用）
+// - featureStopRequested：用户主动停的标记 → job 把那轮标 stopped 而非 error
+const activeFeatureChats = new Map<string, ChildProcess>()
+const featureStopRequested = new Set<string>()
+const featureStops = new Map<string, () => void>()
+
 export type FeaturePlanJobCtx = {
   db: any
   schema: any
@@ -29,6 +39,7 @@ export type FeaturePlanJobCtx = {
   effort: string
   lang: string
   methodology?: string | null
+  assetsDir: string // issue/PR 配图下载目录的根（实际落到 <assetsDir>/<taskId>）
 }
 
 // message：本轮用户输入。首轮(创建时)= 需求原文；之后 = 对上一版方案的细化/反馈 → 重新出方案。
@@ -51,6 +62,21 @@ export async function runFeaturePlanJob(ctx: FeaturePlanJobCtx, message: string)
     emit('chat', 'user')
 
     const t = task()
+    // 需求里若有 GitHub issue/PR 链接：后端先抓正文 + 下载配图（只读 agent 上不了网、下不了图）。
+    // 失败不致命，退回用原始需求继续。
+    let description = t?.description || ''
+    let imagePaths: string[] = []
+    try {
+      const ic = await fetchIssueContext(`${t?.description || ''}\n${message || ''}`, join(ctx.assetsDir, taskId))
+      if (ic) {
+        description = `${description}\n\n${ic.enrichedText}`
+        imagePaths = ic.imagePaths
+        emit('stage', `已抓取 issue/PR 内容（${ic.summary}）`)
+      }
+    } catch (e) {
+      emit('stage', `issue/PR 抓取失败，用原始需求继续：${(e as Error).message}`)
+    }
+
     emit('stage', 'AI 调研分析中…')
     const { plan, raw } = await runFeaturePlanAgent({
       cwd: ctx.cwd,
@@ -59,10 +85,12 @@ export async function runFeaturePlanJob(ctx: FeaturePlanJobCtx, message: string)
       effort: ctx.effort,
       lang: ctx.lang,
       methodology: ctx.methodology,
-      description: t?.description || '',
+      description,
       instruction: message || undefined,
+      imagePaths,
       onTool: (n, i) => emit('tool', `${n} ${i}`),
       onText: (chunk) => emit('text', chunk), // 调研阶段思考文字流（实时,不落库）→ 抽屉 liveAssistant
+      onStop: (stop) => featureStops.set(taskId, stop), // 停止按钮 → abort（分析阶段也能真停）
     })
     const text = renderPlanText(plan) || raw.slice(0, 2000)
     db.update(schema.featureTurns).set({ content: text, status: 'done' }).where(eq(schema.featureTurns.id, asstId)).run()
@@ -73,20 +101,30 @@ export async function runFeaturePlanJob(ctx: FeaturePlanJobCtx, message: string)
       .run()
     emit('chat', 'done')
   } catch (e) {
-    db.update(schema.featureTurns).set({ status: 'error' }).where(eq(schema.featureTurns.id, asstId)).run()
-    const errMsg = (e as Error).message
-    db.update(schema.featureTasks).set({ status: 'error', error: errMsg, updatedAt: now() }).where(eq(schema.featureTasks.id, taskId)).run()
-    emit('error', errMsg)
+    if (featureStopRequested.has(taskId)) {
+      // 用户主动停的，不算错误：占位轮标 stopped；有旧方案就回 planned，否则回 error 提示可重试。
+      db.update(schema.featureTurns).set({ status: 'stopped' }).where(eq(schema.featureTurns.id, asstId)).run()
+      const hadPlan = !!task()?.planJson
+      db.update(schema.featureTasks)
+        .set({ status: hadPlan ? 'planned' : 'error', error: hadPlan ? null : '已停止（未生成方案，可重试）', updatedAt: now() })
+        .where(eq(schema.featureTasks.id, taskId))
+        .run()
+      emit('chat', 'stopped')
+    } else {
+      db.update(schema.featureTurns).set({ status: 'error' }).where(eq(schema.featureTurns.id, asstId)).run()
+      const errMsg = (e as Error).message
+      db.update(schema.featureTasks).set({ status: 'error', error: errMsg, updatedAt: now() }).where(eq(schema.featureTasks.id, taskId)).run()
+      emit('error', errMsg)
+    }
   } finally {
     jobLocks.delete(taskId)
+    featureStops.delete(taskId)
+    featureStopRequested.delete(taskId)
   }
 }
 
 // ── 阶段2：实现（批准后）。在「从默认分支拉的新功能分支 worktree」里改代码，不自动 commit。
 // 复用 fix 的聊天 runner（acceptEdits + 全工具 + 「别 commit」），把已批准方案 + 决策答复作为高优先级注入。
-const activeFeatureChats = new Map<string, ChildProcess>()
-const featureStopRequested = new Set<string>()
-const featureStops = new Map<string, () => void>()
 
 export function stopFeatureImpl(taskId: string): boolean {
   const stop = featureStops.get(taskId)

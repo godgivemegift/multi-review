@@ -105,6 +105,14 @@ export async function fetchPrState(
   return { state: normState(j.state, !!j.isDraft), headSha: j.headRefOid ?? '', reviewDecision: j.reviewDecision ?? '', author: j.author?.login ?? '' }
 }
 
+// 取 issue / PR 的标题 + 正文（feature 开发贴 issue/PR 链接时，把正文喂给只读 agent；
+// agent 自己上不了网、下不了图，所以正文 + 配图都由后端先抓好再交给它）。
+export async function fetchIssueBody(repo: string, kind: 'issue' | 'pr', number: number): Promise<{ title: string; body: string }> {
+  const out = await gh([kind === 'pr' ? 'pr' : 'issue', 'view', String(number), '--repo', repo, '--json', 'title,body'])
+  const j = JSON.parse(out)
+  return { title: j.title ?? '', body: j.body ?? '' }
+}
+
 // 当前 gh 登录 token（给后端图片代理用：私有仓库评论的图片需带 token 才能取）
 let _ghToken: string | null = null
 export async function ghToken(): Promise<string> {
