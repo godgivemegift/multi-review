@@ -56,6 +56,8 @@ export default defineNuxtConfig({
     },
   },
   nitro: {
+    // Electron 打包：用 node-server 产物（.output/server/index.mjs），由主进程 spawn
+    preset: process.env.NITRO_PRESET || 'node-server',
     alias: { '~core': coreDir },
     experimental: { asyncContext: true },
   },

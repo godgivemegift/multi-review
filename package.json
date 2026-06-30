@@ -3,6 +3,9 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
+  "description": "Multi Review — desktop cockpit for multi-agent code review",
+  "author": "Thomas",
+  "main": "electron/main.mjs",
   "scripts": {
     "dev": "nuxt dev",
     "build": "nuxt build",
@@ -10,7 +13,11 @@
     "postinstall": "nuxt prepare",
     "db:studio": "drizzle-kit studio",
     "typecheck": "nuxt typecheck",
-    "test": "for f in tests/*.test.ts tests/*.contract.ts; do echo \"▸ $f\"; tsx \"$f\" || exit 1; done"
+    "test": "for f in tests/*.test.ts tests/*.contract.ts; do echo \"▸ $f\"; tsx \"$f\" || exit 1; done",
+    "electron:dev": "concurrently -k -n nuxt,electron \"nuxt dev\" \"wait-on tcp:127.0.0.1:3000 && cross-env ELECTRON_RENDERER_URL=http://localhost:3000 electron .\"",
+    "electron:build": "nuxt build && node scripts/prepare-electron-sqlite.mjs",
+    "electron:preview": "pnpm electron:build && electron .",
+    "electron:dist": "pnpm electron:build && electron-builder --publish=never"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.132",
@@ -31,9 +38,59 @@
     "@iconify-json/lucide": "^1.2.110",
     "@types/better-sqlite3": "^7.6.11",
     "@types/node": "^22.7.0",
+    "concurrently": "^9.1.0",
+    "cross-env": "^7.0.3",
     "drizzle-kit": "^0.31.0",
+    "electron": "^35.7.5",
+    "electron-builder": "^25.1.8",
     "tsx": "^4.22.3",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "wait-on": "^8.0.1"
   },
-  "packageManager": "pnpm@9.12.0"
+  "packageManager": "pnpm@9.12.0",
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild",
+      "better-sqlite3"
+    ]
+  },
+  "build": {
+    "appId": "com.multireview.app",
+    "productName": "Multi Review",
+    "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "npmRebuild": false,
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "electron/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": ".output",
+        "to": ".output"
+      }
+    ],
+    "asar": true,
+    "mac": {
+      "category": "public.app-category.developer-tools",
+      "target": [
+        "dmg",
+        "zip"
+      ]
+    },
+    "win": {
+      "target": [
+        "nsis"
+      ]
+    },
+    "linux": {
+      "category": "Development",
+      "target": [
+        "AppImage"
+      ]
+    }
+  }
 }
