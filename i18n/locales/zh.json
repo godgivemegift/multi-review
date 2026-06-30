@@ -494,9 +494,9 @@
   },
   "feature": {
     "tab": "Feature 开发",
-    "composerHint": "描述需求或贴一段 issue —— AI 先只读分析、给出方案和决策点，等你批准后才动手实现并开 PR。",
+    "composerHint": "描述需求或贴一段 issue —— AI 在隔离的新分支 worktree 里先给一版方案，你随后可以直接对话继续开发（全权限 + ultracode，绝不碰你的真实仓库），满意了再手动开 PR。",
     "composerPlaceholder": "描述要做的功能 / 粘贴 issue…",
-    "start": "开始分析",
+    "start": "开始开发",
     "creating": "创建中…",
     "empty": "还没有 feature 任务",
     "status": {
@@ -520,6 +520,9 @@
     "pickBlocking": "请先选好所有必选(*)决策点",
     "approve": "批准并实现",
     "openPr": "开 PR",
+    "updatePr": "更新 PR",
+    "regenPlan": "重新出方案",
+    "regenSeed": "请基于当前理解，重新给一版方案。",
     "back": "返回",
     "prTitle": "PR 标题",
     "prBody": "PR 正文",
@@ -527,7 +530,7 @@
     "confirmOpenPr": "确认开 PR",
     "prOpened": "已开 PR #{n}",
     "refinePlaceholder": "对方案提反馈 / 让它改方案…",
-    "chatPlaceholder": "继续让它改 / 补充…",
+    "chatPlaceholder": "继续对话开发 / 让它改 / 问它…（满意了再开 PR）",
     "discard": "删除任务",
     "discardConfirm": "删除这个任务？（含 worktree，不可恢复）"
   },

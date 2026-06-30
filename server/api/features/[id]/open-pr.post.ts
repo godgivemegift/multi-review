@@ -7,12 +7,22 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { schema } from '~core/db/client'
-import { isFeatureBusy } from '~core/feature/pipeline'
+import { isFeatureBusy, tryAcquireFeatureLock, releaseFeatureLock } from '~core/feature/pipeline'
 import { PlanSchema } from '~core/agent/featurePlan'
 import { fixChangesDiff, fixChangesStat } from '~core/fix/changes'
 
 const pexec = promisify(execFile)
 const SAFE_REF = /^[A-Za-z0-9][A-Za-z0-9._\-/]*$/ // 注：分支生成已 slugify 成纯 [a-z0-9/-]，这里仅防注入/路径穿越
+
+// 回查某分支已建的 PR（用于：gh pr create 退 0 但没回链接 / 上次失败但 GitHub 其实建好了 → 别卡死，捡回来标 opened）。
+async function findExistingPr(repo: string, branch: string): Promise<{ url: string; number: number } | null> {
+  try {
+    const { stdout } = await pexec('gh', ['pr', 'list', '--repo', repo, '--head', branch, '--state', 'all', '--json', 'url,number', '--limit', '1'], { timeout: 30_000 })
+    const first = (JSON.parse(stdout.trim() || '[]') as Array<{ url?: string; number?: number }>)[0]
+    if (first?.url) return { url: String(first.url), number: Number(first.number) || 0 }
+  } catch { /* ignore */ }
+  return null
+}
 
 // 开 PR = feature 闭环终点：commit(英文 conventional) + push 新分支 + gh pr create。
 // dryRun=true → 返回待提交 diff + 默认标题/正文(来自方案)，不落地。永远手动触发。
@@ -48,43 +58,69 @@ export default defineEventHandler(async (event) => {
     return { dryRun: true, diff, truncated, title: defTitle, body: defBody, branch: task.branch, base, ...stat }
   }
 
-  // 已开过就直接返回
-  if (task.status === 'opened' && task.prUrl) return { ok: true, url: task.prUrl, number: task.prNumber }
-  if (!['built', 'error'].includes(task.status)) throw createError({ statusCode: 409, statusMessage: `当前状态（${task.status}）不能开 PR` })
+  // 已有 PR → 这次只是把新改动推到同一分支更新现有 PR（不再 gh pr create，避免重复创建报错）。
+  const alreadyOpen = !!task.prUrl
+  if (!['built', 'error', 'opened'].includes(task.status)) throw createError({ statusCode: 409, statusMessage: `当前状态（${task.status}）不能开 PR` })
 
-  // 真没东西可开就别推空分支 / 开空 PR（这一步在 try 外，干净返回 400，不把状态写成 error）。
-  const { stdout: porcelain } = await git(['status', '--porcelain'])
-  const dirty = !!porcelain.trim()
-  if (!dirty) {
-    const { stdout: ahead } = await git(['rev-list', '--count', `origin/${base}..HEAD`]).catch(() => ({ stdout: '0' }))
-    if ((Number(ahead.trim()) || 0) === 0) throw createError({ statusCode: 400, statusMessage: 'worktree 没有任何改动，无法开 PR' })
-  }
-
-  // 不在这里把状态改成 building（会和实现阶段撞名，且开 PR 中途崩溃会卡住）；保持 built，成功→opened / 失败→error。
+  // 非 dryRun 的 git 写：借用 feature 锁，和 plan/impl/另一次 open-pr 互斥（防并发 add/commit/push 撞 index.lock / 重复开 PR）。
+  if (!tryAcquireFeatureLock(id)) throw createError({ statusCode: 409, statusMessage: '正在处理中，请等它完成' })
   try {
-    if (dirty) {
-      await git(['add', '-A'])
-      await git(['commit', '-m', defTitle])
+    // 真没东西可开就别推空分支 / 开空 PR（干净返回 400，不把状态写成 error）。
+    const { stdout: porcelain } = await git(['status', '--porcelain'])
+    const dirty = !!porcelain.trim()
+    if (!dirty) {
+      const { stdout: ahead } = await git(['rev-list', '--count', `origin/${base}..HEAD`]).catch(() => ({ stdout: '0' }))
+      if ((Number(ahead.trim()) || 0) === 0) throw createError({ statusCode: 400, statusMessage: 'worktree 没有任何改动，无法开 PR' })
     }
-    await git(['push', '-u', 'origin', `HEAD:${task.branch}`])
 
-    // gh pr create（正文走临时文件，避免超长参数）
-    const dir = await mkdtemp(join(tmpdir(), 'mr-feat-pr-'))
-    const file = join(dir, 'body.md')
-    await writeFile(file, defBody || defTitle)
-    let url = ''
+    // 不在这里把状态改成 building（会和实现阶段撞名，且开 PR 中途崩溃会卡住）；保持 built，成功→opened / 失败→error。
     try {
-      const { stdout } = await pexec('gh', ['pr', 'create', '--repo', project.repo, '--base', base, '--head', task.branch, '--title', defTitle, '--body-file', file], { timeout: 60_000 })
-      url = stdout.trim().split('\n').filter(Boolean).pop() || ''
-    } finally {
-      await rm(dir, { recursive: true, force: true }).catch(() => {})
+      if (dirty) {
+        await git(['add', '-A'])
+        await git(['commit', '-m', defTitle])
+      }
+      await git(['push', '-u', 'origin', `HEAD:${task.branch}`])
+
+      // 已有 PR：推送即更新，不再创建。
+      if (alreadyOpen) {
+        d.update(schema.featureTasks).set({ status: 'opened', error: null, updatedAt: now() }).where(eq(schema.featureTasks.id, id)).run()
+        return { ok: true, url: task.prUrl, number: task.prNumber }
+      }
+
+      // gh pr create（正文走临时文件，避免超长参数）
+      const dir = await mkdtemp(join(tmpdir(), 'mr-feat-pr-'))
+      const file = join(dir, 'body.md')
+      await writeFile(file, defBody || defTitle)
+      let url = ''
+      try {
+        const { stdout } = await pexec('gh', ['pr', 'create', '--repo', project.repo, '--base', base, '--head', task.branch, '--title', defTitle, '--body-file', file], { timeout: 60_000 })
+        url = stdout.trim().split('\n').filter(Boolean).pop() || ''
+      } finally {
+        await rm(dir, { recursive: true, force: true }).catch(() => {})
+      }
+      // gh 退 0 但没解析出链接（异常输出）→ 别当成功落 null（会永久卡死无法再开/更新），回查这个分支已建的 PR。
+      if (!url) {
+        const ex = await findExistingPr(project.repo, task.branch)
+        if (ex) url = ex.url
+      }
+      if (!url) throw new Error('gh pr create 未返回 PR 链接（请去 GitHub 确认是否已创建）')
+      const num = Number(url.match(/\/pull\/(\d+)/)?.[1]) || null
+      d.update(schema.featureTasks).set({ status: 'opened', prUrl: url, prNumber: num, error: null, updatedAt: now() }).where(eq(schema.featureTasks.id, id)).run()
+      return { ok: true, url, number: num }
+    } catch (e: any) {
+      const m = String(e?.stderr || e?.message || '').slice(0, 400)
+      // PR 已存在（之前推过 / 上次失败但 GitHub 其实建好了）→ 回查捡回来标 opened，而不是卡死在 error。
+      if (/already exists/i.test(m)) {
+        const ex = await findExistingPr(project.repo, task.branch).catch(() => null)
+        if (ex) {
+          d.update(schema.featureTasks).set({ status: 'opened', prUrl: ex.url, prNumber: ex.number, error: null, updatedAt: now() }).where(eq(schema.featureTasks.id, id)).run()
+          return { ok: true, url: ex.url, number: ex.number }
+        }
+      }
+      d.update(schema.featureTasks).set({ status: 'error', error: `开 PR 失败: ${m}`, updatedAt: now() }).where(eq(schema.featureTasks.id, id)).run()
+      throw createError({ statusCode: 500, statusMessage: `开 PR 失败: ${m}` })
     }
-    const num = Number(url.match(/\/pull\/(\d+)/)?.[1]) || null
-    d.update(schema.featureTasks).set({ status: 'opened', prUrl: url || null, prNumber: num, error: null, updatedAt: now() }).where(eq(schema.featureTasks.id, id)).run()
-    return { ok: true, url, number: num }
-  } catch (e: any) {
-    const m = String(e?.stderr || e?.message || '').slice(0, 400)
-    d.update(schema.featureTasks).set({ status: 'error', error: `开 PR 失败: ${m}`, updatedAt: now() }).where(eq(schema.featureTasks.id, id)).run()
-    throw createError({ statusCode: 500, statusMessage: `开 PR 失败: ${m}` })
+  } finally {
+    releaseFeatureLock(id)
   }
 })

@@ -23,8 +23,16 @@ const liveAssistant = ref('')
 const logLines = ref<string[]>([])
 const { confirming } = useInlineConfirm() // '' | 'discard'（抽屉内联确认，不用弹窗）
 const busy = ref(false)
+const allowDanger = ref(false) // 「允许危险命令」开关 → 放行危险命令守卫（同全局助手）
 const decisions = reactive<Record<string, string>>({})
 let es: EventSource | null = null
+
+// ultracode 便捷开关：在输入开头切换 `ultracode: ` 前缀（和全局助手一致；交给子 agent 用更强模式跑）。
+const ULTRA_PREFIX = 'ultracode: '
+const ultracodeActive = computed(() => /^ultracode:/i.test(input.value))
+function toggleUltracode() {
+  input.value = ultracodeActive.value ? input.value.replace(/^ultracode:\s*/i, '') : ULTRA_PREFIX + input.value
+}
 
 const task = computed(() => data.value?.task)
 const plan = computed(() => data.value?.plan)
@@ -89,12 +97,21 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
 const { scrollEl, scrollToBottom } = useScrollToBottom()
 watch([() => data.value?.turns.length, liveAssistant], scrollToBottom)
 
+// 自由聊为主：默认 develop（在 worktree 里全权限开发）；ultracode 走消息前缀，allowDanger 放行危险命令。
 async function sendChat() {
   const msg = input.value.trim()
   if (!msg || !canChat.value) return
   input.value = ''; liveAssistant.value = ''
-  try { await $fetch(`/api/features/${props.featureId}/chat`, { method: 'POST', body: { message: msg } }); await load() }
+  try { await $fetch(`/api/features/${props.featureId}/chat`, { method: 'POST', body: { message: msg, mode: 'develop', allowDanger: allowDanger.value } }); await load() }
   catch (e: any) { input.value = msg; notify(e?.data?.statusMessage || t('common.failed')) }
+}
+// 重新生成方案（可选）：把输入框内容当反馈，只读重出一版方案。
+async function regenPlan() {
+  if (!canChat.value) return
+  const msg = input.value.trim() || t('feature.regenSeed')
+  input.value = ''; liveAssistant.value = ''
+  try { await $fetch(`/api/features/${props.featureId}/chat`, { method: 'POST', body: { message: msg, mode: 'plan' } }); await load() }
+  catch (e: any) { notify(e?.data?.statusMessage || t('common.failed')) }
 }
 async function stop() {
   try { await $fetch(`/api/features/${props.featureId}/stop`, { method: 'POST' }); await load() }
@@ -104,7 +121,7 @@ async function approve() {
   // blocking 决策必须选
   for (const dp of plan.value?.decisionPoints ?? []) if (dp.blocking && !decisions[dp.id]) { notify(t('feature.pickBlocking')); return }
   busy.value = true
-  try { await $fetch(`/api/features/${props.featureId}/approve`, { method: 'POST', body: { decisions: { ...decisions } } }); await load() }
+  try { await $fetch(`/api/features/${props.featureId}/approve`, { method: 'POST', body: { decisions: { ...decisions }, allowDanger: allowDanger.value } }); await load() }
   catch (e: any) { notify(e?.data?.statusMessage || t('common.failed')) }
   finally { busy.value = false }
 }
@@ -226,16 +243,38 @@ async function confirmPr() {
 
         <!-- 动作区 + composer -->
         <div class="shrink-0 pt-3 mt-2 border-t border-default space-y-2">
-          <div class="flex items-center gap-2">
+          <!-- 可选动作：批准（formal 门）/ 开 PR / 重新出方案 / 停止 -->
+          <div class="flex items-center gap-2 flex-wrap">
             <button v-if="status === 'planned'" class="text-sm bg-inverted text-inverted px-4 py-1.5 rounded hover:bg-inverted/90 disabled:opacity-40" :disabled="busy || running" @click="approve">{{ busy ? $t('common.loading') : $t('feature.approve') }}</button>
-            <button v-if="status === 'built'" class="text-sm bg-inverted text-inverted px-4 py-1.5 rounded hover:bg-inverted/90 disabled:opacity-40" :disabled="busy || running" @click="openPrPreview">{{ busy ? $t('common.loading') : $t('feature.openPr') }}</button>
-            <button v-if="running" class="text-sm border border-accented px-4 py-1.5 rounded hover:bg-muted" @click="stop">{{ $t('fix.stop') }}</button>
+            <button v-if="['built', 'error', 'opened'].includes(status)" class="text-sm bg-inverted text-inverted px-4 py-1.5 rounded hover:bg-inverted/90 disabled:opacity-40" :disabled="busy || running" @click="openPrPreview">{{ busy ? $t('common.loading') : (task.prUrl ? $t('feature.updatePr') : $t('feature.openPr')) }}</button>
+            <button v-if="plan && status !== 'analyzing'" class="text-xs text-dimmed hover:text-highlighted disabled:opacity-40" :disabled="!canChat" @click="regenPlan">{{ $t('feature.regenPlan') }}</button>
+            <button v-if="running" class="text-sm border border-accented px-4 py-1.5 rounded hover:bg-muted ml-auto" @click="stop">{{ $t('fix.stop') }}</button>
           </div>
+          <!-- 允许危险命令开关（同全局助手）-->
+          <label class="flex items-center gap-2 text-[11px] cursor-pointer">
+            <input v-model="allowDanger" type="checkbox" class="accent-error" />
+            <span :class="allowDanger ? 'text-error' : 'text-dimmed'">{{ allowDanger ? $t('global.dangerOn') : $t('global.dangerOff') }}</span>
+          </label>
           <textarea
-            v-model="input" rows="2" :placeholder="status === 'planned' ? $t('feature.refinePlaceholder') : $t('feature.chatPlaceholder')"
+            v-model="input" rows="2" :placeholder="$t('feature.chatPlaceholder')"
             class="w-full text-sm border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-inverted" :disabled="!canChat"
           />
-          <div class="flex justify-end">
+          <div class="flex items-center justify-between gap-2">
+            <!-- ultracode 便捷按钮：紫色 + 左→右光效；点击在输入开头切换「ultracode:」前缀 -->
+            <button
+              type="button"
+              class="ultra-btn relative overflow-hidden shrink-0 text-xs rounded px-2.5 py-1.5 font-medium text-white shadow-sm transition"
+              :class="ultracodeActive ? 'bg-purple-600 ring-2 ring-purple-300' : 'bg-purple-600/90 hover:bg-purple-600'"
+              :title="$t('global.ultracodeHint')"
+              @click="toggleUltracode"
+            >
+              <span class="relative z-10 flex items-center gap-1">
+                <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
+                  <path d="M12 3l1.6 3.9L17.5 8.5l-3.9 1.6L12 14l-1.6-3.9L6.5 8.5l3.9-1.6L12 3Z" />
+                </svg>
+                {{ $t('global.ultracode') }}
+              </span>
+            </button>
             <button class="w-24 text-sm bg-inverted text-inverted py-1.5 rounded hover:bg-inverted/90 disabled:opacity-40" :disabled="!input.trim() || !canChat" @click="sendChat">{{ $t('global.send') }}</button>
           </div>
         </div>
@@ -243,3 +282,23 @@ async function confirmPr() {
     </template>
   </USlideover>
 </template>
+
+<style scoped>
+/* ultracode 按钮：一束高光从左到右扫过（扫完停一下再来）*/
+.ultra-btn::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.6) 50%, transparent 75%);
+  transform: translateX(-100%);
+  animation: ultra-shine 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes ultra-shine {
+  0% { transform: translateX(-100%); }
+  60%, 100% { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ultra-btn::after { animation: none; }
+}
+</style>

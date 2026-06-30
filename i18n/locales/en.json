@@ -494,9 +494,9 @@
   },
   "feature": {
     "tab": "Feature dev",
-    "composerHint": "Describe a feature or paste an issue — the AI analyzes read-only first and proposes a plan with decision points; it only implements and opens a PR after you approve.",
+    "composerHint": "Describe a feature or paste an issue — the AI proposes a plan in an isolated new-branch worktree, then you just chat to keep building (full permissions + ultracode, never touching your real repo) and open a PR manually once you're happy.",
     "composerPlaceholder": "Describe the feature / paste an issue…",
-    "start": "Analyze",
+    "start": "Start",
     "creating": "Creating…",
     "empty": "No feature tasks yet",
     "status": {
@@ -520,6 +520,9 @@
     "pickBlocking": "Please answer all required (*) decision points",
     "approve": "Approve & build",
     "openPr": "Open PR",
+    "updatePr": "Update PR",
+    "regenPlan": "Regenerate plan",
+    "regenSeed": "Please give a fresh plan based on the current understanding.",
     "back": "Back",
     "prTitle": "PR title",
     "prBody": "PR body",
@@ -527,7 +530,7 @@
     "confirmOpenPr": "Confirm open PR",
     "prOpened": "PR #{n} opened",
     "refinePlaceholder": "Give feedback on the plan / ask to change it…",
-    "chatPlaceholder": "Ask for more changes…",
+    "chatPlaceholder": "Keep chatting to build / ask for changes… (open a PR when you're happy)",
     "discard": "Delete task",
     "discardConfirm": "Delete this task? (incl. worktree, irreversible)"
   },
