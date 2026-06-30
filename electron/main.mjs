@@ -155,6 +155,10 @@ function createWindow(url) {
     minWidth: 1024,
     minHeight: 720,
     title: 'Multi Review',
+    // macOS：隐藏原生标题栏，traffic light 嵌进 app 自己的顶栏(h-16=64px)垂直居中
+    ...(process.platform === 'darwin'
+      ? { titleBarStyle: 'hidden', trafficLightPosition: { x: 18, y: 24 } }
+      : {}),
     show: false,
     webPreferences: {
       contextIsolation: true,
