@@ -517,6 +517,21 @@
     "discard": "Delete task",
     "discardConfirm": "Delete this task? (incl. worktree, irreversible)"
   },
+  "remote": {
+    "title": "Remote access",
+    "toggleLabel": "Enable LAN remote access",
+    "toggleHint": "Let an iPad/phone on the same network open the same view. The app still runs on this machine.",
+    "warning": "⚠️ Once on, any device on this network that obtains the share link/QR can drive this app (run agents, touch your repos). Use only on trusted networks.",
+    "scanHint": "Scan with your iPad/phone camera to open",
+    "noNetwork": "No LAN address found (not connected to a network?)",
+    "urlsLabel": "Addresses",
+    "copy": "Copy link",
+    "copied": "Copied",
+    "rotate": "Reset link",
+    "rotateHint": "Resetting invalidates the old QR/link immediately; connected devices must re-scan.",
+    "offHint": "Remote access is off. Turn it on to generate a QR code to connect.",
+    "portNote": "Note: the app’s port is reachable on your LAN while running; turning remote access off rejects requests but does not close the port."
+  },
   "automation": {
     "configBtn": "Automation",
     "title": "Automation config",

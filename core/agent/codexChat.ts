@@ -112,14 +112,16 @@ export async function runCodexChat(opts: FixChatOptions): Promise<FixChatResult>
     // 用共享的 newCodex()：它带 codexPathOverride，绕开 nitro 打包后找不到二进制的问题。
     const codex = newCodex()
     const effort = toCodexEffort(runOpts.effort)
-    // feature 开发要「全部权限」：allowDanger → danger-full-access；并放开联网/web 搜索。
-    // fix 路径不传这些 → 维持原来的 workspace-write + 断网。
+    // 网络只跟随「feature 开 PR」这类显式意图（feature 会同时传 fullAccess+networkAccess）。
+    // fix 的 allowDanger 只放开本地沙箱（rm 等危险本地操作），**不开网络**——fix 从不需要 agent 自己 push
+    // （上传走独立 Node 路径），且 codex 的 git-mutation 守卫是「执行后」才拦，开了网络会让 push 先落地再报错。
     const network = !!runOpts.networkAccess
+    const fullSandbox = !!(runOpts.fullAccess || runOpts.allowDanger)
     const threadOptions: ThreadOptions = {
       ...(runOpts.model ? { model: runOpts.model } : {}),
       ...(effort ? { modelReasoningEffort: effort } : {}),
       workingDirectory: runOpts.cwd,
-      sandboxMode: runOpts.fullAccess ? 'danger-full-access' : 'workspace-write',
+      sandboxMode: fullSandbox ? 'danger-full-access' : 'workspace-write',
       approvalPolicy: 'never',
       networkAccessEnabled: network,
       webSearchMode: network ? 'live' : 'disabled',

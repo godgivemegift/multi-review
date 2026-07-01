@@ -74,6 +74,7 @@ async function createProject() {
         </NuxtLink>
         <div class="flex items-center gap-1" style="-webkit-app-region: no-drag">
           <UpdateCheckButton />
+          <RemoteAccessButton />
           <LanguageSwitcher />
           <ColorModeToggle />
         </div>

@@ -28,6 +28,21 @@ let es: EventSource | null = null
 // load 竞态护栏（同 FeatureDrawer）：切 fix / 放弃时，旧 fix 在途的 load 迟到返回不能盖回 data。
 let loadToken = 0
 
+// 「允许危险命令」+「ultracode 后台激活」：一次开启后永久记住（localStorage，跨 PR/刷新），前缀后端注入。
+const allowDanger = ref(false)
+const ultracodeOn = ref(false)
+const LS_DANGER = 'mr.fix.allowDanger'
+const LS_ULTRA = 'mr.fix.ultracode'
+onMounted(() => {
+  allowDanger.value = localStorage.getItem(LS_DANGER) === '1'
+  ultracodeOn.value = localStorage.getItem(LS_ULTRA) === '1'
+})
+watch(allowDanger, (v) => { if (import.meta.client) localStorage.setItem(LS_DANGER, v ? '1' : '0') })
+function toggleUltracode() {
+  ultracodeOn.value = !ultracodeOn.value
+  if (import.meta.client) localStorage.setItem(LS_ULTRA, ultracodeOn.value ? '1' : '0')
+}
+
 function hhmmss(iso?: string) {
   return new Date(iso ?? new Date().toISOString()).toLocaleTimeString(locale.value, { hour12: false })
 }
@@ -130,7 +145,7 @@ async function sendChat() {
       emit('changed')
       openSSE()
     }
-    await $fetch(`/api/fixes/${currentFixId.value}/chat`, { method: 'POST', body: { message: msg } })
+    await $fetch(`/api/fixes/${currentFixId.value}/chat`, { method: 'POST', body: { message: msg, allowDanger: allowDanger.value, ultracode: ultracodeOn.value } })
     await load()
   } catch (e: any) {
     chatInput.value = msg
@@ -286,12 +301,32 @@ async function copyWorktree() {
       </div>
 
       <!-- 输入条（固定钉在最底） -->
-      <div class="shrink-0 border-t border-default pt-3 mt-1">
+      <div class="shrink-0 border-t border-default pt-3 mt-1 space-y-2">
+        <!-- 允许危险命令（默认拦 git push / gh pr create——本来 fix agent 能自己推，现在默认堵上；开了才放行）-->
+        <label class="flex items-center gap-2 text-[11px] cursor-pointer">
+          <input v-model="allowDanger" type="checkbox" class="accent-error" />
+          <span :class="allowDanger ? 'text-error' : 'text-dimmed'">{{ allowDanger ? $t('global.dangerOn') : $t('global.dangerOff') }}</span>
+        </label>
         <textarea
           v-model="chatInput" rows="3" :placeholder="$t('fix.chatPlaceholder')" :disabled="chatting"
           class="w-full text-sm bg-muted border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-accented disabled:opacity-50"
         />
-        <div class="mt-2 flex items-center gap-3">
+        <div class="flex items-center gap-3">
+          <!-- ultracode 后台激活：未激活=灰渐变，激活=紫渐变+扫光；点一次永久记住 -->
+          <button
+            type="button"
+            class="ultra-btn relative overflow-hidden shrink-0 text-xs rounded px-2.5 py-1.5 font-medium text-white shadow-sm transition"
+            :class="ultracodeOn ? 'is-active bg-gradient-to-r from-purple-600 to-fuchsia-600 ring-2 ring-purple-300' : 'bg-gradient-to-r from-neutral-500 to-neutral-600 opacity-80 hover:opacity-100'"
+            :title="$t('global.ultracodeHint')" :aria-pressed="ultracodeOn"
+            @click="toggleUltracode"
+          >
+            <span class="relative z-10 flex items-center gap-1">
+              <svg viewBox="0 0 24 24" width="13" height="13" fill="currentColor" aria-hidden="true">
+                <path d="M12 3l1.6 3.9L17.5 8.5l-3.9 1.6L12 14l-1.6-3.9L6.5 8.5l3.9-1.6L12 3Z" />
+              </svg>
+              {{ $t('global.ultracode') }}
+            </span>
+          </button>
           <button
             v-if="data?.hasUnpushed"
             class="text-sm bg-inverted text-inverted px-4 py-1.5 hover:bg-inverted/90 disabled:opacity-40"
@@ -323,3 +358,23 @@ async function copyWorktree() {
     </template>
   </div>
 </template>
+
+<style scoped>
+/* ultracode 按钮：激活态才有高光扫过；未激活是灰的、不扫光。*/
+.ultra-btn.is-active::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(110deg, transparent 25%, rgba(255, 255, 255, 0.6) 50%, transparent 75%);
+  transform: translateX(-100%);
+  animation: ultra-shine 2.4s ease-in-out infinite;
+  pointer-events: none;
+}
+@keyframes ultra-shine {
+  0% { transform: translateX(-100%); }
+  60%, 100% { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ultra-btn.is-active::after { animation: none; }
+}
+</style>

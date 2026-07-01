@@ -1,4 +1,5 @@
 import { runClaudeStream } from './claudeCli'
+import { dangerSettingsJson, dangerEnv } from './dangerGuard'
 import { outputLangClause } from './lang'
 
 // 修复 PR = 和 Claude 在 PR worktree 里对话，让它直接改文件。子进程跑 headless claude（不是 SDK）：
@@ -18,6 +19,8 @@ export type FixChatOptions = {
   sessionId: string | null // 有就 --resume；没有就开新会话
   message: string
   conflictHint?: string
+  allowDanger?: boolean // 用户开了「允许危险命令」→ 放行危险命令守卫（含 git push / gh pr create）；默认拦（保「点上传才推」）
+  ultracode?: boolean // 后台激活 ultracode（前缀由调用方注入 message，此处不处理）
   // ── feature 开发用的可选「全部权限」开关（fix 路径不传 → 行为不变）──
   promptKind?: 'fix' | 'feature' // 'feature' = 在新功能分支 worktree 里自由开发（codex 用不同 prompt）
   fullAccess?: boolean // codex：true → danger-full-access 沙箱（否则 workspace-write）
@@ -48,6 +51,9 @@ export async function runFixChat(opts: FixChatOptions): Promise<FixChatResult> {
     '--permission-mode', 'acceptEdits',
     '--allowedTools', ALLOWED.join(','),
     ...(DISALLOWED.length ? ['--disallowedTools', DISALLOWED.join(',')] : []),
+    // 危险命令守卫（同 feature/全局助手）：默认拦 git push / gh pr create 等，放行由 allowDanger 决定。
+    // 这也把原来「fix agent 能自己 git push 绕过上传门控」的口子默认堵上了。
+    '--settings', dangerSettingsJson(),
   ]
   if (opts.sessionId) args.push('--resume', opts.sessionId)
 
@@ -67,6 +73,7 @@ ${outputLangClause(opts.lang)}`
   const { costUsd, result, sessionId } = await runClaudeStream(args, {
     input: prompt,
     cwd: opts.cwd,
+    env: dangerEnv(opts.allowDanger), // allowDanger=true → GLOBAL_ALLOW_DANGER=1 放行守卫
     onSpawn: opts.onSpawn,
     onEvent: (msg) => {
       if (msg?.type !== 'assistant') return
