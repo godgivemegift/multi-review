@@ -26,6 +26,10 @@ const busy = ref(false)
 const allowDanger = ref(false) // 「允许危险命令」开关 → 放行危险命令守卫（同全局助手）
 const decisions = reactive<Record<string, string>>({})
 let es: EventSource | null = null
+// load 竞态护栏：每次 load 领一个自增号；结果回来时号变了（切了任务 / 又发起了新 load）就丢弃，
+// 否则任务 A 未完成的 load（pollTimer / SSE done 触发）可能晚于 load(B) 返回、把 A 的详情盖回 data，
+// 造成「切到 B 却显示 A 的处理过程，刷新才好」。
+let loadToken = 0
 
 // ultracode 便捷开关：在输入开头切换 `ultracode: ` 前缀（和全局助手一致；交给子 agent 用更强模式跑）。
 const ULTRA_PREFIX = 'ultracode: '
@@ -47,14 +51,18 @@ function notify(msg: string, ok = false) { toast.add({ title: msg, color: ok ? '
 function hhmmss(iso?: string) { return new Date(iso ?? new Date().toISOString()).toLocaleTimeString(locale.value, { hour12: false }) }
 
 async function load() {
-  if (!props.featureId) return
-  data.value = await $fetch<Detail>(`/api/features/${props.featureId}`)
+  const fid = props.featureId
+  if (!fid) return
+  const my = ++loadToken
+  const detail = await $fetch<Detail>(`/api/features/${fid}`)
+  if (my !== loadToken || fid !== props.featureId) return // 过期结果（切了任务 / 有更新的 load）→ 丢弃
+  data.value = detail
   // 首次：用落库的历史事件回填运行日志（同 fix）
-  if (!logLines.value.length && data.value.events?.length) {
-    logLines.value = data.value.events.filter((e) => e.message).map((e) => `${hhmmss(e.ts)}  ${e.message}`)
+  if (!logLines.value.length && detail.events?.length) {
+    logLines.value = detail.events.filter((e) => e.message).map((e) => `${hhmmss(e.ts)}  ${e.message}`)
   }
   // 初始化决策选择(默认值 / 推荐 / 第一项)
-  for (const dp of plan.value?.decisionPoints ?? []) {
+  for (const dp of detail.plan?.decisionPoints ?? []) {
     if (!decisions[dp.id]) decisions[dp.id] = dp.defaultChoice || dp.recommendation || dp.options[0]?.label || ''
   }
   emit('changed')
@@ -68,8 +76,10 @@ async function doDelete() {
 function openSSE() {
   if (!props.featureId || !import.meta.client) return
   es?.close()
-  es = new EventSource(`/api/features/${props.featureId}/stream`)
+  const fid = props.featureId // 绑定这条流所属的任务：切任务后即便有残留消息也不再写入
+  es = new EventSource(`/api/features/${fid}/stream`)
   es.onmessage = (ev) => {
+    if (fid !== props.featureId) return // 过期流 → 忽略
     try {
       const e = JSON.parse(ev.data)
       if (e.kind === 'text') { liveAssistant.value += e.message || ''; return }
@@ -81,8 +91,12 @@ function openSSE() {
 function closeSSE() { es?.close(); es = null }
 
 watch([open, () => props.featureId], ([o]) => {
-  if (o && props.featureId) { view.value = 'main'; logLines.value = []; confirming.value = ''; for (const k in decisions) delete decisions[k]; load(); openSSE() }
-  else closeSSE()
+  if (o && props.featureId) {
+    // 切任务/打开：先清空上一个任务的残留（否则 load 返回前会闪出旧任务的对话/日志/PR 预览）
+    view.value = 'main'; data.value = null; liveAssistant.value = ''; logLines.value = []; pr.value = null
+    confirming.value = ''; for (const k in decisions) delete decisions[k]
+    load(); openSSE()
+  } else closeSSE()
 })
 onBeforeUnmount(closeSSE)
 
