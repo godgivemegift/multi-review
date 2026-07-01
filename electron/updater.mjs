@@ -103,6 +103,9 @@ function fetchJson(url) {
           reject(e)
         }
       })
+      // 响应头已到、body 中途断流:pipe/end 都不会触发,必须显式 reject,否则 Promise 永挂。
+      res.on('error', reject)
+      res.on('aborted', () => reject(new Error(`Response aborted for ${url}`)))
     })
     req.on('error', reject)
     req.end()
@@ -128,15 +131,39 @@ function downloadAndOpen(win, asset) {
       }
       const total = Number(res.headers['content-length'] || 0)
       let received = 0
+      let settled = false
       const file = fs.createWriteStream(dest)
+      const clearProgress = () => {
+        if (win && !win.isDestroyed()) win.setProgressBar(-1)
+      }
+      // 任何失败路径统一走这里:只结算一次、清进度条、销毁流、删掉残缺文件、报错。
+      const fail = (err) => {
+        if (settled) return
+        settled = true
+        clearProgress()
+        try {
+          file.destroy()
+        } catch {
+          /* ignore */
+        }
+        fs.unlink(dest, () => {}) // 别在 Downloads 里留半截文件
+        dialog.showErrorBox(t.failed_title, err?.message || String(err))
+        resolve(false)
+      }
       res.on('data', (chunk) => {
         received += chunk.length
         if (total && win && !win.isDestroyed()) win.setProgressBar(Math.min(received / total, 1))
       })
+      // 关键:源(res)中途出错/中断不会被 res.pipe(file) 转发给 file,
+      // 那样 file 既不 finish 也不 error → Promise 永挂、spinner/进度条卡死。自己接住。
+      res.on('error', fail)
+      res.on('aborted', () => fail(new Error('Download aborted')))
       res.pipe(file)
       file.on('finish', () => {
+        if (settled) return
+        settled = true
         file.close(() => {
-          if (win && !win.isDestroyed()) win.setProgressBar(-1)
+          clearProgress()
           shell.openPath(dest) // 打开 DMG/安装包(mac 下会挂载)
           dialog
             .showMessageBox(win && !win.isDestroyed() ? win : undefined, {
@@ -154,11 +181,7 @@ function downloadAndOpen(win, asset) {
             })
         })
       })
-      file.on('error', (err) => {
-        if (win && !win.isDestroyed()) win.setProgressBar(-1)
-        dialog.showErrorBox(t.failed_title, err.message)
-        resolve(false)
-      })
+      file.on('error', fail)
     })
     req.on('error', (err) => {
       if (win && !win.isDestroyed()) win.setProgressBar(-1)

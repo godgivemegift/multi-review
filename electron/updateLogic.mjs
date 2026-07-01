@@ -1,11 +1,13 @@
 // 纯逻辑:从 nightly release 判断「是否有更新的构建」。抽出来不依赖 electron，便于单测。
 
 // 当前平台对应的安装包资产。mac=.dmg / win=.exe / linux=.AppImage，优先匹配 CPU 架构。
+// 架构名有多种写法:x64 的安装包常叫 x86_64(electron-builder 的 AppImage),arm64 也叫 aarch64;
+// 用同义词组匹配,避免「x64 用户被推 arm64 包」这类错配。
 export function pickAsset(assets, platform = process.platform, arch = process.arch) {
   const ext = platform === 'darwin' ? '.dmg' : platform === 'win32' ? '.exe' : '.appimage'
-  const archTok = arch === 'arm64' ? 'arm64' : arch === 'x64' ? 'x64' : arch
+  const synonyms = arch === 'arm64' ? ['arm64', 'aarch64'] : arch === 'x64' ? ['x64', 'x86_64', 'amd64'] : [arch]
   const byExt = (assets || []).filter((a) => (a.name || '').toLowerCase().endsWith(ext))
-  return byExt.find((a) => (a.name || '').toLowerCase().includes(archTok)) || byExt[0] || null
+  return byExt.find((a) => synonyms.some((tok) => (a.name || '').toLowerCase().includes(tok))) || byExt[0] || null
 }
 
 // 从 release 说明里解析短 sha:"Rolling build ... (abc1234)"。

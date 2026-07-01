@@ -20,6 +20,18 @@ assert.equal(pickAsset(release.assets, 'darwin', 'arm64')?.browser_download_url,
 assert.equal(pickAsset(release.assets, 'win32', 'x64')?.browser_download_url, 'exe')
 assert.equal(pickAsset(release.assets, 'linux', 'x64')?.browser_download_url, 'appimage')
 
+// arch synonyms: x64 must match an x86_64-named asset, and NOT grab the arm64 one
+// when both exist (electron-builder names AppImages x86_64 / aarch64).
+const dualArch = {
+  body: '(deadbee)',
+  assets: [
+    { name: 'multi-review-0.1.0-aarch64.AppImage', browser_download_url: 'appimage-arm64' },
+    { name: 'multi-review-0.1.0-x86_64.AppImage', browser_download_url: 'appimage-x64' },
+  ],
+}
+assert.equal(pickAsset(dualArch.assets, 'linux', 'x64')?.browser_download_url, 'appimage-x64')
+assert.equal(pickAsset(dualArch.assets, 'linux', 'arm64')?.browser_download_url, 'appimage-arm64')
+
 // 1) same sha → never an update, even if the asset timestamp is later
 assert.equal(
   computeUpdate({ sha: 'e69f14c1111111111111111111111111111111', time: '2026-07-01T00:00:00Z' }, release, 'darwin', 'arm64').update,
