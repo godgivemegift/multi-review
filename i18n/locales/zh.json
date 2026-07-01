@@ -562,5 +562,8 @@
     "modeLabel": "审核模式",
     "fixAuthorHint": "留空 = 只自动修复你自己的 PR。要对他人 PR 自动修复请显式选作者（会跑 agent 并自动 push）。",
     "coolingHint": "冷却中 · 还有 {n} 分钟（仍可在此关闭）"
+  },
+  "update": {
+    "check": "检查更新"
   }
 }
