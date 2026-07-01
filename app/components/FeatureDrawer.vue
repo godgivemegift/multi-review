@@ -182,7 +182,7 @@ async function doDelete() {
 </script>
 
 <template>
-  <USlideover v-model:open="open" :title="task ? (task.title || $t('feature.tab')) : $t('feature.newTitle')" :ui="{ content: 'w-[calc(100vw-15rem)] max-w-none min-w-[640px]' }">
+  <USlideover v-model:open="open" :title="task ? (task.title || $t('feature.tab')) : $t('feature.newTitle')" :ui="{ content: 'w-[100vw] max-w-full min-w-0 md:w-[calc(100vw-15rem)] md:min-w-[640px] md:max-w-none' }">
     <template #body>
       <div class="flex flex-col h-full min-h-0">
         <!-- header（有任务时）：标题 + 状态 + 在 GitHub 打开 + 删除 -->
