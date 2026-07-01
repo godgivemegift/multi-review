@@ -69,12 +69,26 @@ export async function prepareFeatureWorktree(opts: {
     if (existsSync(wtPath)) {
       try { await git(localPath, ['worktree', 'remove', '--force', wtPath]) } catch { /* ignore */ }
     }
+    // worktree 目录可能被外部清掉但 .git/worktrees 里登记还在 → prune 清陈旧登记，否则 add 会报「already used」。
+    try { await git(localPath, ['worktree', 'prune']) } catch { /* ignore */ }
+
     onStep?.(`fetch origin ${defaultBranch}`)
     await git(localPath, ['fetch', 'origin', defaultBranch])
-    const sha = (await git(localPath, ['rev-parse', `origin/${defaultBranch}`])).trim()
-    onStep?.(`创建新分支 worktree（${newBranch} ← origin/${defaultBranch}）`)
-    // -B：从 origin/default 强制建/重置功能分支，并在新 worktree 里 checkout
-    await git(localPath, ['worktree', 'add', '-B', newBranch, wtPath, `origin/${defaultBranch}`])
+
+    // 功能分支若已推到远端（PR 开过、worktree 丢了要恢复）→ 基于 origin/<newBranch> 重建，保留已推送的提交；
+    // 否则硬重置到 origin/default 会丢已推提交，且之后 open-pr 的 push 非快进被拒、卡死无法更新 PR。
+    let baseRef = `origin/${defaultBranch}`
+    const remote = await git(localPath, ['ls-remote', '--heads', 'origin', newBranch]).catch(() => '')
+    if (remote.trim()) {
+      try {
+        await git(localPath, ['fetch', 'origin', newBranch])
+        baseRef = `origin/${newBranch}`
+      } catch { /* 拉不到就退回 default */ }
+    }
+    const sha = (await git(localPath, ['rev-parse', baseRef])).trim()
+    onStep?.(`创建新分支 worktree（${newBranch} ← ${baseRef}）`)
+    // -B：强制建/重置功能分支到 baseRef，并在新 worktree 里 checkout
+    await git(localPath, ['worktree', 'add', '-B', newBranch, wtPath, baseRef])
     return sha
   })
 

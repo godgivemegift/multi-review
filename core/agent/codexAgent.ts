@@ -138,6 +138,7 @@ export async function runCodexReadonly(opts: {
   allowNetwork?: boolean // 复审/反馈复审要用 gh 读评论 → 放开网络（写操作仍被命令守卫拦截）
   label: string
   onTool?: (name: string, info: string) => void
+  onStop?: (stop: () => void) => void // 暴露中断回调：停止时打标记，事件循环检测到就中断消费（feature 分析阶段的停止按钮用）
 }): Promise<string> {
   const codex = newCodex()
   const effort = toCodexEffort(opts.effort)
@@ -152,12 +153,19 @@ export async function runCodexReadonly(opts: {
     webSearchEnabled: false,
   })
 
+  // 停止：codex SDK 没有显式 abort，靠标记 + 下个事件到达时抛错中断 for-await（会触发 events.return() 清理）。
+  // codex 调研会频繁出 command/reasoning 事件，所以中断很快生效。
+  let aborted = false
+  opts.onStop?.(() => { aborted = true })
+
   const { events } = await thread.runStreamed(opts.prompt, opts.outputSchema ? { outputSchema: opts.outputSchema } : {})
   let raw = ''
   for await (const event of events) {
+    if (aborted) throw new Error(`Codex ${opts.label} 已被用户停止`)
     const text = emitReadonlyEvent(event, opts.label, opts.onTool)
     if (text != null) raw = text
   }
+  if (aborted) throw new Error(`Codex ${opts.label} 已被用户停止`)
   if (!raw.trim()) throw new Error(`Codex ${opts.label} returned no final response.`)
   return raw
 }

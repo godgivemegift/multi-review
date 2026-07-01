@@ -13,6 +13,10 @@ export const projects = sqliteTable('projects', {
   provider: text('provider', { enum: ['claude', 'codex'] }).notNull().default('claude'),
   model: text('model'), // 审核用模型别名/全名（空=全局默认）
   effort: text('effort'), // 审核力度 low/medium/high/xhigh/max（空=不设）
+  // 自动化「修复↔复查」每条 PR 的回合上限（防自驱闭环烧 token）。在项目配置里和模型选择同处编辑。
+  autoMaxRounds: integer('auto_max_rounds').notNull().default(2),
+  // 自动化冷却期（分钟）：某条 PR 的 head 第一次被看到后等这么久才动手，给用户时间进去关掉不想跑的。0=不冷却。
+  autoCooldownMinutes: integer('auto_cooldown_minutes').notNull().default(5),
   defaultBranch: text('default_branch').notNull().default('dev'),
   createdAt: text('created_at').notNull(),
 })
@@ -299,6 +303,60 @@ export const featureEvents = sqliteTable('feature_events', {
   message: text('message'),
 })
 
+// ── PR 自动化（自动审核 / 自动修复）。一条项目级配置 + 每条 PR 的运行态。
+// 引擎（server/plugins/automation.ts 的轮询）读这两张表 + GitHub 状态，复用现有端点派活。
+// 项目级：自动化配置弹窗存这里（每个项目一行）。authors/statuses 是 JSON 数组（空数组=不限）。
+export const projectAutomation = sqliteTable('project_automation', {
+  projectId: text('project_id')
+    .primaryKey()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  masterEnabled: integer('master_enabled', { mode: 'boolean' }).notNull().default(false), // 弹窗底部「是否开启系统」总闸
+  reviewEnabled: integer('review_enabled', { mode: 'boolean' }).notNull().default(false), // 自动审核系统开关
+  reviewMode: text('review_mode', { enum: ['once', 'every_push'] }).notNull().default('once'), // 一次 / 每次push（每次push=作者更新后自动复查）
+  reviewAuthors: text('review_authors').notNull().default('[]'), // JSON string[]，空=不限作者
+  reviewStatuses: text('review_statuses').notNull().default('["open"]'), // JSON string[]（pullKey: open/draft/merged/closed），默认 open（草稿默认不勾）
+  fixEnabled: integer('fix_enabled', { mode: 'boolean' }).notNull().default(false), // 自动修复系统开关
+  fixAuthors: text('fix_authors').notNull().default('[]'),
+  fixStatuses: text('fix_statuses').notNull().default('["open"]'),
+  updatedAt: text('updated_at').notNull(),
+})
+
+// 自动化工作流时间线：引擎对某条 PR 做了什么（创建审核/审核/发评论/修复/上传/复查/封顶/收敛…），按时间排。
+// PR 抽屉的「自动化」tab 据此渲染时间线。和 events/fix_events 同构，但按 (projectId, prNumber) 而非任务 id 归集，
+// 这样删了 review/fix 任务后历史仍在。
+export const automationEvents = sqliteTable('automation_events', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  prNumber: integer('pr_number').notNull(),
+  ts: text('ts').notNull(),
+  kind: text('kind').notNull(), // review_created|recheck|posted|fix_started|pushed|capped|converged|cant_fix|fix_error
+  message: text('message'),
+})
+
+// 每条 PR 的自动化运行态 + 实例级覆盖开关（PR 抽屉里的两个 switch）。
+// reviewOn/fixOn 为 null = 跟随项目配置（继承）；显式 0/1 = 用户在该 PR 上覆盖。
+// 删除审核/修复任务 → optOut=1（防全局配置在下一轮把它复活）。重新打开开关 → 清零 round/note/optOut。
+export const prAutomation = sqliteTable('pr_automation', {
+  id: text('id').primaryKey(),
+  projectId: text('project_id')
+    .notNull()
+    .references(() => projects.id, { onDelete: 'cascade' }),
+  prNumber: integer('pr_number').notNull(),
+  reviewOn: integer('review_on', { mode: 'boolean' }), // null=继承配置
+  fixOn: integer('fix_on', { mode: 'boolean' }), // null=继承配置
+  round: integer('round').notNull().default(0), // 已派出的自动修复次数（到 autoMaxRounds 即封顶）
+  lastFixReviewSha: text('last_fix_review_sha'), // 上次针对哪个 review head 派过修复（同一 head 不重复修）
+  pendingFix: integer('pending_fix', { mode: 'boolean' }).notNull().default(false), // 已派修复、等它跑完（push / 判定修不动）
+  optOut: integer('opt_out', { mode: 'boolean' }).notNull().default(false), // 用户删任务 → 本 PR 退出自动化，直到手动再开
+  note: text('note'), // 引擎最近一次的停手原因：capped/converged/cant_fix/fix_error/user_off（喂 UI 提示）
+  // 冷却期：引擎第一次看到这个 head 的 sha + 时间。head 变了就重置；未过 autoCooldownMinutes 不动手。
+  headSeenSha: text('head_seen_sha'),
+  headSeenAt: text('head_seen_at'),
+  updatedAt: text('updated_at').notNull(),
+})
+
 export type Project = typeof projects.$inferSelect
 export type Skill = typeof skills.$inferSelect
 export type Review = typeof reviews.$inferSelect
@@ -314,3 +372,6 @@ export type GlobalTurn = typeof globalTurns.$inferSelect
 export type FeatureTask = typeof featureTasks.$inferSelect
 export type FeatureTurn = typeof featureTurns.$inferSelect
 export type FeatureEvent = typeof featureEvents.$inferSelect
+export type ProjectAutomation = typeof projectAutomation.$inferSelect
+export type PrAutomation = typeof prAutomation.$inferSelect
+export type AutomationEvent = typeof automationEvents.$inferSelect

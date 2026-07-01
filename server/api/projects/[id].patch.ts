@@ -11,6 +11,8 @@ const Body = z.object({
   model: z.string().nullable().optional(),
   effort: z.string().nullable().optional(),
   activeSkillId: z.string().nullable().optional(),
+  autoMaxRounds: z.number().int().min(1).max(10).optional(), // 自动化「修复↔复查」回合上限
+  autoCooldownMinutes: z.number().int().min(0).max(120).optional(), // 自动化冷却期（分钟，0=不冷却）
 })
 
 export default defineEventHandler(async (event) => {

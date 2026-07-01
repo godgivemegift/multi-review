@@ -50,8 +50,10 @@ export default defineEventHandler(async (event) => {
     .run()
 
   // 用内置功能开发方法学(methodology: null)，不要用项目的「审核」方法学。
+  // plan 跑在隔离 worktree 里（job 内建），需要 localPath/reposDir/defaultBranch。
   const ctx: FeaturePlanJobCtx = {
-    db: d, schema, taskId: id, cwd: project.localPath,
+    db: d, schema, taskId: id,
+    localPath: project.localPath, reposDir: cfg.reposDir as string, defaultBranch: project.defaultBranch,
     provider: rc.provider, model: rc.model, effort: rc.effort, lang, methodology: null, assetsDir,
   }
   void runFeaturePlanJob(ctx, description).catch((e) => console.error('[feature-plan] job failed', e))

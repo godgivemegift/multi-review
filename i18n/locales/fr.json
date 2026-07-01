@@ -347,7 +347,11 @@
       "title": "Nouveau skill de revue",
       "contentLabel": "Contenu (méthodologie, peut rester vide pour plus tard / coller un existant)",
       "contentPlaceholder": "# Méthodologie de revue\n..."
-    }
+    },
+    "autoMaxRounds": "Limite de tours d'auto-correction",
+    "autoMaxRoundsHint": "Tours correction↔re-revue max, puis pause",
+    "autoCooldown": "Délai d'automatisation (min)",
+    "autoCooldownHint": "Délai après un nouveau commit, 0 = off"
   },
   "review": {
     "noTask": "Cette PR n'a pas encore de tâche de revue",
@@ -490,9 +494,9 @@
   },
   "feature": {
     "tab": "Dév feature",
-    "composerHint": "Décrivez une fonctionnalité ou collez une issue — l'IA analyse d'abord en lecture seule et propose un plan avec points de décision ; elle n'implémente et n'ouvre une PR qu'après votre approbation.",
+    "composerHint": "Décrivez une fonctionnalité ou collez une issue — l'IA propose un plan dans un worktree isolé sur une nouvelle branche, puis vous discutez librement pour continuer le développement (toutes permissions + ultracode, sans jamais toucher votre vrai dépôt) et ouvrez une PR manuellement une fois satisfait.",
     "composerPlaceholder": "Décrivez la fonctionnalité / collez une issue…",
-    "start": "Analyser",
+    "start": "Démarrer",
     "creating": "Création…",
     "empty": "Aucune tâche feature",
     "status": {
@@ -516,6 +520,9 @@
     "pickBlocking": "Veuillez répondre à tous les points requis (*)",
     "approve": "Approuver & construire",
     "openPr": "Ouvrir la PR",
+    "updatePr": "Mettre à jour la PR",
+    "regenPlan": "Régénérer le plan",
+    "regenSeed": "Veuillez proposer un nouveau plan basé sur la compréhension actuelle.",
     "back": "Retour",
     "prTitle": "Titre PR",
     "prBody": "Corps PR",
@@ -523,8 +530,54 @@
     "confirmOpenPr": "Confirmer l'ouverture",
     "prOpened": "PR #{n} ouverte",
     "refinePlaceholder": "Donnez un retour sur le plan / demandez à le changer…",
-    "chatPlaceholder": "Demandez d'autres changements…",
+    "chatPlaceholder": "Continuez à discuter pour construire / demandez des changements… (ouvrez une PR quand vous êtes satisfait)",
     "discard": "Supprimer",
     "discardConfirm": "Supprimer cette tâche ? (worktree inclus, irréversible)"
+  },
+  "automation": {
+    "configBtn": "Automatisation",
+    "title": "Configuration de l'automatisation",
+    "reviewSystem": "Auto-revue",
+    "fixSystem": "Auto-correction",
+    "modeOnce": "Une fois après la PR",
+    "modeEveryPush": "À chaque push",
+    "noAuthors": "Aucun auteur",
+    "masterEnabled": "Activer le système",
+    "masterHint": "Interrupteur principal de toute l'automatisation.",
+    "start": "Démarrer",
+    "fixHint": "Chaque PR fait au plus {n} tours correction↔re-revue, puis se met en pause.",
+    "prAutoReview": "Auto-revue",
+    "prAutoFix": "Auto-correction",
+    "note": {
+      "capped": "En pause (limite de {max} tours atteinte)",
+      "converged": "Terminé (tout corrigé)",
+      "cant_fix": "Correction auto impossible — à vous",
+      "fix_error": "Échec de la correction — à vous",
+      "stopped": "En pause (arrêté par vous)",
+      "deleted": "Désactivé (tâche supprimée)",
+      "post_error": "Échec de publication — arrêté",
+      "push_error": "Échec du push — arrêté",
+      "fix_unverified": "Corrigé — à re-vérifier"
+    },
+    "tab": "Automatisation",
+    "noEvents": "Aucune activité d'automatisation",
+    "event": {
+      "review_created": "Revue lancée",
+      "recheck": "Re-revue des changements de l'auteur",
+      "posted": "Commentaire publié sur GitHub",
+      "fix_started": "Auto-correction lancée (tour {round})",
+      "pushed": "Correction poussée",
+      "capped": "En pause — limite de tours atteinte ({info})",
+      "converged": "Terminé — tout est traité",
+      "cant_fix": "Auto-correction impossible — à vous",
+      "fix_error": "Échec de la correction — à vous",
+      "post_error": "Échec de publication : {info}",
+      "push_error": "Échec du push : {info}",
+      "fix_unverified": "Corrigé — re-revue manuelle requise (mode once)",
+      "cooldown": "En attente — démarre dans {info} min"
+    },
+    "modeLabel": "Mode de revue",
+    "fixAuthorHint": "Vide = seulement vos propres PR. Ajoutez des auteurs pour corriger celles des autres (lance un agent + push).",
+    "coolingHint": "En attente · {n} min restantes (vous pouvez encore désactiver)"
   }
 }

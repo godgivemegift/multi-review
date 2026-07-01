@@ -4,7 +4,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { runFeaturePlanAgent, renderPlanText, type Plan } from '../agent/featurePlan'
 import { prepareFeatureWorktree } from '../git/worktree'
-import { selectChatRunner } from '../fix/pipeline'
+import { runFeatureChat } from '../agent/featureChat'
 import { appendTurns } from '../db/turns'
 import { makeEmit } from '../streaming/emit'
 import { sessionFields } from '../agent/session'
@@ -21,6 +21,17 @@ export function isFeatureBusy(id: string): boolean {
   return jobLocks.has(id)
 }
 
+// open-pr 等「非 job」的 git 写操作借用同一把锁：和 plan/impl 互斥，也防两次并发开 PR 同时 add/commit/push。
+// 成功拿到返回 true（务必在 finally 里 release）；已被占用返回 false。
+export function tryAcquireFeatureLock(id: string): boolean {
+  if (jobLocks.has(id)) return false
+  jobLocks.add(id)
+  return true
+}
+export function releaseFeatureLock(id: string): void {
+  jobLocks.delete(id)
+}
+
 // 停止状态（plan 阶段 abort SDK query、impl 阶段 kill 子进程都用它）：
 // - featureStops：runner 暴露的中断回调（plan=abort SDK query / impl=runner stop）
 // - activeFeatureChats：impl 子进程句柄（kill 用）
@@ -29,11 +40,43 @@ const activeFeatureChats = new Map<string, ChildProcess>()
 const featureStopRequested = new Set<string>()
 const featureStops = new Map<string, () => void>()
 
+function slugify(s: string): string {
+  return (s || 'feature').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'feature'
+}
+
+// 确保 feature 的隔离 worktree（从 origin/<default> 拉的新功能分支）。plan 和 develop 都在它里头跑——
+// **绝不碰用户真实的本地 clone**。首次（通常是 plan 阶段）创建，之后复用；丢了就按原分支重建。
+// 分支名 slugify 成纯 [a-z0-9-]，避免 nanoid 的 `_` 触发 SAFE_REF 拦截。
+async function ensureFeatureWorktree(p: {
+  db: any; schema: any; taskId: string
+  localPath: string; reposDir: string; defaultBranch: string
+  now: () => string; emit: (kind: string, message: string) => void
+}): Promise<string> {
+  const { db, schema, taskId } = p
+  const t = db.select().from(schema.featureTasks).where(eq(schema.featureTasks.id, taskId)).get()
+  if (t?.worktreePath && existsSync(t.worktreePath)) return t.worktreePath as string
+  p.emit('stage', '准备 worktree（新功能分支）')
+  const branch = t?.branch || `feat/${slugify(t?.title || t?.description)}-${slugify(taskId.slice(0, 6))}`
+  const wt = await prepareFeatureWorktree({
+    localPath: p.localPath, reposDir: p.reposDir, taskId,
+    newBranch: branch, defaultBranch: t?.baseBranch || p.defaultBranch,
+    onStep: (m) => p.emit('stage', m),
+  })
+  db.update(schema.featureTasks)
+    .set({ worktreePath: wt.path, baseHeadSha: wt.headSha, branch, updatedAt: p.now() })
+    .where(eq(schema.featureTasks.id, taskId))
+    .run()
+  return wt.path
+}
+
 export type FeaturePlanJobCtx = {
   db: any
   schema: any
   taskId: string
-  cwd: string
+  // plan 也跑在隔离 worktree 里（不碰真实 clone）→ 需要建 worktree 的这几项，不再用现成 cwd。
+  localPath: string
+  reposDir: string
+  defaultBranch: string
   provider: ReviewProvider
   model: string
   effort: string
@@ -77,9 +120,14 @@ export async function runFeaturePlanJob(ctx: FeaturePlanJobCtx, message: string)
       emit('stage', `issue/PR 抓取失败，用原始需求继续：${(e as Error).message}`)
     }
 
+    // 先建/复用隔离 worktree，plan 在它里头只读分析（绝不碰真实本地 clone）。
+    const cwd = await ensureFeatureWorktree({
+      db, schema, taskId, localPath: ctx.localPath, reposDir: ctx.reposDir, defaultBranch: ctx.defaultBranch, now, emit,
+    })
+
     emit('stage', 'AI 调研分析中…')
     const { plan, raw } = await runFeaturePlanAgent({
-      cwd: ctx.cwd,
+      cwd,
       provider: ctx.provider,
       model: ctx.model,
       effort: ctx.effort,
@@ -145,10 +193,6 @@ export function stopAllFeatureImpl(): boolean {
   return any
 }
 
-function slugify(s: string): string {
-  return (s || 'feature').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'feature'
-}
-
 // 把已批准方案 + 决策答复拼成实现阶段的首条指令。
 export function buildImplementMessage(plan: Plan, decisions: Record<string, string>, lang: string): string {
   const dlines = plan.decisionPoints.map((d) => {
@@ -179,6 +223,7 @@ export type FeatureImplJobCtx = {
   effort?: string
   defaultBranch: string
   lang: string
+  allowDanger?: boolean // 用户在抽屉开了「允许危险命令」→ 放行危险命令守卫（同全局助手）
 }
 
 export async function runFeatureImplJob(ctx: FeatureImplJobCtx, message: string): Promise<void> {
@@ -204,30 +249,23 @@ export async function runFeatureImplJob(ctx: FeatureImplJobCtx, message: string)
 
     let stopped = false
     const t = task()
-    // 确保新分支 worktree（首次实现时建）。分支名 slugify 成纯 [a-z0-9-]，避免 nanoid 的 _ 触发 SAFE_REF 拦截。
-    let wtPath = t?.worktreePath as string | null
-    if (!wtPath || !existsSync(wtPath)) {
-      emit('stage', '准备 worktree（新功能分支）')
-      const branch = t?.branch || `feat/${slugify(t?.title || t?.description)}-${slugify(taskId.slice(0, 6))}`
-      const wt = await prepareFeatureWorktree({
-        localPath: ctx.localPath, reposDir: ctx.reposDir, taskId,
-        newBranch: branch, defaultBranch: t?.baseBranch || ctx.defaultBranch,
-        onStep: (m) => emit('stage', m),
-      })
-      wtPath = wt.path
-      db.update(schema.featureTasks).set({ worktreePath: wt.path, baseHeadSha: wt.headSha, branch, updatedAt: now() }).where(eq(schema.featureTasks.id, taskId)).run()
-    }
+    // 确保新分支 worktree（首次开发时建；plan 阶段通常已建好 → 复用）。绝不碰真实本地 clone。
+    const wtPath = await ensureFeatureWorktree({
+      db, schema, taskId, localPath: ctx.localPath, reposDir: ctx.reposDir, defaultBranch: ctx.defaultBranch, now, emit,
+    })
 
     let newSessionId: string | null = (ctx.provider === 'codex' ? t?.codexSessionId : t?.sessionId) ?? null
     try {
       const cur = task()
-      const r = await selectChatRunner(ctx.provider).runChat({
-        cwd: wtPath!,
+      // 开发模式 = 全局助手式的 bypassPermissions 全权限聊天，只是锁在这个 worktree、默认别 commit。
+      const r = await runFeatureChat(ctx.provider, {
+        cwd: wtPath,
         model: ctx.model,
         effort: ctx.effort,
         lang: ctx.lang,
         sessionId: (ctx.provider === 'codex' ? cur?.codexSessionId : cur?.sessionId) ?? null,
         message,
+        allowDanger: ctx.allowDanger,
         onSpawn: (cp) => activeFeatureChats.set(taskId, cp),
         onStop: (stop) => featureStops.set(taskId, stop),
         onSessionId: (sid) => {

@@ -25,6 +25,7 @@ export function shouldRetryCodexChatWithoutThread(error: unknown, hadSessionId: 
 }
 
 function buildCodexChatPrompt(opts: FixChatOptions): string {
+  if (opts.promptKind === 'feature') return buildCodexFeaturePrompt(opts)
   const opening = opts.sessionId
     ? 'You are continuing the same Codex thread for this pull-request fix task in the same git worktree.'
     : 'You are starting a Codex chat for this pull-request fix task in a git worktree.'
@@ -44,6 +45,25 @@ Reviewer's message:
 ${opts.message}
 
 Reply briefly: answer their question, or describe what you changed. ${outputLangClause(opts.lang)}`
+}
+
+// Feature 开发：在「从默认分支拉的新功能分支」worktree 里自由开发（不是修 PR）。
+function buildCodexFeaturePrompt(opts: FixChatOptions): string {
+  const opening = opts.sessionId
+    ? 'You are continuing the same Codex thread, building a feature inside its isolated git worktree.'
+    : 'You are starting a Codex chat to build a NEW feature inside an isolated git worktree on a fresh feature branch (created from the default branch).'
+
+  return `${opening}
+
+The current directory is that worktree — implement what the user asks by editing files directly. Investigate the repo whenever it helps. Keep the change a focused, reviewable slice.
+
+- Do NOT git add, git commit, or git push. Do NOT push, post comments, reply to GitHub, or mutate any remote service.
+- Leave your edits uncommitted in the worktree. The user reviews them in the UI and clicks "Open PR", which commits and pushes for them.
+
+User's message:
+${opts.message}
+
+Reply briefly: answer their question, or describe what you changed / propose next steps. ${outputLangClause(opts.lang)}`
 }
 
 function emitCodexChatEvent(
@@ -92,15 +112,18 @@ export async function runCodexChat(opts: FixChatOptions): Promise<FixChatResult>
     // 用共享的 newCodex()：它带 codexPathOverride，绕开 nitro 打包后找不到二进制的问题。
     const codex = newCodex()
     const effort = toCodexEffort(runOpts.effort)
+    // feature 开发要「全部权限」：allowDanger → danger-full-access；并放开联网/web 搜索。
+    // fix 路径不传这些 → 维持原来的 workspace-write + 断网。
+    const network = !!runOpts.networkAccess
     const threadOptions: ThreadOptions = {
       ...(runOpts.model ? { model: runOpts.model } : {}),
       ...(effort ? { modelReasoningEffort: effort } : {}),
       workingDirectory: runOpts.cwd,
-      sandboxMode: 'workspace-write',
+      sandboxMode: runOpts.fullAccess ? 'danger-full-access' : 'workspace-write',
       approvalPolicy: 'never',
-      networkAccessEnabled: false,
-      webSearchMode: 'disabled',
-      webSearchEnabled: false,
+      networkAccessEnabled: network,
+      webSearchMode: network ? 'live' : 'disabled',
+      webSearchEnabled: network,
     }
     const thread = sessionId
       ? codex.resumeThread(sessionId, threadOptions)

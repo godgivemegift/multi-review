@@ -190,6 +190,7 @@ async function runCodexPlan(opts: FeaturePlanOptions): Promise<{ plan: Plan; cos
     outputSchema: PLAN_JSON_SCHEMA,
     label: 'feature plan',
     onTool: opts.onTool,
+    onStop: opts.onStop, // codex 只读分析阶段也能被停止按钮中断
   })
   const cleaned = raw.trim().replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/i, '').trim()
   return { plan: PlanSchema.parse(JSON.parse(cleaned)), costUsd: 0, raw }
