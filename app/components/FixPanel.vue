@@ -25,6 +25,8 @@ const view = ref<'chat' | 'preview'>('chat')
 const logLines = ref<string[]>([]) // 运行日志（worktree 准备 / 工具调用 / 阶段等），可展开
 const showLog = ref(false)
 let es: EventSource | null = null
+// load 竞态护栏（同 FeatureDrawer）：切 fix / 放弃时，旧 fix 在途的 load 迟到返回不能盖回 data。
+let loadToken = 0
 
 function hhmmss(iso?: string) {
   return new Date(iso ?? new Date().toISOString()).toLocaleTimeString(locale.value, { hour12: false })
@@ -45,19 +47,25 @@ const pushing = computed(() => data.value?.fix?.status === 'pushing')
 function fixStatusLabel(s: string) { const k = `status.fix.${s}`; return te(k) ? t(k) : s }
 
 async function load() {
-  if (!currentFixId.value) return
-  data.value = await $fetch<FixData>(`/api/fixes/${currentFixId.value}`)
+  const fid = currentFixId.value
+  if (!fid) return
+  const my = ++loadToken
+  const detail = await $fetch<FixData>(`/api/fixes/${fid}`)
+  if (my !== loadToken || fid !== currentFixId.value) return // 过期结果（切了 fix / 有更新的 load）→ 丢弃
+  data.value = detail
   // 首次：用落库的历史事件回填运行日志
-  if (!logLines.value.length && data.value.events?.length) {
-    logLines.value = data.value.events.filter((e) => e.message).map((e) => `${hhmmss(e.ts)}  ${e.message}`)
+  if (!logLines.value.length && detail.events?.length) {
+    logLines.value = detail.events.filter((e) => e.message).map((e) => `${hhmmss(e.ts)}  ${e.message}`)
   }
   emit('changed')
 }
 function openSSE() {
   if (!currentFixId.value || !import.meta.client) return
   es?.close()
-  es = new EventSource(`/api/fixes/${currentFixId.value}/stream`)
+  const fid = currentFixId.value // 绑定这条流所属 fix：切走后残留消息不再写入
+  es = new EventSource(`/api/fixes/${fid}/stream`)
   es.onmessage = (ev) => {
+    if (fid !== currentFixId.value) return // 过期流 → 忽略
     try {
       const e = JSON.parse(ev.data)
       if (e.kind === 'text') { liveAssistant.value += e.message || ''; return }
@@ -72,11 +80,11 @@ function openSSE() {
 }
 function closeSSE() { es?.close(); es = null }
 
-// tab 激活时连 SSE / load；切走时断开。切回 tab 总是回到对话视图。
-watch(() => [props.active, currentFixId.value] as const, ([on, id]) => {
+// tab 激活时连 SSE / load；切走时断开。切回 tab 总是回到对话视图。load 完滚到底（看最新一条）。
+watch(() => [props.active, currentFixId.value] as const, async ([on, id]) => {
   if (on) {
     view.value = 'chat'
-    if (id) { load(); openSSE() } else { data.value = null; closeSSE() }
+    if (id) { await load(); openSSE(); scrollChatToBottom() } else { data.value = null; closeSSE() }
   } else { closeSSE() }
 }, { immediate: true })
 onBeforeUnmount(() => { closeSSE(); if (chatTimer) clearInterval(chatTimer); if (pollTimer) clearInterval(pollTimer) })
@@ -88,7 +96,9 @@ const liveAssistant = ref('')
 // 进对话 / 来新消息时自动滚到最底
 const chatScroll = ref<HTMLElement | null>(null)
 function scrollChatToBottom() {
-  nextTick(() => { const el = chatScroll.value; if (el) el.scrollTop = el.scrollHeight })
+  const go = () => { const el = chatScroll.value; if (el) el.scrollTop = el.scrollHeight }
+  // 二次补滚：MarkdownBody 渲染后内容高度可能再变（首次滚不到真正的底）
+  nextTick(() => { go(); setTimeout(go, 80) })
 }
 watch([view, () => data.value?.turns.length, liveAssistant], ([v]) => { if (v === 'chat') scrollChatToBottom() })
 

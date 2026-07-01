@@ -18,6 +18,10 @@ export type FixChatOptions = {
   sessionId: string | null // 有就 --resume；没有就开新会话
   message: string
   conflictHint?: string
+  // ── feature 开发用的可选「全部权限」开关（fix 路径不传 → 行为不变）──
+  promptKind?: 'fix' | 'feature' // 'feature' = 在新功能分支 worktree 里自由开发（codex 用不同 prompt）
+  fullAccess?: boolean // codex：true → danger-full-access 沙箱（否则 workspace-write）
+  networkAccess?: boolean // codex：true → 放开联网 + web 搜索
   onSpawn?: (cp: import('node:child_process').ChildProcess) => void
   onStop?: (stop: () => void) => void
   onSessionId?: (sessionId: string) => void

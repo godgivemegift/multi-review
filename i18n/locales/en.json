@@ -347,7 +347,11 @@
       "title": "New review skill",
       "contentLabel": "Content (methodology, can stay empty for later / paste an existing one)",
       "contentPlaceholder": "# Review methodology\n..."
-    }
+    },
+    "autoMaxRounds": "Auto-fix round limit",
+    "autoMaxRoundsHint": "Max fix↔re-review rounds, then pause",
+    "autoCooldown": "Automation cooldown (min)",
+    "autoCooldownHint": "Delay after a new commit, 0 = off"
   },
   "review": {
     "noTask": "This PR has no review task yet",
@@ -490,9 +494,9 @@
   },
   "feature": {
     "tab": "Feature dev",
-    "composerHint": "Describe a feature or paste an issue — the AI analyzes read-only first and proposes a plan with decision points; it only implements and opens a PR after you approve.",
+    "composerHint": "Describe a feature or paste an issue — the AI proposes a plan in an isolated new-branch worktree, then you just chat to keep building (full permissions + ultracode, never touching your real repo) and open a PR manually once you're happy.",
     "composerPlaceholder": "Describe the feature / paste an issue…",
-    "start": "Analyze",
+    "start": "Start",
     "creating": "Creating…",
     "empty": "No feature tasks yet",
     "status": {
@@ -516,6 +520,9 @@
     "pickBlocking": "Please answer all required (*) decision points",
     "approve": "Approve & build",
     "openPr": "Open PR",
+    "updatePr": "Update PR",
+    "regenPlan": "Regenerate plan",
+    "regenSeed": "Please give a fresh plan based on the current understanding.",
     "back": "Back",
     "prTitle": "PR title",
     "prBody": "PR body",
@@ -523,7 +530,7 @@
     "confirmOpenPr": "Confirm open PR",
     "prOpened": "PR #{n} opened",
     "refinePlaceholder": "Give feedback on the plan / ask to change it…",
-    "chatPlaceholder": "Ask for more changes…",
+    "chatPlaceholder": "Keep chatting to build / ask for changes… (open a PR when you're happy)",
     "discard": "Delete task",
     "discardConfirm": "Delete this task? (incl. worktree, irreversible)"
   },
@@ -540,5 +547,51 @@
     "rotate": "Reset link",
     "rotateHint": "Resetting invalidates the old QR/link immediately; connected devices must re-scan.",
     "offHint": "Remote access is off. Turn it on to generate a QR code to connect."
+  },
+  "automation": {
+    "configBtn": "Automation",
+    "title": "Automation config",
+    "reviewSystem": "Auto-review",
+    "fixSystem": "Auto-fix feedback",
+    "modeOnce": "Once after PR",
+    "modeEveryPush": "Every push",
+    "noAuthors": "No authors yet",
+    "masterEnabled": "Enable system",
+    "masterHint": "Master switch for the whole automation.",
+    "start": "Start",
+    "fixHint": "Each PR runs at most {n} fix↔re-review rounds, then pauses for you.",
+    "prAutoReview": "Auto-review",
+    "prAutoFix": "Auto-fix",
+    "note": {
+      "capped": "Paused (reached {max}-round limit)",
+      "converged": "Done (all fixed)",
+      "cant_fix": "Can't auto-fix — needs you",
+      "fix_error": "Fix failed — needs you",
+      "stopped": "Paused (you stopped it)",
+      "deleted": "Off (task deleted)",
+      "post_error": "Post failed — stopped",
+      "push_error": "Push failed — stopped",
+      "fix_unverified": "Fixed — needs re-review"
+    },
+    "tab": "Workflow",
+    "noEvents": "No automation activity yet",
+    "event": {
+      "review_created": "Review started",
+      "recheck": "Re-reviewed author changes",
+      "posted": "Posted review to GitHub",
+      "fix_started": "Auto-fix started (round {round})",
+      "pushed": "Pushed fix",
+      "capped": "Paused — round limit reached ({info})",
+      "converged": "Done — all findings addressed",
+      "cant_fix": "Couldn't auto-fix — needs you",
+      "fix_error": "Fix failed — needs you",
+      "post_error": "Post failed: {info}",
+      "push_error": "Push failed: {info}",
+      "fix_unverified": "Fixed — needs manual re-review (once mode)",
+      "cooldown": "Cooling down — starts in {info} min"
+    },
+    "modeLabel": "Review mode",
+    "fixAuthorHint": "Empty author = only your own PRs are auto-fixed. Add authors to auto-fix others' PRs (runs an agent + pushes).",
+    "coolingHint": "Cooling down · {n} min left (you can still turn it off)"
   }
 }

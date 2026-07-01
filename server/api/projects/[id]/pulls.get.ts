@@ -1,7 +1,9 @@
 import { existsSync } from 'node:fs'
 import { eq } from 'drizzle-orm'
 import { schema } from '~core/db/client'
-import { listPulls } from '~core/github/gh'
+import { listPulls, getCurrentUserLogin } from '~core/github/gh'
+import { getProjectAutomation, getPrAutomationMap, pullStatusKey } from '~core/automation/state'
+import { effectiveReviewOn, effectiveFixOnGuarded } from '~core/automation/decide'
 
 // 分页拉该项目仓库的 PR（GraphQL cursor），标注哪些已建审核任务。
 export default defineEventHandler(async (event) => {
@@ -69,10 +71,23 @@ export default defineEventHandler(async (event) => {
       .map((r: any) => r.fixId),
   )
 
+  // 自动化：项目级配置 + 每条 PR 的有效开关 / 运行态（喂 PR 抽屉的两个 switch + 列表「已暂停」提示）
+  const autoCfg = getProjectAutomation(d, schema, id)
+  const autoRowByPr = getPrAutomationMap(d, schema, id) // 一次拉全，避免 .map() 里 N+1 点查
+  const autoMaxRounds = project.autoMaxRounds ?? 2
+  const autoCooldownMin = project.autoCooldownMinutes ?? 5
+  const nowMs = Date.now()
+  const me = await getCurrentUserLogin().catch(() => null) // 自动修复作者白名单默认值（和引擎口径一致）
+
   return {
     pulls: page.pulls.map((p) => {
       const task = taskByPr.get(p.number)
       const fix = fixByPr.get(p.number)
+      // 自动化有效开关：实例覆盖优先，否则继承项目配置 + 作者/状态过滤
+      const autoRow = autoRowByPr.get(p.number) ?? null
+      const prKey = { author: p.author, status: pullStatusKey(p) }
+      const autoReviewOn = effectiveReviewOn(autoCfg, autoRow, prKey)
+      const autoFixOn = effectiveFixOnGuarded(autoCfg, autoRow, prKey, me)
       // 作者已更新：我「看过」的 sha 之后 PR head 又变了。基线用 review.headSha——审核/复审完成都会推进它，
       // 所以点了复审看过新 commit 后红点自动清，作者在复审基线之后再 push 才重新点亮（与抽屉/refresh 口径统一）。
       // 副作用：首次审核后即便还没发评论，作者 push 也会点亮——这正是「有我没看过的新改动」的本意。
@@ -83,12 +98,19 @@ export default defineEventHandler(async (event) => {
       // 本地 fix worktree 是否还在磁盘上（review worktree 用完即弃，不会残留；只有 fix 保留到 push/discard）。
       // 合并后想找残留清理就靠它。检查实际目录，不是只看 DB 字段（DB 有路径但目录可能已被手动删）。
       const hasWorktree = !!fix?.worktreePath && existsSync(fix.worktreePath)
+      // 冷却中：引擎看到的 head 还是当前 head，且首见时间 + 冷却期 还没到 → 给 UI 显示「冷却中，剩 X」
+      let autoCoolingUntil: string | null = null
+      if (autoCooldownMin > 0 && (autoReviewOn || autoFixOn) && autoRow?.headSeenSha && autoRow.headSeenSha === p.headSha && autoRow.headSeenAt) {
+        const until = Date.parse(autoRow.headSeenAt) + autoCooldownMin * 60_000
+        if (until > nowMs) autoCoolingUntil = new Date(until).toISOString()
+      }
       return {
         ...p,
         hasTask: !!task, taskId: task?.id ?? null, taskStatus: task?.status ?? null,
         fixId: fix?.id ?? null, fixStatus: fix?.status ?? null,
         fixChatting: fix ? chattingFixIds.has(fix.id) : false,
         authorUpdated, reviewerUpdated, hasWorktree,
+        autoReviewOn, autoFixOn, autoNote: autoRow?.note ?? null, autoRound: autoRow?.round ?? 0, autoMaxRounds, autoCoolingUntil,
       }
     }),
     totalCount: page.totalCount,

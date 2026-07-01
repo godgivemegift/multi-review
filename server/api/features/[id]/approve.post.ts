@@ -4,12 +4,15 @@ import { schema } from '~core/db/client'
 import { runFeatureImplJob, isFeatureBusy, buildImplementMessage, type FeatureImplJobCtx } from '~core/feature/pipeline'
 import { PlanSchema } from '~core/agent/featurePlan'
 
-// 批准方案 + 答复决策点 → 进入阶段2：建新分支 worktree 并实现（acceptEdits，不自动 commit）。
-const Body = z.object({ decisions: z.record(z.string(), z.string()).default({}) })
+// 批准方案 + 答复决策点 → 进入开发：在新分支 worktree 里全权限实现（不自动 commit）。
+const Body = z.object({
+  decisions: z.record(z.string(), z.string()).default({}),
+  allowDanger: z.boolean().default(false),
+})
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
-  const { decisions } = Body.parse((await readBody(event).catch(() => ({}))) || {})
+  const { decisions, allowDanger } = Body.parse((await readBody(event).catch(() => ({}))) || {})
   const cfg = useRuntimeConfig()
   const d = db()
   const task = d.select().from(schema.featureTasks).where(eq(schema.featureTasks.id, id)).get()
@@ -30,7 +33,7 @@ export default defineEventHandler(async (event) => {
     db: d, schema, taskId: id,
     localPath: project.localPath, reposDir: cfg.reposDir as string,
     provider: rc.provider, model: rc.model, effort: rc.effort,
-    defaultBranch: project.defaultBranch, lang: task.lang || 'zh',
+    defaultBranch: project.defaultBranch, lang: task.lang || 'zh', allowDanger,
   }
   void runFeatureImplJob(ctx, buildImplementMessage(plan, decisions, task.lang || 'zh')).catch((e) => console.error('[feature-impl] job failed', e))
   return { ok: true }

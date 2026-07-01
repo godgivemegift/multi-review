@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { schema } from '~core/db/client'
 import { removeWorktree } from '~core/git/worktree'
 import { isChatting } from '~core/fix/pipeline'
+import { optOutPr } from '~core/automation/state'
 
 // 删除修复任务：清 worktree + 删行（fix_findings 走 FK cascade 一起删）。
 // 进行中 / 对话中不可删（worktree 正被 agent 或 Node 的 git 操作占用）。
@@ -20,6 +21,8 @@ export default defineEventHandler(async (event) => {
 
   const project = d.select().from(schema.projects).where(eq(schema.projects.id, fix.projectId)).get()
   await removeWorktree(project?.localPath ?? null, cfg.reposDir as string, id).catch(() => {})
+  // 删修复任务即退出自动化（同审核删除）：标该 PR opt-out，防被全局配置复活
+  optOutPr(d, schema, fix.projectId, fix.prNumber, new Date().toISOString())
   d.delete(schema.fixes).where(eq(schema.fixes.id, id)).run()
   return { ok: true, status: 'deleted' }
 })

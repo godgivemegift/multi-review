@@ -47,9 +47,12 @@ export type StreamMsg = Record<string, any>
 export function runClaudeStream(
   args: string[],
   // onSpawn 暴露子进程句柄给调用方（M2 停止按钮要 kill 它）
-  opts: { input?: string; cwd?: string; timeout?: number; env?: Record<string, string>; onEvent?: (msg: StreamMsg) => void; onSpawn?: (cp: import('node:child_process').ChildProcess) => void } = {},
+  opts: { input?: string; cwd?: string; timeout?: number; idleTimeout?: number; env?: Record<string, string>; onEvent?: (msg: StreamMsg) => void; onSpawn?: (cp: import('node:child_process').ChildProcess) => void } = {},
 ): Promise<{ costUsd: number; result: string; sessionId: string | null }> {
-  const timeout = opts.timeout ?? 30 * 60_000 // 修复可能跑很久
+  // 空闲超时：agent 可能跑很久（ultracode 多子代理 / opus[1m] / 大改动都正常），只要还在产出就别砍它。
+  // 有输出即重置计时，只砍「真的卡死、久无任何输出」的。timeout = 绝对上限兜底（防跑飞），默认很大。
+  const idleMs = opts.idleTimeout ?? 20 * 60_000
+  const hardMs = opts.timeout ?? 4 * 60 * 60_000
   const bin = resolveClaudeExecutable() ?? 'claude'
   const hasInput = typeof opts.input === 'string'
   return new Promise((resolve, reject) => {
@@ -62,14 +65,19 @@ export function runClaudeStream(
     let result = ''
     let sessionId: string | null = null // stream-json 自带，留给后续 --resume 续聊
     let done = false
+    let idleTimer: ReturnType<typeof setTimeout> | undefined
+    let hardTimer: ReturnType<typeof setTimeout> | undefined
     const finish = (fn: () => void) => {
       if (done) return
       done = true
-      clearTimeout(timer)
+      clearTimeout(idleTimer); clearTimeout(hardTimer)
       fn()
     }
     const killTree = (sig: NodeJS.Signals) => { try { process.kill(-(cp.pid as number), sig) } catch { try { cp.kill(sig) } catch { /* 已退出 */ } } }
-    const timer = setTimeout(() => finish(() => { killTree('SIGKILL'); reject(new Error('claude 修复调用超时')) }), timeout)
+    // 每次有输出就重置空闲计时（有产出 = 没卡死）；hard 上限只兜底防跑飞。
+    const armIdle = () => { clearTimeout(idleTimer); idleTimer = setTimeout(() => finish(() => { killTree('SIGKILL'); reject(new Error(`claude 调用超时（${Math.round(idleMs / 60_000)} 分钟无输出）`)) }), idleMs) }
+    hardTimer = setTimeout(() => finish(() => { killTree('SIGKILL'); reject(new Error(`claude 调用超时（超过 ${Math.round(hardMs / 60_000)} 分钟上限）`)) }), hardMs)
+    armIdle()
 
     const consume = (line: string) => {
       if (!line) return
@@ -92,6 +100,7 @@ export function runClaudeStream(
     }
     cp.stdout!.setEncoding('utf8')
     cp.stdout!.on('data', (d: string) => {
+      armIdle() // 有输出 → 重置空闲计时
       buf += d
       let nl: number
       while ((nl = buf.indexOf('\n')) >= 0) {
@@ -100,11 +109,11 @@ export function runClaudeStream(
         consume(line)
       }
     })
-    cp.stderr!.on('data', (d) => { err += d })
+    cp.stderr!.on('data', (d) => { armIdle(); err += d })
     cp.on('error', (e) => finish(() => reject(e)))
     cp.on('close', (code) => {
       consume(buf.trim()) // 最后一行可能没有换行符（result 行丢了 cost/sessionId 就麻烦）
-      finish(() => (code === 0 ? resolve({ costUsd, result, sessionId }) : reject(new Error(`claude 修复退出码 ${code}: ${err.slice(0, 500)}`))))
+      finish(() => (code === 0 ? resolve({ costUsd, result, sessionId }) : reject(new Error(`claude 退出码 ${code}: ${err.slice(0, 500)}`))))
     })
     if (hasInput) {
       cp.stdin!.on('error', () => {})

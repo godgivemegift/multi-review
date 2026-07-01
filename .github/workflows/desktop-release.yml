@@ -1,8 +1,9 @@
 name: desktop-release
 
-# 手动触发(可选平台)或推送 desktop-v* tag 时,跨平台打包 Electron 桌面应用。
-# 与 SuiSui 的 desktop-release 流程一致:matrix 跨 linux/mac/win → electron-builder → 上传 artifacts。
-# 推 tag 时额外汇总所有产物建一个 GitHub Release。
+# 三种触发,跨平台打包 Electron 桌面应用(matrix linux/mac/win → electron-builder):
+#   ① push 到 main    → 构建并覆盖滚动的 `nightly` 预发布(固定下载地址、免登录、零管理,给高速迭代用)。
+#   ② 手动 dispatch   → 只构建、传 artifacts(可选平台),不动任何 Release。
+#   ③ push desktop-v* → 汇总所有产物建一个正式的草稿 GitHub Release。
 on:
   workflow_dispatch:
     inputs:
@@ -17,10 +18,17 @@ on:
           - mac
           - win
   push:
+    branches:
+      - main
     tags:
       - "desktop-v*"
 
-# 默认最小权限；只有 release job 需要写(建 Release)。
+# 同一 ref 的旧构建被新 push 取代时取消(main 上高速迭代不排队;不同 tag/ref 互不影响)。
+concurrency:
+  group: desktop-${{ github.ref }}
+  cancel-in-progress: true
+
+# 默认最小权限；只有发 Release 的 job 需要写。
 permissions:
   contents: read
 
@@ -97,3 +105,83 @@ jobs:
           draft: true
           generate_release_notes: true
           files: dist-artifacts/**/*
+
+  # push 到 main 时,把三平台产物覆盖到滚动的 `nightly` 预发布上。
+  # 就地更新(而非先删后建):release 已存在时不删除整份 release,只把 nightly tag 力推到本次 commit、
+  #   再用 --clobber 覆盖同名资产;首次才创建。消除了「先删后建」整份 release 短时消失的大空窗。
+  # 资产名靠无空格的 artifactName 保证本地名==服务端名(见 package.json build.artifactName),
+  #   nightly 版本号基本不变 → 每次产出文件名恒定,--clobber 逐个 1:1 覆盖,不残留过时资产。
+  # 固定下载地址:github.com/<repo>/releases/tag/nightly(公开仓库免登录直下)。
+  nightly:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist-artifacts
+          merge-multiple: true
+
+      - name: Publish rolling nightly pre-release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # merge-multiple 把产物拍平进 dist-artifacts/;用 find 收集(不靠 shell glob,任何层级都稳)。
+          mapfile -t assets < <(find dist-artifacts -type f)
+          if [ "${#assets[@]}" -eq 0 ]; then echo "没有找到任何构建产物" >&2; exit 1; fi
+
+          # F1:nightly 是无人值守的自动发布,必须三平台齐全,否则会静默发出「缺平台」的预发布。
+          # 用各平台的标志性安装包断言:mac=.dmg、win=.exe、linux=.AppImage,缺任一则整个 job 失败。
+          for pattern in "*.dmg" "*.exe" "*.AppImage"; do
+            if [ -z "$(find dist-artifacts -type f -name "$pattern" -print -quit)" ]; then
+              echo "::error::缺少必需的平台安装包($pattern);nightly 需要 mac/windows/linux 三平台齐全,已中止发布" >&2
+              exit 1
+            fi
+          done
+
+          title="Nightly (main)"
+          notes="Rolling build from the latest \`main\` (${GITHUB_SHA:0:7}). Overwritten on every merge — not a versioned release. macOS/Windows builds are unsigned; you may need to bypass Gatekeeper/SmartScreen on first launch."
+
+          # F2:「先删后建」会让固定下载地址短时整份 404(尤其配合 cancel-in-progress 在删与建之间被取消,
+          #   或 create 因网络/一致性延迟失败,release 与 tag 被删掉却没重建)。改为「就地更新」消除了这个大空窗:
+          #   release 已存在时全程不删除,只覆盖资产与元数据;首次才创建(create 加重试)。
+          #   说明:这仍不是严格原子操作 —— --clobber 对每个同名资产是「先删后传」,若 cancel-in-progress 恰好在
+          #   某个资产删除与重传之间取消本 job,该单个资产会短时缺失(gh 也会丢掉它的旧副本);但受影响至多是单个
+          #   文件、下次 push 即重传,不再是整份 release 消失。要彻底原子需临时命名+切换或给本 job 单独关掉
+          #   cancel-in-progress,权衡后按现状接受这一极小的单资产窗口。
+          if gh release view nightly --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "nightly 已存在:就地覆盖资产与元数据(不删除整份 release,大空窗已消除;单个资产仍有极小重传窗口)"
+            # 把 nightly tag 原子地力推到本次 commit(force update,不经历删除,无空窗);失败仅告警不阻断发布。
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/nightly" -f sha="$GITHUB_SHA" -F force=true \
+              || echo "::warning::移动 nightly tag 到 ${GITHUB_SHA:0:7} 失败,release 资产仍会照常更新"
+            # 刷新标题/说明/prerelease 标记。
+            gh release edit nightly --repo "$GITHUB_REPOSITORY" --prerelease --title "$title" --notes "$notes"
+            # 覆盖同名资产。artifactName 已改为无空格模板(package.json build.artifactName),本地文件名与 GitHub
+            #   服务端资产名一致,--clobber 能可靠匹配旧同名资产并替换。nightly 版本号基本不变 → 每次文件名恒定,
+            #   --clobber 逐个 1:1 覆盖,不会残留过时资产,因此不再单独跑「按名字比对删旧资产」的清理 —— 那步既多余,
+            #   又因本地名(含空格)与服务端名(空格被转成点)必然不等而会把刚上传的安装包全部误删。
+            gh release upload nightly --repo "$GITHUB_REPOSITORY" --clobber "${assets[@]}"
+          else
+            echo "nightly 尚不存在:创建预发布(create 加重试,抵御网络/一致性抖动)"
+            for attempt in 1 2 3; do
+              if gh release create nightly \
+                --repo "$GITHUB_REPOSITORY" \
+                --target "$GITHUB_SHA" \
+                --prerelease \
+                --title "$title" \
+                --notes "$notes" \
+                "${assets[@]}"; then
+                break
+              fi
+              if [ "$attempt" -eq 3 ]; then
+                echo "::error::创建 nightly 预发布失败(已重试 3 次),固定下载地址可能缺失,请人工介入" >&2
+                exit 1
+              fi
+              echo "创建失败(第 ${attempt}/3 次),10 秒后重试..." >&2
+              sleep 10
+            done
+          fi

@@ -347,7 +347,11 @@
       "title": "新建审核 skill",
       "contentLabel": "内容（方法学，可留空稍后写 / 直接粘贴现成的）",
       "contentPlaceholder": "# 审核方法学\n..."
-    }
+    },
+    "autoMaxRounds": "自动修复回合上限",
+    "autoMaxRoundsHint": "修复↔复查最多几轮，到顶暂停",
+    "autoCooldown": "自动化冷却期(分钟)",
+    "autoCooldownHint": "新提交后等待再动手，0=不冷却"
   },
   "review": {
     "noTask": "该 PR 还没有审核任务",
@@ -490,9 +494,9 @@
   },
   "feature": {
     "tab": "Feature 开发",
-    "composerHint": "描述需求或贴一段 issue —— AI 先只读分析、给出方案和决策点，等你批准后才动手实现并开 PR。",
+    "composerHint": "描述需求或贴一段 issue —— AI 在隔离的新分支 worktree 里先给一版方案，你随后可以直接对话继续开发（全权限 + ultracode，绝不碰你的真实仓库），满意了再手动开 PR。",
     "composerPlaceholder": "描述要做的功能 / 粘贴 issue…",
-    "start": "开始分析",
+    "start": "开始开发",
     "creating": "创建中…",
     "empty": "还没有 feature 任务",
     "status": {
@@ -516,6 +520,9 @@
     "pickBlocking": "请先选好所有必选(*)决策点",
     "approve": "批准并实现",
     "openPr": "开 PR",
+    "updatePr": "更新 PR",
+    "regenPlan": "重新出方案",
+    "regenSeed": "请基于当前理解，重新给一版方案。",
     "back": "返回",
     "prTitle": "PR 标题",
     "prBody": "PR 正文",
@@ -523,7 +530,7 @@
     "confirmOpenPr": "确认开 PR",
     "prOpened": "已开 PR #{n}",
     "refinePlaceholder": "对方案提反馈 / 让它改方案…",
-    "chatPlaceholder": "继续让它改 / 补充…",
+    "chatPlaceholder": "继续对话开发 / 让它改 / 问它…（满意了再开 PR）",
     "discard": "删除任务",
     "discardConfirm": "删除这个任务？（含 worktree，不可恢复）"
   },
@@ -540,5 +547,51 @@
     "rotate": "重置链接",
     "rotateHint": "重置后旧的二维码/链接立即失效，已连接的设备需重新扫码。",
     "offHint": "远程访问当前已关闭。打开后会生成二维码，扫码即可连接。"
+  },
+  "automation": {
+    "configBtn": "自动化配置",
+    "title": "自动化配置",
+    "reviewSystem": "自动审核系统",
+    "fixSystem": "自动修复系统",
+    "modeOnce": "PR 创建后一次",
+    "modeEveryPush": "每次 push",
+    "noAuthors": "暂无作者",
+    "masterEnabled": "是否开启系统",
+    "masterHint": "整套自动化的总开关。",
+    "start": "启动",
+    "fixHint": "每条 PR 最多跑 {n} 轮「修复↔复查」，到顶暂停等你。",
+    "prAutoReview": "自动审核",
+    "prAutoFix": "自动修复",
+    "note": {
+      "capped": "已暂停（达 {max} 轮上限）",
+      "converged": "已完成（都修好了）",
+      "cant_fix": "无法自动修复 · 待人工",
+      "fix_error": "修复失败 · 待人工",
+      "stopped": "已暂停（你点了停止）",
+      "deleted": "已关闭（任务已删）",
+      "post_error": "发评论失败 · 已停",
+      "push_error": "上传失败 · 已停",
+      "fix_unverified": "已修复 · 待人工复核"
+    },
+    "tab": "自动化",
+    "noEvents": "暂无自动化记录",
+    "event": {
+      "review_created": "创建审核任务",
+      "recheck": "复查作者改动",
+      "posted": "发布评论到 GitHub",
+      "fix_started": "开始自动修复（第 {round} 轮）",
+      "pushed": "上传修复",
+      "capped": "已暂停 · 达回合上限（{info}）",
+      "converged": "已完成 · 问题都处理了",
+      "cant_fix": "无法自动修复 · 待人工",
+      "fix_error": "修复失败 · 待人工",
+      "post_error": "发评论失败：{info}",
+      "push_error": "上传失败：{info}",
+      "fix_unverified": "已修复，待人工复核（once 模式不自动复查）",
+      "cooldown": "冷却中，{info} 分钟后开始"
+    },
+    "modeLabel": "审核模式",
+    "fixAuthorHint": "留空 = 只自动修复你自己的 PR。要对他人 PR 自动修复请显式选作者（会跑 agent 并自动 push）。",
+    "coolingHint": "冷却中 · 还有 {n} 分钟（仍可在此关闭）"
   }
 }

@@ -1,8 +1,44 @@
 <script setup lang="ts">
-const props = defineProps<{ projectId: string; prNumber: number | null; reviewId: string | null; fixId: string | null; initialTab?: string }>()
+const props = defineProps<{
+  projectId: string; prNumber: number | null; reviewId: string | null; fixId: string | null; initialTab?: string
+  autoReviewOn?: boolean; autoFixOn?: boolean; autoNote?: string | null; autoRound?: number; autoMaxRounds?: number
+  autoCoolingUntil?: string | null
+}>()
 const open = defineModel<boolean>('open', { required: true })
 const emit = defineEmits<{ taskCreated: [] }>()
-const { t, locale } = useI18n()
+const { t, te, locale } = useI18n()
+
+// 两个实例级自动化开关（自动审核 / 自动修复）。本地乐观状态：点了立刻动，不等 8s 轮询回来（顺滑）；
+// 失败或下次轮询再用真实值校正。只有 switch 本身可点（模板里用 div 而非 label，文字不触发切换）。
+const reviewOnLocal = ref(props.autoReviewOn ?? false)
+const fixOnLocal = ref(props.autoFixOn ?? false)
+watch(() => props.autoReviewOn, (v) => { reviewOnLocal.value = v ?? false })
+watch(() => props.autoFixOn, (v) => { fixOnLocal.value = v ?? false })
+async function toggleAuto(field: 'reviewOn' | 'fixOn', value: boolean) {
+  if (props.prNumber == null) return
+  if (field === 'reviewOn') reviewOnLocal.value = value
+  else fixOnLocal.value = value
+  try {
+    await $fetch(`/api/projects/${props.projectId}/pulls/${props.prNumber}/automation`, { method: 'POST', body: { [field]: value } })
+    emit('taskCreated') // 触发父级 refreshPulls，把有效状态/轮数刷新回来
+  } catch {
+    // 失败 → 回退本地乐观值
+    if (field === 'reviewOn') reviewOnLocal.value = !value
+    else fixOnLocal.value = !value
+  }
+}
+// 引擎停手原因 → 一行提示（capped/converged/cant_fix/...）
+const autoNoteText = computed(() => {
+  if (!props.autoNote) return ''
+  const k = `automation.note.${props.autoNote}`
+  return te(k) ? t(k, { round: props.autoRound ?? 0, max: props.autoMaxRounds ?? 0 }) : ''
+})
+// 冷却中：还有几分钟才会开始自动跑（用户可在此窗口关掉开关）
+const coolingMinLeft = computed(() => {
+  if (!props.autoCoolingUntil) return 0
+  const ms = Date.parse(props.autoCoolingUntil) - Date.now()
+  return ms > 0 ? Math.ceil(ms / 60000) : 0
+})
 
 type Detail = {
   number: number; title: string; body: string; author: string; createdAt: string
@@ -22,10 +58,48 @@ const nodes = ref<Node[]>([])
 const pending = ref(false)
 const error = ref('')
 
-const activeTab = ref<'review' | 'fix' | 'timeline' | 'changes'>('timeline')
+const activeTab = ref<'review' | 'fix' | 'timeline' | 'changes' | 'workflow'>('timeline')
 const diff = ref<string | null>(null)
 const diffTruncated = ref(false)
 const diffPending = ref(false)
+
+// ── 自动化工作流时间线（引擎对这条 PR 做了什么）──
+type WfEvent = { id: string; kind: string; ts: string; message: string | null }
+const wfEvents = ref<WfEvent[]>([])
+const wfPending = ref(false)
+let wfTimer: ReturnType<typeof setInterval> | null = null
+async function loadWf() {
+  if (!props.prNumber) return
+  wfPending.value = true
+  try {
+    const r = await $fetch<{ events: WfEvent[] }>(`/api/projects/${props.projectId}/pulls/${props.prNumber}/automation-events`)
+    wfEvents.value = r.events
+  } catch { /* 静默：下次轮询再拉 */ } finally {
+    wfPending.value = false
+  }
+}
+function stopWfPoll() { if (wfTimer) { clearInterval(wfTimer); wfTimer = null } }
+// 在「自动化」tab 时每 5s 拉一次，工作流进展实时冒出来
+watch([activeTab, open], ([tabNow, isOpen]) => {
+  stopWfPoll()
+  if (isOpen && tabNow === 'workflow') {
+    loadWf()
+    wfTimer = setInterval(() => { if (typeof document === 'undefined' || document.visibilityState !== 'hidden') loadWf() }, 5000)
+  }
+})
+onBeforeUnmount(stopWfPoll)
+// 自动化事件 i18n：kind → 文案（fix_started/capped 带 message 插值）
+const WF_DOT: Record<string, string> = {
+  review_created: 'bg-inverted', recheck: 'bg-inverted', posted: 'bg-accented',
+  fix_started: 'bg-inverted', pushed: 'bg-accented',
+  capped: 'bg-warning', converged: 'bg-success', cant_fix: 'bg-error', fix_error: 'bg-error', post_error: 'bg-error',
+  push_error: 'bg-error', fix_unverified: 'bg-warning', cooldown: 'bg-accented',
+}
+function wfLabel(ev: WfEvent) {
+  const k = `automation.event.${ev.kind}`
+  if (!te(k)) return ev.message ? `${ev.kind} ${ev.message}` : ev.kind
+  return t(k, { round: ev.message ?? '', info: ev.message ?? '' })
+}
 
 // ── markdown 渲染（客户端动态加载 marked + dompurify）──
 let _render: ((s: string) => string) | null = null
@@ -49,7 +123,7 @@ watch(
   async ([isOpen, num]) => {
     if (!isOpen || !num) return
     if (detail.value?.number === num) return
-    detail.value = null; nodes.value = []; openingHtml.value = ''; diff.value = null
+    detail.value = null; nodes.value = []; openingHtml.value = ''; diff.value = null; wfEvents.value = []
     activeTab.value = (props.initialTab as any) || (props.reviewId ? 'review' : 'timeline'); error.value = ''; pending.value = true
     try {
       const res = await $fetch<{ detail: Detail; nodes: Node[] }>(
@@ -168,12 +242,27 @@ const lineCls: Record<DiffLine['t'], string> = {
             <button class="text-dimmed hover:text-highlighted text-lg leading-none" @click="open = false">✕</button>
           </div>
 
+          <!-- 实例级自动化开关：自动审核 / 自动修复（覆盖项目配置；翻开即重置该 PR 的回合数） -->
+          <div v-if="detail" class="flex items-center flex-wrap gap-x-5 gap-y-1 mt-3 text-xs">
+            <div class="flex items-center gap-2">
+              <USwitch :model-value="reviewOnLocal" size="sm" @update:model-value="(v: boolean) => toggleAuto('reviewOn', v)" />
+              <span class="select-none" :class="reviewOnLocal ? 'text-highlighted' : 'text-dimmed'">{{ $t('automation.prAutoReview') }}</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <USwitch :model-value="fixOnLocal" size="sm" @update:model-value="(v: boolean) => toggleAuto('fixOn', v)" />
+              <span class="select-none" :class="fixOnLocal ? 'text-highlighted' : 'text-dimmed'">{{ $t('automation.prAutoFix') }}</span>
+            </div>
+            <span v-if="coolingMinLeft" class="text-warning">· {{ $t('automation.coolingHint', { n: coolingMinLeft }) }}</span>
+            <span v-else-if="autoNoteText" class="text-highlighted">· {{ autoNoteText }}</span>
+          </div>
+
           <!-- 子 tab -->
           <div v-if="detail" class="flex gap-6 mt-4 text-sm">
             <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'review' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'review'">{{ $t('prDrawer.tabReview') }}</button>
             <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'fix' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'fix'">{{ $t('prDrawer.tabFix') }}</button>
             <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'timeline' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'timeline'">{{ $t('prDrawer.tabTimeline') }}</button>
             <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'changes' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'changes'">{{ $t('prDrawer.tabChanges') }} <span class="text-dimmed">{{ detail.changedFiles }}</span></button>
+            <button class="pb-1 border-b-2 transition-colors" :class="activeTab === 'workflow' ? 'border-inverted text-highlighted' : 'border-transparent text-dimmed hover:text-default'" @click="activeTab = 'workflow'">{{ $t('automation.tab') }}</button>
           </div>
         </div>
 
@@ -260,6 +349,20 @@ const lineCls: Record<DiffLine['t'], string> = {
             <p v-if="diffPending" class="py-6 text-sm text-dimmed">{{ $t('prDrawer.loadingDiff') }}</p>
             <DiffView v-else :diff="diff || ''" :truncated="diffTruncated" />
           </section>
+        </div>
+
+        <!-- ── 自动化工作流时间线 ── -->
+        <div v-else-if="detail && activeTab === 'workflow'" class="flex-1 overflow-y-auto px-6 py-5">
+          <p v-if="!wfEvents.length" class="py-16 text-center text-xs text-dimmed">
+            {{ wfPending ? $t('common.loading') : $t('automation.noEvents') }}
+          </p>
+          <ol v-else class="relative border-l border-default ml-3 space-y-4">
+            <li v-for="ev in wfEvents" :key="ev.id" class="pl-6 relative">
+              <span class="absolute -left-[6px] top-1.5 w-2.5 h-2.5 rounded-full" :class="WF_DOT[ev.kind] || 'bg-accented'" />
+              <div class="text-sm text-toned">{{ wfLabel(ev) }}</div>
+              <div class="text-[11px] text-dimmed mt-0.5">{{ rel(ev.ts) }}</div>
+            </li>
+          </ol>
         </div>
       </div>
     </template>
