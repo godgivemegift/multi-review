@@ -38,4 +38,31 @@ assert.deepEqual(rankIpv4([{ name: 'en0', address: '192.168.1.2' }]), ['192.168.
 // 5) 空输入：空数组
 assert.deepEqual(rankIpv4([]), [])
 
+// 6) systemd 名(eno1)必须排在 libvirt 网桥(virbr0)前 —— 之前的正则漏了 eno1
+assert.equal(
+  rankIpv4([
+    { name: 'virbr0', address: '192.168.122.1' }, // libvirt 默认桥
+    { name: 'eno1', address: '10.0.0.50' }, // 物理网卡(systemd 命名)
+  ])[0],
+  '10.0.0.50',
+)
+
+// 7) Windows 友好名:真 "Wi-Fi" 排在 VirtualBox host-only 适配器前
+assert.equal(
+  rankIpv4([
+    { name: 'VirtualBox Host-Only Ethernet Adapter', address: '192.168.56.1' },
+    { name: 'Wi-Fi', address: '192.168.1.20' },
+  ])[0],
+  '192.168.1.20',
+)
+
+// 8) Docker 默认网桥(172.17)排在真网卡后
+assert.equal(
+  rankIpv4([
+    { name: 'docker0', address: '172.17.0.1' },
+    { name: 'ens160', address: '10.1.2.3' },
+  ])[0],
+  '10.1.2.3',
+)
+
 console.log('lan-rank-ipv4: ok')

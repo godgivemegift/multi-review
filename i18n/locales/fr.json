@@ -521,7 +521,7 @@
     "title": "Accès distant",
     "toggleLabel": "Activer l’accès distant (réseau local)",
     "toggleHint": "Permet à un iPad/téléphone du même réseau d’ouvrir la même vue. L’app tourne toujours sur cette machine.",
-    "warning": "⚠️ Une fois activé, tout appareil du réseau disposant du lien ci-dessous peut piloter l’app (lancer des agents, toucher vos dépôts). À utiliser uniquement sur un réseau de confiance.",
+    "warning": "⚠️ Une fois activé, tout appareil du réseau disposant du lien/QR de partage peut piloter l’app (lancer des agents, toucher vos dépôts). À utiliser uniquement sur un réseau de confiance.",
     "scanHint": "Scannez avec l’appareil photo de l’iPad/téléphone",
     "noNetwork": "Aucune adresse réseau local trouvée (pas connecté à un réseau ?)",
     "urlsLabel": "Adresses",
@@ -529,7 +529,8 @@
     "copied": "Copié",
     "rotate": "Réinitialiser le lien",
     "rotateHint": "La réinitialisation invalide immédiatement l’ancien QR/lien ; les appareils connectés doivent re-scanner.",
-    "offHint": "Accès distant désactivé. Activez-le pour générer un QR code de connexion."
+    "offHint": "Accès distant désactivé. Activez-le pour générer un QR code de connexion.",
+    "portNote": "Note : le port de l’app est accessible sur le réseau local pendant l’exécution ; désactiver l’accès distant refuse les requêtes mais ne ferme pas le port."
   },
   "automation": {
     "configBtn": "Automatisation",

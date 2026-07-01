@@ -85,15 +85,18 @@ async function copyLink() {
             />
           </div>
 
-          <!-- 安全提示 -->
+          <!-- 安全提示（状态无关：开启前作为风险预告，措辞不引用尚未显示的链接）-->
           <p class="text-[11px] leading-relaxed text-warning border border-warning/30 bg-warning/5 rounded px-3 py-2">
             {{ t('remote.warning') }}
           </p>
 
+          <!-- 端口暴露说明（M4）：关闭≠关端口 -->
+          <p class="text-[11px] text-dimmed leading-relaxed">{{ t('remote.portNote') }}</p>
+
           <!-- 启用后：QR + 地址 -->
           <template v-if="info.enabled">
             <div v-if="info.qr" class="flex flex-col items-center gap-3">
-              <img :src="info.qr" alt="QR" class="w-44 h-44 rounded-lg border border-default bg-white p-2" />
+              <img :src="info.qr" :alt="t('remote.scanHint')" class="w-44 h-44 rounded-lg border border-default bg-white p-2" />
               <p class="text-[11px] text-dimmed text-center">{{ t('remote.scanHint') }}</p>
             </div>
             <p v-else class="text-xs text-dimmed text-center py-4">{{ t('remote.noNetwork') }}</p>

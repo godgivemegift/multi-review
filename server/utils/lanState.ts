@@ -49,10 +49,12 @@ export function getLanState(): LanState {
   return { ...load() }
 }
 
-// 开/关远程访问。开启时若还没 token 则补一个(load 已保证有)。
+// 开/关远程访问。关闭 = 撤销:换一个新 token,让已分发的 cookie/链接立即失效——
+// 且重新开启也不会复活旧凭据(否则「关闭」只是暂停,de-auth 的设备 30 天 cookie 会复活)。
+// 开启:沿用现有 token(没有则补)。
 export function setLanEnabled(enabled: boolean): LanState {
   const s = load()
-  state = { enabled, token: s.token || nanoid() }
+  state = { enabled, token: enabled ? s.token || nanoid() : nanoid() }
   persist()
   return { ...state }
 }
@@ -95,13 +97,22 @@ export function rankIpv4(ifaces: Ipv4Iface[]): string[] {
   const score = ({ name, address }: Ipv4Iface): number => {
     let s = 0
     const n = name.toLowerCase()
-    if (/^(en|eth|wlan|wlp|enp)\d/.test(n)) s += 100 // 物理以太网/Wi-Fi
-    else if (/^(utun|tun|tap|ppp|wg|awdl|llw|bridge|docker|br-|veth|vmnet|vboxnet|zt)/.test(n)) s -= 100 // VPN/虚拟/容器网桥
+    // 虚拟/VPN/容器优先判定(它可能同时长得像物理名，如 Windows 的 "vEthernet")。
+    const virtual =
+      /^(utun|tun|tap|ppp|wg|awdl|llw|bridge|docker|br-|veth|vmnet|vboxnet|virbr|vnic|zt|ham|tailscale|wsl)/.test(n) ||
+      /virtualbox|vmware|hyper-?v|vethernet|loopback/.test(n)
+    // 物理网卡:macOS enX、Linux ethX/eno1/ens160/enp*/enx*/wlan*/wlp*、Windows "Ethernet"/"Wi-Fi"。
+    // (不再要求前缀后紧跟数字，之前漏了 eno1/ens160 这类 systemd 名和 Windows 友好名。)
+    const physical = /^(en|eth|wl)/.test(n) || /ethernet|wi[-_ ]?fi/.test(n)
+    if (virtual) s -= 100
+    else if (physical) s += 100
 
     if (address.startsWith('169.254.')) s -= 1000 // link-local：基本不可达
+    else if (/^192\.168\.(56|122)\./.test(address)) s -= 200 // VirtualBox host-only / libvirt 默认段
+    else if (address.startsWith('172.17.')) s -= 60 // Docker 默认网桥
     else if (address.startsWith('192.168.')) s += 50
     else if (address.startsWith('10.')) s += 40
-    else if (/^172\.(1[6-9]|2\d|3[01])\./.test(address)) s += 20 // 私网，但常被 Docker 占用 → 弱优先
+    else if (/^172\.(1[6-9]|2\d|3[01])\./.test(address)) s += 20 // 私网，但常被容器占用 → 弱优先
     else s += 10 // 其它(公网段等)——LAN 里少见
     return s
   }
@@ -125,8 +136,11 @@ function lanUrls(port: number): string[] {
 
 // 给 UI 用的完整信息：地址列表 + 带 token 的分享链接 + QR data URL。
 // port 由调用方从当前连接推出(dev/打包端口不同)。
-export async function lanInfo(port: number) {
+// loopback=false(远端调用者)：只回 enabled，不吐 token/QR/内网地址——否则一个已授权的
+// 远端脚本能 fetch 出明文 token(架空 httpOnly),或探到本机内网 IP+端口(DNS-rebinding 利用)。
+export async function lanInfo(port: number, loopback: boolean) {
   const s = load()
+  if (!loopback) return { enabled: s.enabled, urls: [] as string[], link: null, qr: null }
   const urls = lanUrls(port)
   let link: string | null = null
   let qr: string | null = null
