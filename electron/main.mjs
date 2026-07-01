@@ -10,7 +10,11 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url))
 // dev 模式由启动脚本注入(指向 nuxt dev server)。打包态忽略该 env：
 // 否则任何能设置启动环境的人都能把「可信」app 悄悄重定向到任意 URL 并自动开 DevTools。
 const DEV_URL = app.isPackaged ? '' : process.env.ELECTRON_RENDERER_URL || ''
-const HOST = '127.0.0.1'
+// Nitro 绑 0.0.0.0（所有网卡），让局域网设备「有可能」连上；到底放不放行由
+// server/middleware/00.lan-guard.ts 按请求鉴权（默认关闭、远端 403）。桌面窗口
+// 始终走回环地址，与远程访问开关无关。
+const BIND_HOST = '0.0.0.0'
+const LOOPBACK = '127.0.0.1'
 
 let mainWindow = null
 let serverProc = null
@@ -47,7 +51,7 @@ function getFreePort() {
     const srv = net.createServer()
     srv.unref()
     srv.on('error', reject)
-    srv.listen(0, HOST, () => {
+    srv.listen(0, BIND_HOST, () => {
       const { port } = srv.address()
       srv.close(() => resolve(port))
     })
@@ -72,7 +76,7 @@ function waitForServer(port, child, timeoutMs = 30000) {
       done(reject, new Error(`Nitro server exited before it was ready (code ${code ?? signal}).${tail()}`)))
     const tryonce = () => {
       if (settled) return
-      const sock = net.connect(port, HOST)
+      const sock = net.connect(port, LOOPBACK)
       sock.once('connect', () => {
         sock.destroy()
         done(resolve)
@@ -81,7 +85,7 @@ function waitForServer(port, child, timeoutMs = 30000) {
         sock.destroy()
         if (settled) return
         if (Date.now() - start > timeoutMs) {
-          done(reject, new Error(`Server not ready on ${HOST}:${port} after ${timeoutMs}ms.${tail()}`))
+          done(reject, new Error(`Server not ready on ${LOOPBACK}:${port} after ${timeoutMs}ms.${tail()}`))
         } else {
           setTimeout(tryonce, 250)
         }
@@ -113,8 +117,8 @@ async function startNitro() {
       ...process.env,
       ELECTRON_RUN_AS_NODE: '1',
       PATH: envPath,
-      NITRO_HOST: HOST,
-      HOST,
+      NITRO_HOST: BIND_HOST,
+      HOST: BIND_HOST,
       NITRO_PORT: String(port),
       PORT: String(port),
       NUXT_DB_PATH: path.join(userData, 'cockpit.db'),
@@ -139,7 +143,7 @@ async function startNitro() {
   })
 
   await waitForServer(port, child)
-  serverUrl = `http://${HOST}:${port}`
+  serverUrl = `http://${LOOPBACK}:${port}`
   return serverUrl
 }
 

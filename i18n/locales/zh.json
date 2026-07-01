@@ -526,5 +526,19 @@
     "chatPlaceholder": "继续让它改 / 补充…",
     "discard": "删除任务",
     "discardConfirm": "删除这个任务？（含 worktree，不可恢复）"
+  },
+  "remote": {
+    "title": "远程访问",
+    "toggleLabel": "启用局域网远程访问",
+    "toggleHint": "允许同一局域网内的 iPad/手机打开同样的界面；应用仍在本机运行。",
+    "warning": "⚠️ 开启后，同一网络内持有下方链接的设备即可操作本应用（驱动 agent、动你的仓库）。仅在可信网络中使用。",
+    "scanHint": "用 iPad/手机相机扫码即可打开",
+    "noNetwork": "未检测到局域网地址（未连接网络？）",
+    "urlsLabel": "访问地址",
+    "copy": "复制链接",
+    "copied": "已复制",
+    "rotate": "重置链接",
+    "rotateHint": "重置后旧的二维码/链接立即失效，已连接的设备需重新扫码。",
+    "offHint": "远程访问当前已关闭。打开后会生成二维码，扫码即可连接。"
   }
 }
