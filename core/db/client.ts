@@ -75,6 +75,10 @@ function ensureColumns(sqlite: Database.Database) {
     sqlite.exec(`UPDATE fixes SET status = 'error' WHERE status IN ('merging','conflict')`)
     sqlite.exec(`UPDATE fixes SET status = 'open'  WHERE status NOT IN ('open','ready','pushing','pushed','error','discarded')`)
   } catch { /* 忽略 */ }
+  // feature 单段式：把两段式旧状态归一到新枚举（analyzing/planned/building/built → working；opened/error 不动）。
+  try {
+    sqlite.exec(`UPDATE feature_tasks SET status = 'working' WHERE status NOT IN ('working','awaiting','opened','error')`)
+  } catch { /* 老库无该表时忽略 */ }
 }
 
 function ensureSchema(sqlite: Database.Database) {

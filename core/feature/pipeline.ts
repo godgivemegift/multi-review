@@ -1,41 +1,34 @@
-import { nanoid } from 'nanoid'
 import { eq } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
 import { join } from 'node:path'
-import { runFeaturePlanAgent, renderPlanText, type Plan } from '../agent/featurePlan'
 import { prepareFeatureWorktree } from '../git/worktree'
 import { runFeatureChat } from '../agent/featureChat'
 import { appendTurns } from '../db/turns'
 import { makeEmit } from '../streaming/emit'
 import { sessionFields } from '../agent/session'
 import { fetchIssueContext } from '../github/issueAssets'
+import { findPrByBranch } from '../github/gh'
 import type { ChildProcess } from 'node:child_process'
 import type { ReviewProvider } from '../agent/runners'
 
-// Feature 开发 · 阶段1（只读分析 → 方案）。照 review 的非流式模式：跑期间出 stage/tool 事件,
-// 完成后把方案落到 task.plan_json + 一条 assistant 轮(可读渲染)。SSE 频道用 f:<taskId>。
+// Feature 开发 · 单段式（原生 agent）：一个任务 = 一个隔离 worktree（新功能分支）里的自由开发对话。
+// 不再分「只读方案 → 批准 → 实现」两段；agent 直接动手，遇到真决策点用 ```ask-user 块问用户（→ awaiting），
+// 用户点「开 PR」就让 agent 自己 commit/push/开 PR。每轮结束按分支回查 gh 联动 PR 状态。SSE 频道 f:<taskId>。
 export const featureChan = (id: string) => `f:${id}`
+
+// agent 在等用户拍板的标记：产出里含 ```ask-user 围栏块 → 本轮以「等你确认」收尾。
+const ASK_RE = /```ask-user\b/i
+export function hasAskBlock(text: string): boolean {
+  return ASK_RE.test(text || '')
+}
 
 const jobLocks = new Set<string>()
 export function isFeatureBusy(id: string): boolean {
   return jobLocks.has(id)
 }
 
-// open-pr 等「非 job」的 git 写操作借用同一把锁：和 plan/impl 互斥，也防两次并发开 PR 同时 add/commit/push。
-// 成功拿到返回 true（务必在 finally 里 release）；已被占用返回 false。
-export function tryAcquireFeatureLock(id: string): boolean {
-  if (jobLocks.has(id)) return false
-  jobLocks.add(id)
-  return true
-}
-export function releaseFeatureLock(id: string): void {
-  jobLocks.delete(id)
-}
-
-// 停止状态（plan 阶段 abort SDK query、impl 阶段 kill 子进程都用它）：
-// - featureStops：runner 暴露的中断回调（plan=abort SDK query / impl=runner stop）
-// - activeFeatureChats：impl 子进程句柄（kill 用）
-// - featureStopRequested：用户主动停的标记 → job 把那轮标 stopped 而非 error
+// 停止状态：featureStops = runner 暴露的中断回调；activeFeatureChats = 子进程句柄（kill 用）；
+// featureStopRequested = 用户主动停的标记 → 把那轮标 stopped 而非 error。
 const activeFeatureChats = new Map<string, ChildProcess>()
 const featureStopRequested = new Set<string>()
 const featureStops = new Map<string, () => void>()
@@ -44,8 +37,8 @@ function slugify(s: string): string {
   return (s || 'feature').toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40) || 'feature'
 }
 
-// 确保 feature 的隔离 worktree（从 origin/<default> 拉的新功能分支）。plan 和 develop 都在它里头跑——
-// **绝不碰用户真实的本地 clone**。首次（通常是 plan 阶段）创建，之后复用；丢了就按原分支重建。
+// 确保 feature 的隔离 worktree（从 origin/<default> 拉的新功能分支）。开发全程在它里头跑——
+// **绝不碰用户真实的本地 clone**。首次创建，之后复用；丢了就按原分支重建。
 // 分支名 slugify 成纯 [a-z0-9-]，避免 nanoid 的 `_` 触发 SAFE_REF 拦截。
 async function ensureFeatureWorktree(p: {
   db: any; schema: any; taskId: string
@@ -69,111 +62,6 @@ async function ensureFeatureWorktree(p: {
   return wt.path
 }
 
-export type FeaturePlanJobCtx = {
-  db: any
-  schema: any
-  taskId: string
-  // plan 也跑在隔离 worktree 里（不碰真实 clone）→ 需要建 worktree 的这几项，不再用现成 cwd。
-  localPath: string
-  reposDir: string
-  defaultBranch: string
-  provider: ReviewProvider
-  model: string
-  effort: string
-  lang: string
-  methodology?: string | null
-  assetsDir: string // issue/PR 配图下载目录的根（实际落到 <assetsDir>/<taskId>）
-}
-
-// message：本轮用户输入。首轮(创建时)= 需求原文；之后 = 对上一版方案的细化/反馈 → 重新出方案。
-export async function runFeaturePlanJob(ctx: FeaturePlanJobCtx, message: string): Promise<void> {
-  const { db, schema, taskId } = ctx
-  const now = () => new Date().toISOString()
-  // 落 feature_events（除高频 text）：打开任务时回填历史日志 + 思考/分析过程留痕，同 fix。
-  const emit = makeEmit({ channel: featureChan(taskId), now, db, eventTable: schema.featureEvents, fkField: 'taskId', fkValue: taskId })
-  const task = () => db.select().from(schema.featureTasks).where(eq(schema.featureTasks.id, taskId)).get()
-
-  if (jobLocks.has(taskId)) return
-  jobLocks.add(taskId)
-  let asstId = '' // appendTurns 里赋值；catch 引用它（失败时为 '' → 更新 0 行，无害）。
-
-  // 整段放进 try/finally：哪怕建轮/写库就抛了，也保证锁释放（否则任务永久卡 busy）。
-  try {
-    // append-only：user 轮 + assistant 占位轮（分析完成后写入方案文本）。
-    asstId = appendTurns({ db, turnTable: schema.featureTurns, fkField: 'taskId', fkValue: taskId, now, message }).assistantId
-    db.update(schema.featureTasks).set({ status: 'analyzing', error: null, updatedAt: now() }).where(eq(schema.featureTasks.id, taskId)).run()
-    emit('chat', 'user')
-
-    const t = task()
-    // 需求里若有 GitHub issue/PR 链接：后端先抓正文 + 下载配图（只读 agent 上不了网、下不了图）。
-    // 失败不致命，退回用原始需求继续。
-    let description = t?.description || ''
-    let imagePaths: string[] = []
-    try {
-      const ic = await fetchIssueContext(`${t?.description || ''}\n${message || ''}`, join(ctx.assetsDir, taskId))
-      if (ic) {
-        description = `${description}\n\n${ic.enrichedText}`
-        imagePaths = ic.imagePaths
-        emit('stage', `已抓取 issue/PR 内容（${ic.summary}）`)
-      }
-    } catch (e) {
-      emit('stage', `issue/PR 抓取失败，用原始需求继续：${(e as Error).message}`)
-    }
-
-    // 先建/复用隔离 worktree，plan 在它里头只读分析（绝不碰真实本地 clone）。
-    const cwd = await ensureFeatureWorktree({
-      db, schema, taskId, localPath: ctx.localPath, reposDir: ctx.reposDir, defaultBranch: ctx.defaultBranch, now, emit,
-    })
-
-    emit('stage', 'AI 调研分析中…')
-    const { plan, raw } = await runFeaturePlanAgent({
-      cwd,
-      provider: ctx.provider,
-      model: ctx.model,
-      effort: ctx.effort,
-      lang: ctx.lang,
-      methodology: ctx.methodology,
-      description,
-      instruction: message || undefined,
-      imagePaths,
-      onTool: (n, i) => emit('tool', `${n} ${i}`),
-      onText: (chunk) => emit('text', chunk), // 调研阶段思考文字流（实时,不落库）→ 抽屉 liveAssistant
-      onStop: (stop) => featureStops.set(taskId, stop), // 停止按钮 → abort（分析阶段也能真停）
-    })
-    const text = renderPlanText(plan) || raw.slice(0, 2000)
-    db.update(schema.featureTurns).set({ content: text, status: 'done' }).where(eq(schema.featureTurns.id, asstId)).run()
-    const title = t?.title || (t?.description || '').trim().slice(0, 60)
-    db.update(schema.featureTasks)
-      .set({ status: 'planned', planJson: JSON.stringify(plan), error: null, title, updatedAt: now() })
-      .where(eq(schema.featureTasks.id, taskId))
-      .run()
-    emit('chat', 'done')
-  } catch (e) {
-    if (featureStopRequested.has(taskId)) {
-      // 用户主动停的，不算错误：占位轮标 stopped；有旧方案就回 planned，否则回 error 提示可重试。
-      db.update(schema.featureTurns).set({ status: 'stopped' }).where(eq(schema.featureTurns.id, asstId)).run()
-      const hadPlan = !!task()?.planJson
-      db.update(schema.featureTasks)
-        .set({ status: hadPlan ? 'planned' : 'error', error: hadPlan ? null : '已停止（未生成方案，可重试）', updatedAt: now() })
-        .where(eq(schema.featureTasks.id, taskId))
-        .run()
-      emit('chat', 'stopped')
-    } else {
-      db.update(schema.featureTurns).set({ status: 'error' }).where(eq(schema.featureTurns.id, asstId)).run()
-      const errMsg = (e as Error).message
-      db.update(schema.featureTasks).set({ status: 'error', error: errMsg, updatedAt: now() }).where(eq(schema.featureTasks.id, taskId)).run()
-      emit('error', errMsg)
-    }
-  } finally {
-    jobLocks.delete(taskId)
-    featureStops.delete(taskId)
-    featureStopRequested.delete(taskId)
-  }
-}
-
-// ── 阶段2：实现（批准后）。在「从默认分支拉的新功能分支 worktree」里改代码，不自动 commit。
-// 复用 fix 的聊天 runner（acceptEdits + 全工具 + 「别 commit」），把已批准方案 + 决策答复作为高优先级注入。
-
 export function stopFeatureImpl(taskId: string): boolean {
   const stop = featureStops.get(taskId)
   if (stop) { featureStopRequested.add(taskId); stop(); return true }
@@ -186,85 +74,90 @@ export function stopFeatureImpl(taskId: string): boolean {
   return true
 }
 
-// 进程退出(app 关闭)时把所有在跑的 feature 实现停掉(plan SDK abort + impl 子进程组),别留孤儿。
+// 进程退出(app 关闭)时把所有在跑的 feature 开发停掉（子进程组），别留孤儿。
 export function stopAllFeatureImpl(): boolean {
   let any = false
   for (const id of new Set([...activeFeatureChats.keys(), ...featureStops.keys()])) any = stopFeatureImpl(id) || any
   return any
 }
 
-// 把已批准方案 + 决策答复拼成实现阶段的首条指令。
-export function buildImplementMessage(plan: Plan, decisions: Record<string, string>, lang: string): string {
-  const dlines = plan.decisionPoints.map((d) => {
-    const ans = decisions[d.id] || d.defaultChoice || d.recommendation || '(用推荐/默认)'
-    return `  - ${d.question} → 选定：${ans}`
-  })
-  return `以下方案已经用户批准，请据此实现（这是阶段2：可写）。
-
-【已批准方案】
-${plan.approach}
-
-【分步计划】
-${plan.plannedSteps.map((s, i) => `${i + 1}. ${s}`).join('\n')}
-${dlines.length ? `\n【决策答复（最高优先级，严格遵守）】\n${dlines.join('\n')}` : ''}
-${plan.outOfScope.length ? `\n【不在本次范围，别做】\n${plan.outOfScope.map((s) => `- ${s}`).join('\n')}` : ''}
-
-在当前 worktree 里直接改文件实现。偏离已批准方案要回到方案，不要自作主张改方向。**不要 commit / push**——改动留在 worktree，用户点「开 PR」才提交。完成后简述你改了什么（用 ${lang === 'en' ? 'English' : lang === 'fr' ? 'French' : '中文'}）。`
-}
-
-export type FeatureImplJobCtx = {
+export type FeatureDevelopJobCtx = {
   db: any
   schema: any
   taskId: string
   localPath: string
   reposDir: string
+  defaultBranch: string
+  repo: string // owner/name，回查 gh PR 用
   provider: ReviewProvider
   model: string
   effort?: string
-  defaultBranch: string
   lang: string
-  allowDanger?: boolean // 用户在抽屉开了「允许危险命令」→ 放行危险命令守卫（同全局助手）
+  allowDanger?: boolean // 用户开了「允许危险命令」/ 点了「开 PR」→ 放行危险命令守卫（含 git push / gh pr create）
+  ultracode?: boolean // 后台激活 ultracode → 给 agent 的消息前缀注入 `ultracode:`（存库仍是干净消息）
+  assetsDir: string // issue/PR 配图下载根目录（首轮抓 issue 用）
 }
 
-export async function runFeatureImplJob(ctx: FeatureImplJobCtx, message: string): Promise<void> {
+// message = 本轮用户输入（首轮=需求原文；之后=继续对话 / 决策答复 / 「帮我开 PR」）。
+export async function runFeatureDevelopJob(ctx: FeatureDevelopJobCtx, message: string): Promise<void> {
   const { db, schema, taskId } = ctx
   const now = () => new Date().toISOString()
-  // 落 feature_events（除高频 text）：打开任务时回填历史日志 + 思考/分析过程留痕，同 fix。
   const emit = makeEmit({ channel: featureChan(taskId), now, db, eventTable: schema.featureEvents, fkField: 'taskId', fkValue: taskId })
   const task = () => db.select().from(schema.featureTasks).where(eq(schema.featureTasks.id, taskId)).get()
   const saveSession = (sid: string | null) => sessionFields(ctx.provider, sid)
 
   if (jobLocks.has(taskId)) return
   jobLocks.add(taskId)
-  let asstId = '' // appendTurns 里赋值；flush 闭包按变量捕获（赋值在流式开始前完成）。
+  let asstId = ''
   let acc = ''
   let lastWrite = 0
   const flush = (status: string) => db.update(schema.featureTurns).set({ content: acc, status }).where(eq(schema.featureTurns.id, asstId)).run()
 
-  // 整段放进 try/finally：建轮/写库即使抛了也保证释放锁。
   try {
+    // append-only：user 轮（干净 message）+ assistant 占位轮（流式写入）。
     asstId = appendTurns({ db, turnTable: schema.featureTurns, fkField: 'taskId', fkValue: taskId, now, message }).assistantId
-    db.update(schema.featureTasks).set({ status: 'building', error: null, updatedAt: now() }).where(eq(schema.featureTasks.id, taskId)).run()
+    db.update(schema.featureTasks).set({ status: 'working', error: null, updatedAt: now() }).where(eq(schema.featureTasks.id, taskId)).run()
     emit('chat', 'user')
 
-    let stopped = false
-    const t = task()
-    // 确保新分支 worktree（首次开发时建；plan 阶段通常已建好 → 复用）。绝不碰真实本地 clone。
+    const t0 = task()
+    const isFirstTurn = !(ctx.provider === 'codex' ? t0?.codexSessionId : t0?.sessionId)
+
+    // 送给 agent 的消息（可能被增强/前缀）；存库/展示的仍是原始干净 message。
+    let agentMessage = message
+    // 首轮：抓 issue/PR 正文 + 下载配图（agent 上不了网、下不了图；只做一次）。
+    if (isFirstTurn) {
+      try {
+        const ic = await fetchIssueContext(`${t0?.description || ''}\n${message || ''}`, join(ctx.assetsDir, taskId))
+        if (ic) {
+          agentMessage = `${message}\n\n【需求相关的 issue/PR 内容（后端已抓取）】\n${ic.enrichedText}`
+          if (ic.imagePaths.length) {
+            agentMessage += `\n\n【配图（已下载到本地，先用 Read 逐张打开看再动手）】\n${ic.imagePaths.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
+          }
+          emit('stage', `已抓取 issue/PR 内容（${ic.summary}）`)
+        }
+      } catch (e) {
+        emit('stage', `issue/PR 抓取失败，用原始需求继续：${(e as Error).message}`)
+      }
+    }
+    // ultracode 后台激活：harness 认这个关键词 → agent 走 xhigh + 多代理。
+    if (ctx.ultracode) agentMessage = `ultracode: ${agentMessage}`
+
+    // 确保新分支 worktree（首轮建；之后复用）。绝不碰真实本地 clone。
     const wtPath = await ensureFeatureWorktree({
       db, schema, taskId, localPath: ctx.localPath, reposDir: ctx.reposDir, defaultBranch: ctx.defaultBranch, now, emit,
     })
 
-    let newSessionId: string | null = (ctx.provider === 'codex' ? t?.codexSessionId : t?.sessionId) ?? null
+    let stopped = false
+    let newSessionId: string | null = (ctx.provider === 'codex' ? t0?.codexSessionId : t0?.sessionId) ?? null
     try {
       const cur = task()
-      // 开发模式 = 全局助手式的 bypassPermissions 全权限聊天，只是锁在这个 worktree、默认别 commit。
       const r = await runFeatureChat(ctx.provider, {
         cwd: wtPath,
         model: ctx.model,
         effort: ctx.effort,
         lang: ctx.lang,
         sessionId: (ctx.provider === 'codex' ? cur?.codexSessionId : cur?.sessionId) ?? null,
-        message,
+        message: agentMessage,
         allowDanger: ctx.allowDanger,
         onSpawn: (cp) => activeFeatureChats.set(taskId, cp),
         onStop: (stop) => featureStops.set(taskId, stop),
@@ -292,8 +185,22 @@ export async function runFeatureImplJob(ctx: FeatureImplJobCtx, message: string)
     }
 
     flush(stopped ? 'stopped' : 'done')
-    // 实现完成（或停止）：改动留在 worktree 未提交，状态 → built（待开 PR）。
-    db.update(schema.featureTasks).set({ status: 'built', error: null, ...saveSession(newSessionId), updatedAt: now() }).where(eq(schema.featureTasks.id, taskId)).run()
+
+    // 收尾状态：① agent 在等你拍板（输出了 ask-user 块）→ awaiting；
+    // 否则 ② 按分支回查 gh，查到就联动 opened + url/number（不管按钮开还是聊天顺手开）；查不到回 working。
+    const cur = task()
+    let nextStatus = 'working'
+    let prPatch: Record<string, unknown> = {}
+    if (!stopped && hasAskBlock(acc)) {
+      nextStatus = 'awaiting'
+    } else if (cur?.branch) {
+      const pr = await findPrByBranch(ctx.repo, cur.branch).catch(() => null)
+      if (pr?.url) { nextStatus = 'opened'; prPatch = { prUrl: pr.url, prNumber: pr.number || null } }
+    }
+    db.update(schema.featureTasks)
+      .set({ status: nextStatus, error: null, ...prPatch, ...saveSession(newSessionId), updatedAt: now() })
+      .where(eq(schema.featureTasks.id, taskId))
+      .run()
     emit('chat', stopped ? 'stopped' : 'done')
   } catch (e) {
     activeFeatureChats.delete(taskId)
