@@ -18,7 +18,7 @@ const liveAssistant = ref('')
 const logLines = ref<string[]>([])
 const { confirming } = useInlineConfirm() // '' | 'discard'
 const busy = ref(false)
-const creating = ref(false)
+const sending = ref(false) // 发送/创建/开PR 在途：防重复派发（含决策卡按钮双击）
 let es: EventSource | null = null
 // load 竞态护栏（同 main 里的修复）：切任务时旧任务在途的 load 迟到返回不能盖回 data。
 let loadToken = 0
@@ -44,7 +44,7 @@ const running = computed(() => {
   const ts = data.value?.turns ?? []
   return data.value?.busy || (ts.length > 0 && ts[ts.length - 1]!.role === 'assistant' && ts[ts.length - 1]!.status === 'streaming')
 })
-const canChat = computed(() => !running.value && !busy.value && !creating.value)
+const canChat = computed(() => !running.value && !busy.value && !sending.value)
 
 const STATUS_CLS: Record<string, string> = {
   working: 'text-toned border-accented',
@@ -54,7 +54,9 @@ const STATUS_CLS: Record<string, string> = {
 }
 
 // 决策卡：最后一条 assistant 轮里含 ```ask-user 块 → 解析出问题 + 选项（用户还没回时才显示）。
+// 只要有块就渲染卡片（哪怕没列出选项，也用「其它」自由回答），绝不让问题凭空消失。
 const ASK_RE = /```ask-user\s*\n([\s\S]*?)```/i
+const IS_OPT = /^(?:[-*]|\d+[.)])\s+/ // 接受 - / * / 1. / 1) 各种列举写法
 const askCard = computed(() => {
   const ts = data.value?.turns ?? []
   const last = ts[ts.length - 1]
@@ -62,13 +64,17 @@ const askCard = computed(() => {
   const m = last.content.match(ASK_RE)
   if (!m) return null
   const lines = m[1]!.split('\n').map((l) => l.trim()).filter(Boolean)
-  const options = lines.filter((l) => /^[-*]\s+/.test(l)).map((l) => l.replace(/^[-*]\s+/, '').trim()).filter(Boolean)
-  const question = lines.filter((l) => !/^[-*]\s+/.test(l)).join(' ').trim()
-  if (!options.length) return null
+  const options = lines.filter((l) => IS_OPT.test(l)).map((l) => l.replace(IS_OPT, '').trim()).filter(Boolean)
+  const question = lines.filter((l) => !IS_OPT.test(l)).join('\n').trim()
   return { question, options }
 })
-// 展示时去掉 ask-user 围栏块（用卡片替代原文）
-function displayText(content: string): string { return content.replace(/```ask-user\s*\n[\s\S]*?```/gi, '').trim() }
+// 展示：正在渲染卡片的那一轮把 ask 块整段去掉（卡片已呈现）；其它历史轮把块替换成问题文本（不留空白）。
+function askQuestionText(inner: string): string {
+  return inner.split('\n').map((l) => l.trim()).filter((l) => l && !IS_OPT.test(l)).join('\n')
+}
+function displayText(content: string, stripAsk: boolean): string {
+  return content.replace(/```ask-user\s*\n([\s\S]*?)```/gi, (_m, inner) => (stripAsk ? '' : askQuestionText(inner))).trim()
+}
 // 选项按钮上的推荐标记只用于展示；发送时去掉
 function optionLabel(o: string): string { return o.replace(/\s*[（(]\s*推荐\s*[)）]\s*$/i, '') }
 
@@ -123,43 +129,42 @@ onBeforeUnmount(() => { if (pollTimer) clearInterval(pollTimer) })
 const { scrollEl, scrollToBottom } = useScrollToBottom()
 watch([() => data.value?.turns.length, liveAssistant, open], () => { if (open.value) scrollToBottom() })
 
-// 发消息：新任务(featureId=null) → 首条消息 = 创建 + 开跑；否则 → 继续对话。
-async function sendChat(overrideMsg?: string) {
+// 发消息：新任务(featureId=null) → 首条消息 = 创建 + 开跑；否则 → 继续对话。返回是否发送成功。
+async function sendChat(overrideMsg?: string): Promise<boolean> {
   const msg = (overrideMsg ?? input.value).trim()
-  if (!msg || !canChat.value) return
+  if (!msg || !canChat.value) return false
   if (overrideMsg == null) input.value = ''
   liveAssistant.value = ''
-  if (!props.featureId) {
-    creating.value = true
-    try {
+  sending.value = true
+  try {
+    if (!props.featureId) {
       const res = await $fetch<{ id: string }>(`/api/projects/${props.projectId}/features`, { method: 'POST', body: { description: msg, allowDanger: allowDanger.value, ultracode: ultracodeOn.value } })
       emit('created', res.id) // 父组件把 activeId 切到新 id → 本抽屉 featureId 变化 → watch 加载运行中的任务
-    } catch (e: any) {
-      if (overrideMsg == null) input.value = msg
-      notify(e?.data?.statusMessage || t('common.failed'))
-    } finally { creating.value = false }
-    return
-  }
-  try {
+      return true
+    }
     await $fetch(`/api/features/${props.featureId}/chat`, { method: 'POST', body: { message: msg, allowDanger: allowDanger.value, ultracode: ultracodeOn.value } })
     await load()
+    return true
   } catch (e: any) {
     if (overrideMsg == null) input.value = msg
     notify(e?.data?.statusMessage || t('common.failed'))
-  }
+    return false
+  } finally { sending.value = false }
 }
-// 决策卡选项 / 「其它…」自由回答
-function answer(opt: string) { sendChat(optionLabel(opt)) }
-function answerOther() { const v = otherAnswer.value.trim(); if (v) { otherAnswer.value = ''; sendChat(v) } }
+// 决策卡选项 / 「其它…」自由回答（发失败不丢用户手打的文本）
+function answer(opt: string) { void sendChat(optionLabel(opt)) }
+function answerOther() { const v = otherAnswer.value.trim(); if (!v) return; sendChat(v).then((ok) => { if (ok) otherAnswer.value = '' }) }
 
 // 开 PR：给 agent 发一句「帮我开 PR」，它自己 commit/push/gh pr create（allowDanger 强制放行 push）。
 async function openPr() {
   if (!props.featureId || !canChat.value) return
   liveAssistant.value = ''
+  sending.value = true
   try {
     await $fetch(`/api/features/${props.featureId}/chat`, { method: 'POST', body: { message: t('feature.openPrMsg'), allowDanger: true, ultracode: ultracodeOn.value } })
     await load()
   } catch (e: any) { notify(e?.data?.statusMessage || t('common.failed')) }
+  finally { sending.value = false }
 }
 
 async function stop() {
@@ -206,12 +211,13 @@ async function doDelete() {
           <div v-for="(turn, ti) in data?.turns ?? []" :key="turn.id" :class="turn.role === 'user' ? 'text-right' : ''">
             <div v-if="turn.role === 'user'" class="inline-block max-w-[92%] text-left text-sm rounded-lg px-3 py-2 whitespace-pre-wrap break-words bg-inverted text-inverted">{{ turn.content }}</div>
             <div v-else class="inline-block max-w-[92%] text-left text-sm rounded-lg px-3 py-2 break-words bg-muted">
-              <!-- 流式中：纯文本(避免半截 markdown 重叠)；完成后：markdown（去掉 ask-user 块）-->
+              <!-- 流式中：纯文本(避免半截 markdown 重叠)；完成后：markdown（卡片那轮才去掉 ask 块）-->
               <template v-if="turn.status === 'streaming' && ti === (data?.turns.length ?? 0) - 1">
-                <span class="whitespace-pre-wrap break-words">{{ liveAssistant || turn.content }}</span>
+                <!-- 取 liveAssistant 与已落库 content 中较长者：迟到连 SSE 时 liveAssistant 只有尾段，别覆盖完整前半段 -->
+                <span class="whitespace-pre-wrap break-words">{{ liveAssistant.length >= turn.content.length ? liveAssistant : turn.content }}</span>
                 <span class="animate-pulse">▍</span>
               </template>
-              <MarkdownBody v-else :text="displayText(turn.content)" />
+              <MarkdownBody v-else :text="displayText(turn.content, !!askCard && ti === (data?.turns.length ?? 0) - 1)" />
               <span v-if="turn.status === 'stopped'" class="text-[10px] text-dimmed ml-1">· {{ $t('fix.stoppedTag') }}</span>
             </div>
           </div>
@@ -223,8 +229,8 @@ async function doDelete() {
           <!-- 决策卡（agent 在等你拍板）-->
           <div v-if="askCard" class="rounded border border-inverted p-3 space-y-2">
             <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed">{{ $t('feature.decisionTitle') }}</div>
-            <p class="text-sm font-medium whitespace-pre-wrap">{{ askCard.question }}</p>
-            <div class="flex flex-col gap-1.5">
+            <p v-if="askCard.question" class="text-sm font-medium whitespace-pre-wrap">{{ askCard.question }}</p>
+            <div v-if="askCard.options.length" class="flex flex-col gap-1.5">
               <button
                 v-for="(o, i) in askCard.options" :key="i"
                 class="text-left text-sm border border-default rounded px-3 py-1.5 hover:border-inverted hover:bg-elevated/40 disabled:opacity-40"
@@ -276,7 +282,7 @@ async function doDelete() {
                 {{ $t('global.ultracode') }}
               </span>
             </button>
-            <button class="w-24 text-sm bg-inverted text-inverted py-1.5 rounded hover:bg-inverted/90 disabled:opacity-40" :disabled="!input.trim() || !canChat" @click="sendChat()">{{ creating ? $t('feature.creating') : $t('global.send') }}</button>
+            <button class="w-24 text-sm bg-inverted text-inverted py-1.5 rounded hover:bg-inverted/90 disabled:opacity-40" :disabled="!input.trim() || !canChat" @click="sendChat()">{{ sending && !featureId ? $t('feature.creating') : $t('global.send') }}</button>
           </div>
         </div>
       </div>

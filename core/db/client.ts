@@ -75,8 +75,10 @@ function ensureColumns(sqlite: Database.Database) {
     sqlite.exec(`UPDATE fixes SET status = 'error' WHERE status IN ('merging','conflict')`)
     sqlite.exec(`UPDATE fixes SET status = 'open'  WHERE status NOT IN ('open','ready','pushing','pushed','error','discarded')`)
   } catch { /* 忽略 */ }
-  // feature 单段式：把两段式旧状态归一到新枚举（analyzing/planned/building/built → working；opened/error 不动）。
+  // feature 单段式：把两段式旧状态归一到新枚举。先保住「已开 PR」的行（旧 built + pr_url 也算 opened），
+  // 再把其余旧状态（analyzing/planned/building/built）归到 working；opened/error 不动。
   try {
+    sqlite.exec(`UPDATE feature_tasks SET status = 'opened' WHERE pr_url IS NOT NULL AND status NOT IN ('working','awaiting','opened','error')`)
     sqlite.exec(`UPDATE feature_tasks SET status = 'working' WHERE status NOT IN ('working','awaiting','opened','error')`)
   } catch { /* 老库无该表时忽略 */ }
 }
@@ -277,7 +279,7 @@ function ensureSchema(sqlite: Database.Database) {
       provider TEXT NOT NULL DEFAULT 'claude',
       model TEXT,
       lang TEXT NOT NULL DEFAULT 'en',
-      status TEXT NOT NULL DEFAULT 'analyzing',
+      status TEXT NOT NULL DEFAULT 'working',
       plan_json TEXT,
       decisions TEXT,
       base_branch TEXT,

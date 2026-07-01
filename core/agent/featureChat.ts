@@ -12,10 +12,11 @@ import type { FixChatOptions, FixChatResult } from './fixer'
 // claude 路径：headless `claude -p --permission-mode bypassPermissions`（同 globalChat），
 // 用 --append-system-prompt 注入方法学 + 开发上下文。ultracode 前缀由管线注入（不在此处理）。
 
-export type FeatureChatOptions = FixChatOptions & { allowDanger?: boolean }
+export type FeatureChatOptions = FixChatOptions & { allowDanger?: boolean; baseBranch?: string }
 
-function featureSystemPrompt(lang: string): string {
-  return `You are a senior engineer implementing a feature directly inside an isolated git worktree on a NEW feature branch (created from the repository's default branch). The current directory IS that worktree — implement what the user asks by editing files directly. You have the full toolset and full permissions (bash, git, gh, network, tests).
+function featureSystemPrompt(lang: string, baseBranch?: string): string {
+  const base = baseBranch || 'the default branch'
+  return `You are a senior engineer implementing a feature directly inside an isolated git worktree on a NEW feature branch (created from ${base}). The current directory IS that worktree — implement what the user asks by editing files directly. You have the full toolset and full permissions (bash, git, gh, network, tests).
 
 Working principles:
 - Explore before acting: read the relevant code first, reuse existing patterns/conventions, and keep each change a small, focused, reviewable slice. If the request is too big, propose the smallest first slice.
@@ -27,7 +28,7 @@ Working principles:
 - <option B (推荐)>
 \`\`\`
   Mark your recommended option with (推荐). Batch related questions; never ask about implementation details you can decide yourself; keep the number of questions minimal.
-- Do NOT commit or push by default — leave your edits uncommitted in the worktree. EXCEPTION: when the user explicitly asks you to open a PR (e.g. "开 PR" / "open a PR"), then commit with an English conventional-commit message, push the new branch, and run \`gh pr create\` yourself with an English title + body, and report the resulting PR URL.
+- Do NOT commit or push by default — leave your edits uncommitted in the worktree. EXCEPTION: when the user explicitly asks you to open a PR (e.g. "开 PR" / "open a PR"), then: commit with an English conventional-commit message; push the current branch with \`git push -u origin HEAD\` (NEVER a bare \`git push\` — its upstream is intentionally unset, and never push to ${base}); then run \`gh pr create --base ${base} --title <English> --body <English>\` and report the resulting PR URL.
 
 Respond in ${langName(lang)}. Keep PR title/body, commit messages, and code comments in English.`
 }
@@ -39,7 +40,7 @@ async function runFeatureClaudeChat(opts: FeatureChatOptions): Promise<FixChatRe
     '--output-format', 'stream-json',
     '--permission-mode', 'bypassPermissions',
     '--settings', dangerSettingsJson(),
-    '--append-system-prompt', featureSystemPrompt(opts.lang),
+    '--append-system-prompt', featureSystemPrompt(opts.lang, opts.baseBranch),
   ]
   if (opts.model) args.push('--model', opts.model)
   if (opts.effort) args.push('--effort', opts.effort)

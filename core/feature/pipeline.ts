@@ -159,6 +159,8 @@ export async function runFeatureDevelopJob(ctx: FeatureDevelopJobCtx, message: s
         sessionId: (ctx.provider === 'codex' ? cur?.codexSessionId : cur?.sessionId) ?? null,
         message: agentMessage,
         allowDanger: ctx.allowDanger,
+        baseBranch: cur?.baseBranch || ctx.defaultBranch, // 开 PR 时 gh pr create --base 用它
+
         onSpawn: (cp) => activeFeatureChats.set(taskId, cp),
         onStop: (stop) => featureStops.set(taskId, stop),
         onSessionId: (sid) => {
@@ -186,17 +188,18 @@ export async function runFeatureDevelopJob(ctx: FeatureDevelopJobCtx, message: s
 
     flush(stopped ? 'stopped' : 'done')
 
-    // 收尾状态：① agent 在等你拍板（输出了 ask-user 块）→ awaiting；
-    // 否则 ② 按分支回查 gh，查到就联动 opened + url/number（不管按钮开还是聊天顺手开）；查不到回 working。
+    // 收尾：PR 回查与「等你拍板」解耦——agent 可能同一轮既开了 PR 又提了问，两者都要处理。
+    // ① 只在可能有 PR 时才回查 gh（这轮放行了危险命令 / 之前已开过 PR）——省掉必为 null 的往返；
+    //    查到就联动 prUrl/prNumber；opened 借「PR 仍在 GitHub 上」天然粘滞，不因后续提问回合丢失。
+    // ② badge：agent 在等你拍板 → awaiting（此时 prUrl 仍照记，链接不丢）；否则有 PR → opened；否则 working。
     const cur = task()
-    let nextStatus = 'working'
     let prPatch: Record<string, unknown> = {}
-    if (!stopped && hasAskBlock(acc)) {
-      nextStatus = 'awaiting'
-    } else if (cur?.branch) {
+    let prOpened = !!cur?.prUrl
+    if (cur?.branch && (ctx.allowDanger || cur?.prUrl)) {
       const pr = await findPrByBranch(ctx.repo, cur.branch).catch(() => null)
-      if (pr?.url) { nextStatus = 'opened'; prPatch = { prUrl: pr.url, prNumber: pr.number || null } }
+      if (pr?.url) { prPatch = { prUrl: pr.url, prNumber: pr.number || null }; prOpened = true }
     }
+    const nextStatus = (!stopped && hasAskBlock(acc)) ? 'awaiting' : (prOpened ? 'opened' : 'working')
     db.update(schema.featureTasks)
       .set({ status: nextStatus, error: null, ...prPatch, ...saveSession(newSessionId), updatedAt: now() })
       .where(eq(schema.featureTasks.id, taskId))
