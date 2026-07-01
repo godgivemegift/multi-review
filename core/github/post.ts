@@ -235,10 +235,11 @@ export async function postReview(opts: {
   // 自愈：先清掉本人残留的 PENDING review（GitHub 只允许每人每 PR 一个 pending，残留会让新 review 422）。
   // GET 返回里能看到的 PENDING 一定是自己的（别人的 pending 不可见），直接删。
   try {
-    const { stdout } = await pexec('gh', ['api', `repos/${repo}/pulls/${prNumber}/reviews`, '--paginate', '--slurp'], { maxBuffer: 1024 * 1024 * 16 })
+    // 带 timeout：这两步在 review 的 'posting' 认领窗口内跑，gh 若无限挂起会把行永久卡在 'posting'（recover 只在启动跑）。
+    const { stdout } = await pexec('gh', ['api', `repos/${repo}/pulls/${prNumber}/reviews`, '--paginate', '--slurp'], { maxBuffer: 1024 * 1024 * 16, timeout: 30_000 })
     for (const r of (JSON.parse(stdout) as any[][]).flat()) {
       if (r.state === 'PENDING') {
-        await pexec('gh', ['api', `repos/${repo}/pulls/${prNumber}/reviews/${r.id}`, '--method', 'DELETE']).catch(() => {})
+        await pexec('gh', ['api', `repos/${repo}/pulls/${prNumber}/reviews/${r.id}`, '--method', 'DELETE'], { timeout: 30_000 }).catch(() => {})
       }
     }
   } catch {

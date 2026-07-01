@@ -145,7 +145,7 @@ function clearFilters() {
   fAuthors.value = []; fPr.value = []; fReview.value = []; fFix.value = []; fWorktree.value = []
 }
 
-const INFLIGHT = ['queued', 'cloning', 'reviewing', 'recheck_requested', 'rechecking']
+const INFLIGHT = ['queued', 'cloning', 'reviewing', 'recheck_requested', 'rechecking', 'posting']
 function pullKey(p: Pull) {
   if (p.state === 'merged') return 'merged'
   if (p.state === 'closed') return 'closed'

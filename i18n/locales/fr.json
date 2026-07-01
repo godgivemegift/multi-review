@@ -63,7 +63,8 @@
       "posted": "Commentaire publié",
       "recheck_requested": "Recontrôle en attente",
       "rechecking": "Recontrôle en cours",
-      "error": "Erreur"
+      "error": "Erreur",
+      "posting": "Publication"
     },
     "pr": {
       "open": "En cours",
@@ -412,7 +413,8 @@
       "posted": "Commentaire publié",
       "recheck_requested": "Recontrôle en attente",
       "rechecking": "Recontrôle en cours",
-      "error": "Erreur"
+      "error": "Erreur",
+      "posting": "Publication"
     },
     "rc": {
       "fixed": "✓ Corrigé",
@@ -515,7 +517,13 @@
     "openPrMsg": "Ouvre une PR pour ceci : commit avec un message conventional-commit en anglais, pousse la branche, et lance gh pr create avec un titre + corps en anglais. Réponds ensuite avec l’URL de la PR.",
     "chatPlaceholder": "Continuez à discuter pour développer / demander des changements… (cliquez « Ouvrir la PR » quand vous êtes satisfait)",
     "discard": "Supprimer la tâche",
-    "discardConfirm": "Supprimer cette tâche ? (worktree inclus, irréversible)"
+    "discardConfirm": "Supprimer cette tâche ? (worktree inclus, irréversible)",
+    "col": {
+      "title": "Titre",
+      "status": "Statut",
+      "pr": "PR",
+      "updated": "Mis à jour"
+    }
   },
   "automation": {
     "configBtn": "Automatisation",

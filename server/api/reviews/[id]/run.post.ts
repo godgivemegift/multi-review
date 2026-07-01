@@ -17,7 +17,7 @@ export default defineEventHandler(async (event) => {
   const review = d.select().from(schema.reviews).where(eq(schema.reviews.id, id)).get()
   if (!review) throw createError({ statusCode: 404, statusMessage: 'review 不存在' })
   // 已在处理中就别重复触发
-  if (['queued', 'cloning', 'reviewing', 'recheck_requested', 'rechecking'].includes(review.status)) {
+  if (['queued', 'cloning', 'reviewing', 'recheck_requested', 'rechecking', 'posting'].includes(review.status)) {
     throw createError({ statusCode: 409, statusMessage: '该任务正在处理中，请等它完成再操作' })
   }
 
