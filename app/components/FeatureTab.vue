@@ -56,27 +56,32 @@ function onCreated(id: string) { activeId.value = id; refresh() }
 
     <!-- 列表：标题(固定宽·换行) | 状态 | PR | 更新时间 -->
     <div class="mt-6 overflow-x-auto">
-      <div class="min-w-[38rem]">
-        <div class="grid grid-cols-[minmax(16rem,1fr)_7rem_5rem_9rem] gap-x-4 px-1 pb-3 text-[10px] uppercase tracking-[0.15em] text-dimmed border-b border-inverted">
+      <div class="md:min-w-[38rem]">
+        <!-- 列头：仅桌面显示（手机是卡片，不需要列名）-->
+        <div class="hidden md:grid grid-cols-[minmax(16rem,1fr)_7rem_5rem_9rem] gap-x-4 px-1 pb-3 text-[10px] uppercase tracking-[0.15em] text-dimmed border-b border-inverted">
           <span>{{ $t('feature.col.title') }}</span>
           <span class="text-center">{{ $t('feature.col.status') }}</span>
           <span class="text-center">{{ $t('feature.col.pr') }}</span>
           <span class="text-right">{{ $t('feature.col.updated') }}</span>
         </div>
+        <!-- 手机=卡片(flex-col)，桌面=4 列网格。状态/PR/更新时间在桌面用 md:contents
+             「消融」进网格各占一列；手机上成组 flex-wrap 成一行小标签。 -->
         <div
           v-for="taskItem in pagedTasks" :key="taskItem.id"
-          class="grid grid-cols-[minmax(16rem,1fr)_7rem_5rem_9rem] gap-x-4 items-center px-1 min-h-16 py-3 border-b border-default text-sm cursor-pointer hover:bg-elevated/40 transition-colors"
+          class="flex flex-col gap-2 py-3 px-1 border-b border-default text-sm cursor-pointer hover:bg-elevated/40 transition-colors md:grid md:grid-cols-[minmax(16rem,1fr)_7rem_5rem_9rem] md:gap-x-4 md:items-center md:min-h-16"
           @click="openTask(taskItem.id)"
         >
           <span class="text-default break-words leading-snug line-clamp-2">{{ taskItem.title || taskItem.description }}</span>
-          <span class="text-center">
-            <span class="inline-block whitespace-nowrap text-[10px] uppercase tracking-wider px-2 py-0.5 border rounded-full" :class="badge(taskItem.status).cls">{{ $t(badge(taskItem.status).label) }}</span>
-          </span>
-          <span class="text-center text-xs">
-            <a v-if="taskItem.prUrl" :href="taskItem.prUrl" target="_blank" class="text-muted hover:text-highlighted" @click.stop>#{{ taskItem.prNumber }}</a>
-            <span v-else class="text-dimmed">—</span>
-          </span>
-          <span class="text-right text-xs text-dimmed tabular-nums">{{ fmt(taskItem.updatedAt) }}</span>
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs md:contents">
+            <span class="md:text-center">
+              <span class="inline-block whitespace-nowrap text-[10px] uppercase tracking-wider px-2 py-0.5 border rounded-full" :class="badge(taskItem.status).cls">{{ $t(badge(taskItem.status).label) }}</span>
+            </span>
+            <span class="md:text-center">
+              <a v-if="taskItem.prUrl" :href="taskItem.prUrl" target="_blank" class="text-muted hover:text-highlighted" @click.stop>#{{ taskItem.prNumber }}</a>
+              <span v-else class="text-dimmed">—</span>
+            </span>
+            <span class="text-dimmed tabular-nums md:text-right">{{ fmt(taskItem.updatedAt) }}</span>
+          </div>
         </div>
 
         <p v-if="!tasks?.length" class="py-16 text-center text-xs text-dimmed">{{ $t('feature.empty') }}</p>
