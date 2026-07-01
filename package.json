@@ -58,7 +58,7 @@
   "build": {
     "appId": "com.multireview.app",
     "productName": "Multi Review",
-    "artifactName": "${productName}-${version}-${arch}.${ext}",
+    "artifactName": "${name}-${version}-${arch}.${ext}",
     "npmRebuild": false,
     "directories": {
       "output": "release"

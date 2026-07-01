@@ -107,8 +107,10 @@ jobs:
           files: dist-artifacts/**/*
 
   # push 到 main 时,把三平台产物覆盖到滚动的 `nightly` 预发布上。
-  # 就地更新(而非先删后建):把 nightly tag 力推到本次 commit、--clobber 覆盖同名资产,
-  #   再清掉版本变化后不再产出的旧资产 → 资产保持干净,且「固定下载地址」全程不消失(无 404 空窗)。
+  # 就地更新(而非先删后建):release 已存在时不删除整份 release,只把 nightly tag 力推到本次 commit、
+  #   再用 --clobber 覆盖同名资产;首次才创建。消除了「先删后建」整份 release 短时消失的大空窗。
+  # 资产名靠无空格的 artifactName 保证本地名==服务端名(见 package.json build.artifactName),
+  #   nightly 版本号基本不变 → 每次产出文件名恒定,--clobber 逐个 1:1 覆盖,不残留过时资产。
   # 固定下载地址:github.com/<repo>/releases/tag/nightly(公开仓库免登录直下)。
   nightly:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -144,28 +146,25 @@ jobs:
           title="Nightly (main)"
           notes="Rolling build from the latest \`main\` (${GITHUB_SHA:0:7}). Overwritten on every merge — not a versioned release. macOS/Windows builds are unsigned; you may need to bypass Gatekeeper/SmartScreen on first launch."
 
-          # F2:「固定下载地址」不能有空窗。先删后建非原子 —— 配合 cancel-in-progress,若在删与建之间
-          #   被取消、或 create 因网络/一致性延迟失败,nightly release 与 tag 会被删掉却没重建,短时 404。
-          #   改为「就地更新」:release 已存在时全程不删除,只覆盖资产与元数据;首次才创建(create 加重试)。
+          # F2:「先删后建」会让固定下载地址短时整份 404(尤其配合 cancel-in-progress 在删与建之间被取消,
+          #   或 create 因网络/一致性延迟失败,release 与 tag 被删掉却没重建)。改为「就地更新」消除了这个大空窗:
+          #   release 已存在时全程不删除,只覆盖资产与元数据;首次才创建(create 加重试)。
+          #   说明:这仍不是严格原子操作 —— --clobber 对每个同名资产是「先删后传」,若 cancel-in-progress 恰好在
+          #   某个资产删除与重传之间取消本 job,该单个资产会短时缺失(gh 也会丢掉它的旧副本);但受影响至多是单个
+          #   文件、下次 push 即重传,不再是整份 release 消失。要彻底原子需临时命名+切换或给本 job 单独关掉
+          #   cancel-in-progress,权衡后按现状接受这一极小的单资产窗口。
           if gh release view nightly --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "nightly 已存在:就地覆盖资产与元数据(全程 release 不消失,无下载空窗)"
+            echo "nightly 已存在:就地覆盖资产与元数据(不删除整份 release,大空窗已消除;单个资产仍有极小重传窗口)"
             # 把 nightly tag 原子地力推到本次 commit(force update,不经历删除,无空窗);失败仅告警不阻断发布。
             gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/nightly" -f sha="$GITHUB_SHA" -F force=true \
               || echo "::warning::移动 nightly tag 到 ${GITHUB_SHA:0:7} 失败,release 资产仍会照常更新"
             # 刷新标题/说明/prerelease 标记。
             gh release edit nightly --repo "$GITHUB_REPOSITORY" --prerelease --title "$title" --notes "$notes"
-            # 覆盖同名资产(--clobber:同名先删后传)。
+            # 覆盖同名资产。artifactName 已改为无空格模板(package.json build.artifactName),本地文件名与 GitHub
+            #   服务端资产名一致,--clobber 能可靠匹配旧同名资产并替换。nightly 版本号基本不变 → 每次文件名恒定,
+            #   --clobber 逐个 1:1 覆盖,不会残留过时资产,因此不再单独跑「按名字比对删旧资产」的清理 —— 那步既多余,
+            #   又因本地名(含空格)与服务端名(空格被转成点)必然不等而会把刚上传的安装包全部误删。
             gh release upload nightly --repo "$GITHUB_REPOSITORY" --clobber "${assets[@]}"
-            # 清掉版本号变化后不再产出的旧资产,保持 release 资产干净(逐行整行比对,允许文件名含空格)。
-            new_names="$(for f in "${assets[@]}"; do basename "$f"; done)"
-            gh release view nightly --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' \
-              | while IFS= read -r name; do
-                  [ -n "$name" ] || continue
-                  if ! grep -Fxq -- "$name" <<<"$new_names"; then
-                    echo "删除过时资产:$name"
-                    gh release delete-asset nightly "$name" --repo "$GITHUB_REPOSITORY" --yes || true
-                  fi
-                done
           else
             echo "nightly 尚不存在:创建预发布(create 加重试,抵御网络/一致性抖动)"
             for attempt in 1 2 3; do
