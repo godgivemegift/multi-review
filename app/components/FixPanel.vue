@@ -28,7 +28,7 @@ let es: EventSource | null = null
 // load 竞态护栏（同 FeatureDrawer）：切 fix / 放弃时，旧 fix 在途的 load 迟到返回不能盖回 data。
 let loadToken = 0
 
-// 「允许危险命令」+「ultracode 后台激活」：一次开启后永久记住（localStorage，跨 PR/刷新），前缀后端注入。
+// 允许危险命令 + ultracode 后台激活：localStorage 持久（跨 PR/刷新，同 feature/global）；前缀后端注入。
 const allowDanger = ref(false)
 const ultracodeOn = ref(false)
 const LS_DANGER = 'mr.fix.allowDanger'
@@ -42,6 +42,29 @@ function toggleUltracode() {
   ultracodeOn.value = !ultracodeOn.value
   if (import.meta.client) localStorage.setItem(LS_ULTRA, ultracodeOn.value ? '1' : '0')
 }
+
+// 决策卡（同 FeatureDrawer）：最后一条 assistant 轮含 ```ask-user 块 → 问题+选项；点选项=下一条消息。
+const otherAnswer = ref('')
+const ASK_RE = /```ask-user\s*\n([\s\S]*?)```/i
+const IS_OPT = /^(?:[-*]|\d+[.)])\s+/
+const askCard = computed(() => {
+  const ts = data.value?.turns ?? []
+  const last = ts[ts.length - 1]
+  if (!last || last.role !== 'assistant' || last.status === 'streaming') return null
+  const m = last.content.match(ASK_RE)
+  if (!m) return null
+  const lines = m[1]!.split('\n').map((l) => l.trim()).filter(Boolean)
+  const options = lines.filter((l) => IS_OPT.test(l)).map((l) => l.replace(IS_OPT, '').trim()).filter(Boolean)
+  const question = lines.filter((l) => !IS_OPT.test(l)).join('\n').trim()
+  return { question, options }
+})
+function askQuestionText(inner: string): string {
+  return inner.split('\n').map((l) => l.trim()).filter((l) => l && !IS_OPT.test(l)).join('\n')
+}
+function displayText(content: string, stripAsk: boolean): string {
+  return content.replace(/```ask-user\s*\n([\s\S]*?)```/gi, (_m, inner) => (stripAsk ? '' : askQuestionText(inner))).trim()
+}
+function optionLabel(o: string): string { return o.replace(/\s*[（(]\s*推荐\s*[)）]\s*$/i, '') }
 
 function hhmmss(iso?: string) {
   return new Date(iso ?? new Date().toISOString()).toLocaleTimeString(locale.value, { hour12: false })
@@ -132,10 +155,10 @@ watch([chatting, pushing, () => props.active], ([c, p, on]) => {
   else if (!active && pollTimer) { clearInterval(pollTimer); pollTimer = null }
 })
 
-async function sendChat() {
-  const msg = chatInput.value.trim()
-  if (!msg || chatting.value || !!busy.value) return
-  chatInput.value = ''
+async function sendChat(overrideMsg?: string): Promise<boolean> {
+  const msg = (overrideMsg ?? chatInput.value).trim()
+  if (!msg || chatting.value || !!busy.value) return false
+  if (overrideMsg == null) chatInput.value = ''
   liveAssistant.value = ''
   try {
     // 惰性创建：还没有 fix 行就先建一个（不跑验证），再发第一条
@@ -147,11 +170,16 @@ async function sendChat() {
     }
     await $fetch(`/api/fixes/${currentFixId.value}/chat`, { method: 'POST', body: { message: msg, allowDanger: allowDanger.value, ultracode: ultracodeOn.value } })
     await load()
+    return true
   } catch (e: any) {
-    chatInput.value = msg
+    if (overrideMsg == null) chatInput.value = msg
     notify(e?.data?.statusMessage || t('common.failed'))
+    return false
   }
 }
+// 决策卡选项 / 「其它…」自由回答（发失败不丢用户手打的文本）
+function answer(opt: string) { void sendChat(optionLabel(opt)) }
+function answerOther() { const v = otherAnswer.value.trim(); if (!v) return; sendChat(v).then((ok) => { if (ok) otherAnswer.value = '' }) }
 async function stopChat() {
   try { await $fetch(`/api/fixes/${currentFixId.value}/stop`, { method: 'POST' }); await load() }
   catch (e: any) { notify(e?.data?.statusMessage || t('common.failed')) }
@@ -285,13 +313,26 @@ async function copyWorktree() {
               <span class="text-[10px] uppercase tracking-wider text-dimmed mr-1.5">{{ $t('fix.you') }}</span>{{ turn.content }}
             </div>
             <div v-else class="text-toned leading-relaxed">
-              <MarkdownBody :text="turn.status === 'streaming' && ti === data.turns.length - 1 && liveAssistant ? liveAssistant : turn.content" />
+              <MarkdownBody :text="turn.status === 'streaming' && ti === data.turns.length - 1 && liveAssistant ? liveAssistant : displayText(turn.content, !!askCard && ti === data.turns.length - 1)" />
               <span v-if="turn.status === 'streaming'" class="animate-pulse">▍</span>
               <span v-if="turn.status === 'stopped'" class="text-[10px] text-dimmed ml-1">· {{ $t('fix.stoppedTag') }}</span>
               <span v-else-if="turn.status === 'error'" class="text-[10px] text-dimmed ml-1">· {{ $t('common.failed') }}</span>
             </div>
           </div>
         </template>
+
+        <!-- 决策卡（agent 在等你拍板；同 feature 开发）-->
+        <div v-if="askCard" class="rounded border border-inverted p-3 space-y-2 mb-3">
+          <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed">{{ $t('feature.decisionTitle') }}</div>
+          <p v-if="askCard.question" class="text-sm font-medium whitespace-pre-wrap text-highlighted">{{ askCard.question }}</p>
+          <div v-if="askCard.options.length" class="flex flex-col gap-1.5">
+            <button v-for="(o, i) in askCard.options" :key="i" class="text-left text-sm border border-default rounded px-3 py-1.5 hover:border-inverted hover:bg-elevated/40 disabled:opacity-40" :disabled="chatting || !!busy" @click="answer(o)">{{ o }}</button>
+          </div>
+          <div class="flex items-center gap-2 pt-1">
+            <input v-model="otherAnswer" :placeholder="$t('feature.decisionOther')" class="flex-1 text-sm border-b border-default focus:border-inverted outline-none py-1 bg-transparent" :disabled="chatting || !!busy" @keydown.enter="answerOther" />
+            <button class="text-xs text-dimmed hover:text-highlighted disabled:opacity-40" :disabled="chatting || !!busy || !otherAnswer.trim()" @click="answerOther">{{ $t('fix.send') }}</button>
+          </div>
+        </div>
 
         <!-- 对话进行中：活动指示（步骤详情看上方「展开日志」） -->
         <div v-if="chatting" class="mb-3 flex items-center gap-2 text-xs text-toned">
@@ -301,9 +342,9 @@ async function copyWorktree() {
       </div>
 
       <!-- 输入条（固定钉在最底） -->
-      <div class="shrink-0 border-t border-default pt-3 mt-1 space-y-2">
-        <!-- 允许危险命令（默认拦 git push / gh pr create——本来 fix agent 能自己推，现在默认堵上；开了才放行）-->
-        <label class="flex items-center gap-2 text-[11px] cursor-pointer">
+      <div class="shrink-0 border-t border-default pt-3 mt-1">
+        <!-- 允许危险命令（默认拦 git push / gh pr create；开了才放行，同 feature/global）-->
+        <label class="flex items-center gap-2 text-[11px] cursor-pointer mb-2">
           <input v-model="allowDanger" type="checkbox" class="accent-error" />
           <span :class="allowDanger ? 'text-error' : 'text-dimmed'">{{ allowDanger ? $t('global.dangerOn') : $t('global.dangerOff') }}</span>
         </label>
@@ -311,7 +352,7 @@ async function copyWorktree() {
           v-model="chatInput" rows="3" :placeholder="$t('fix.chatPlaceholder')" :disabled="chatting"
           class="w-full text-sm bg-muted border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-accented disabled:opacity-50"
         />
-        <div class="flex items-center gap-3">
+        <div class="mt-2 flex items-center gap-3">
           <!-- ultracode 后台激活：未激活=灰渐变，激活=紫渐变+扫光；点一次永久记住 -->
           <button
             type="button"
@@ -336,7 +377,7 @@ async function copyWorktree() {
           </button>
           <div class="ml-auto">
             <button v-if="chatting" class="w-24 text-sm border border-accented py-1.5 hover:bg-muted" @click="stopChat">{{ $t('fix.stop') }}</button>
-            <button v-else class="w-24 text-sm bg-inverted text-inverted py-1.5 hover:bg-inverted/90 disabled:opacity-40" :disabled="!chatInput.trim() || !!busy" @click="sendChat">{{ $t('fix.send') }}</button>
+            <button v-else class="w-24 text-sm bg-inverted text-inverted py-1.5 hover:bg-inverted/90 disabled:opacity-40" :disabled="!chatInput.trim() || !!busy" @click="sendChat()">{{ $t('fix.send') }}</button>
           </div>
         </div>
       </div>

@@ -53,6 +53,7 @@ export const reviews = sqliteTable('reviews', {
       'reviewing',
       'draft',
       'ready_to_post',
+      'posting', // 发评论「认领」中：组装/翻译/发布的整个窗口占住此状态，防并发重复发/发旧内容
       'posted',
       'recheck_requested',
       'rechecking',

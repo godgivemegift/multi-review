@@ -3,6 +3,7 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { prepareFeatureWorktree } from '../git/worktree'
 import { runFeatureChat } from '../agent/featureChat'
+import { genFeatureTitle } from '../agent/featureTitle'
 import { appendTurns } from '../db/turns'
 import { makeEmit } from '../streaming/emit'
 import { sessionFields } from '../agent/session'
@@ -91,6 +92,7 @@ export type FeatureDevelopJobCtx = {
   repo: string // owner/name，回查 gh PR 用
   provider: ReviewProvider
   model: string
+  translateModel: string // 便宜/快模型（生成任务标题用；跟随 provider，同 assembleReview 的 translate）
   effort?: string
   lang: string
   allowDanger?: boolean // 用户开了「允许危险命令」/ 点了「开 PR」→ 放行危险命令守卫（含 git push / gh pr create）
@@ -124,11 +126,13 @@ export async function runFeatureDevelopJob(ctx: FeatureDevelopJobCtx, message: s
 
     // 送给 agent 的消息（可能被增强/前缀）；存库/展示的仍是原始干净 message。
     let agentMessage = message
+    let issueEnriched = '' // 首轮抓到的 issue 正文，也喂给「读懂需求」标题生成
     // 首轮：抓 issue/PR 正文 + 下载配图（agent 上不了网、下不了图；只做一次）。
     if (isFirstTurn) {
       try {
         const ic = await fetchIssueContext(`${t0?.description || ''}\n${message || ''}`, join(ctx.assetsDir, taskId))
         if (ic) {
+          issueEnriched = ic.enrichedText
           agentMessage = `${message}\n\n【需求相关的 issue/PR 内容（后端已抓取）】\n${ic.enrichedText}`
           if (ic.imagePaths.length) {
             agentMessage += `\n\n【配图（已下载到本地，先用 Read 逐张打开看再动手）】\n${ic.imagePaths.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
@@ -139,8 +143,13 @@ export async function runFeatureDevelopJob(ctx: FeatureDevelopJobCtx, message: s
         emit('stage', `issue/PR 抓取失败，用原始需求继续：${(e as Error).message}`)
       }
     }
-    // ultracode 后台激活：harness 认这个关键词 → agent 走 xhigh + 多代理。
-    if (ctx.ultracode) agentMessage = `ultracode: ${agentMessage}`
+    // 首轮且还没标题：读懂需求生成一句短标题（便宜快模型，后台异步不阻塞 develop；失败则列表回退显示描述）。
+    if (isFirstTurn && !t0?.title) {
+      void genFeatureTitle({ provider: ctx.provider, model: ctx.translateModel, requirement: `${t0?.description || message}\n${issueEnriched}`, lang: ctx.lang, cwd: ctx.localPath })
+        .then((title) => { if (title) db.update(schema.featureTasks).set({ title, updatedAt: now() }).where(eq(schema.featureTasks.id, taskId)).run() })
+        .catch(() => { /* 生成失败无所谓，列表回退显示描述 */ })
+    }
+    // ultracode 前缀由共享运行器（chat.ts / runCodexChat）按 flag 注入，这里不再拼。
 
     // 确保新分支 worktree（首轮建；之后复用）。绝不碰真实本地 clone。
     const wtPath = await ensureFeatureWorktree({
@@ -159,6 +168,7 @@ export async function runFeatureDevelopJob(ctx: FeatureDevelopJobCtx, message: s
         sessionId: (ctx.provider === 'codex' ? cur?.codexSessionId : cur?.sessionId) ?? null,
         message: agentMessage,
         allowDanger: ctx.allowDanger,
+        ultracode: ctx.ultracode, // 前缀由运行器注入
         baseBranch: cur?.baseBranch || ctx.defaultBranch, // 开 PR 时 gh pr create --base 用它
 
         onSpawn: (cp) => activeFeatureChats.set(taskId, cp),

@@ -2,6 +2,7 @@ import { eq } from 'drizzle-orm'
 import { z } from 'zod'
 import os from 'node:os'
 import { existsSync } from 'node:fs'
+import { dirname, resolve } from 'node:path'
 import { schema } from '~core/db/client'
 import { runGlobalChatJob, isGlobalChatting, type GlobalChatJobCtx } from '~core/global/pipeline'
 
@@ -28,10 +29,14 @@ export default defineEventHandler(async (event) => {
   const cfg = useRuntimeConfig()
   const ctx: GlobalChatJobCtx = {
     db: d, schema, sessionId: id, cwd: workdir,
-    model: session.model || (cfg.anthropicModel as string) || '',
+    provider: (session.provider as 'claude' | 'codex') || 'claude',
+    // 不混用：codex 会话兜底用 codex 模型（空=Codex 默认），别把 claude 模型塞进 codex。
+    model: session.model || (session.provider === 'codex' ? (cfg.codexModel as string) : (cfg.anthropicModel as string)) || '',
     effort: session.effort || (cfg.globalEffort as string) || undefined,
+    lang: getCookie(event, 'mr-locale') || 'zh',
     allowDanger: !!allowDanger,
     ultracode: !!ultracode,
+    assetsDir: resolve(process.cwd(), dirname(cfg.dbPath as string), 'issue-assets'),
   }
   void runGlobalChatJob(ctx, message).catch((e) => console.error('[global-chat] job failed', e))
   return { ok: true, cwd: workdir }

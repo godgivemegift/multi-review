@@ -9,7 +9,7 @@
 //  - 终止性：自动修复/复查只在 round < max 时触发，round 单调增 → 最多 max 次写码必然熄火；或更早走「收敛」出口。
 
 // 审核任务「在跑」的状态（引擎也会跳过，但这里再兜底当作 wait）
-export const REVIEW_INFLIGHT = ['queued', 'cloning', 'reviewing', 'recheck_requested', 'rechecking']
+export const REVIEW_INFLIGHT = ['queued', 'cloning', 'reviewing', 'recheck_requested', 'rechecking', 'posting']
 // 审核「跑完、有结果可据此动手」的状态（error 不算——审失败了没 findings 可修，留人工）
 const REVIEW_TERMINAL = ['draft', 'posted', 'ready_to_post']
 

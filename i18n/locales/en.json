@@ -63,7 +63,8 @@
       "posted": "Comment posted",
       "recheck_requested": "Recheck pending",
       "rechecking": "Rechecking",
-      "error": "Error"
+      "error": "Error",
+      "posting": "Posting"
     },
     "pr": {
       "open": "Open",
@@ -412,7 +413,8 @@
       "posted": "Comment posted",
       "recheck_requested": "Recheck pending",
       "rechecking": "Rechecking",
-      "error": "Error"
+      "error": "Error",
+      "posting": "Posting"
     },
     "rc": {
       "fixed": "✓ Fixed",
@@ -515,7 +517,13 @@
     "openPrMsg": "Please open a PR for this: commit with an English conventional-commit message, push the branch, and run gh pr create with an English title + body. Then reply with the PR URL.",
     "chatPlaceholder": "Keep chatting to build / ask for changes… (click Open PR when you’re happy)",
     "discard": "Delete task",
-    "discardConfirm": "Delete this task? (incl. worktree, irreversible)"
+    "discardConfirm": "Delete this task? (incl. worktree, irreversible)",
+    "col": {
+      "title": "Title",
+      "status": "Status",
+      "pr": "PR",
+      "updated": "Updated"
+    }
   },
   "remote": {
     "title": "Remote access",

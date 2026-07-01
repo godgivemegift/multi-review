@@ -125,6 +125,32 @@ watch(chatting, (on) => {
   else load() // 轮结束兜底刷新
 })
 
+// 决策卡（同 feature/fix）：最后一条 assistant 轮含 ```ask-user 块 → 问题+选项；点选项=下一条消息（自由回答用输入框）。
+const ASK_RE = /```ask-user\s*\n([\s\S]*?)```/i
+const IS_OPT = /^(?:[-*]|\d+[.)])\s+/
+const askCard = computed(() => {
+  const ts = data.value?.turns ?? []
+  const last = ts[ts.length - 1]
+  if (!last || last.role !== 'assistant' || last.status === 'streaming') return null
+  const m = last.content.match(ASK_RE)
+  if (!m) return null
+  const lines = m[1]!.split('\n').map((l) => l.trim()).filter(Boolean)
+  const options = lines.filter((l) => IS_OPT.test(l)).map((l) => l.replace(IS_OPT, '').trim()).filter(Boolean)
+  const question = lines.filter((l) => !IS_OPT.test(l)).join('\n').trim()
+  return { question, options }
+})
+function askQuestionText(inner: string): string {
+  return inner.split('\n').map((l) => l.trim()).filter((l) => l && !IS_OPT.test(l)).join('\n')
+}
+function displayText(content: string, stripAsk: boolean): string {
+  return content.replace(/```ask-user\s*\n([\s\S]*?)```/gi, (_m, inner) => (stripAsk ? '' : askQuestionText(inner))).trim()
+}
+function answer(opt: string) {
+  if (chatting.value || busy.value) return
+  input.value = opt.replace(/\s*[（(]\s*推荐\s*[)）]\s*$/i, '')
+  send(true) // 绕开 slash 拦截
+}
+
 // ── 命令面板(自建)──
 const COMMANDS = [
   { cmd: '/clear', desc: () => t('global.cmd.clear') },
@@ -171,11 +197,11 @@ async function handleSlash(raw: string): Promise<boolean> {
 
 const pendingCwd = ref<string | null>(null)
 
-async function send() {
+async function send(skipSlash = false) {
   const msg = input.value.trim()
   if (!msg || chatting.value || busy.value) return
-  // 命令优先
-  if (msg.startsWith('/') && await handleSlash(msg)) return
+  // 命令优先（决策卡回答走 skipSlash：选项文本万一以 /clear 之类开头别被当命令吞掉）
+  if (!skipSlash && msg.startsWith('/') && await handleSlash(msg)) return
   input.value = ''
   liveAssistant.value = ''
   try {
@@ -291,9 +317,17 @@ function hhmmss(iso?: string) { return new Date(iso ?? new Date().toISOString())
               <div v-if="turn.role === 'user'" class="inline-block max-w-[90%] text-left text-sm rounded-lg px-3 py-2 whitespace-pre-wrap break-words bg-inverted text-inverted">{{ turn.content }}</div>
               <!-- assistant：markdown 渲染 -->
               <div v-else class="inline-block max-w-[90%] text-left text-sm rounded-lg px-3 py-2 break-words bg-muted">
-                <MarkdownBody :text="turn.status === 'streaming' && ti === (data?.turns.length ?? 0) - 1 && liveAssistant ? liveAssistant : turn.content" />
+                <MarkdownBody :text="turn.status === 'streaming' && ti === (data?.turns.length ?? 0) - 1 && liveAssistant ? liveAssistant : displayText(turn.content, !!askCard && ti === (data?.turns.length ?? 0) - 1)" />
                 <span v-if="turn.status === 'streaming'" class="animate-pulse">▍</span>
                 <span v-if="turn.status === 'stopped'" class="text-[10px] text-dimmed ml-1">· {{ $t('fix.stoppedTag') }}</span>
+              </div>
+            </div>
+            <!-- 决策卡（agent 在等你拍板；同 feature/fix）。自由回答用下方输入框。 -->
+            <div v-if="askCard" class="rounded border border-inverted p-3 space-y-2 text-left">
+              <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed">{{ $t('feature.decisionTitle') }}</div>
+              <p v-if="askCard.question" class="text-sm font-medium whitespace-pre-wrap">{{ askCard.question }}</p>
+              <div v-if="askCard.options.length" class="flex flex-col gap-1.5">
+                <button v-for="(o, i) in askCard.options" :key="i" class="text-left text-sm border border-default rounded px-3 py-1.5 hover:border-inverted hover:bg-elevated/40 disabled:opacity-40" :disabled="chatting || busy" @click="answer(o)">{{ o }}</button>
               </div>
             </div>
             <div v-if="chatting" class="text-xs text-toned flex items-center gap-2">
@@ -333,7 +367,7 @@ function hhmmss(iso?: string) { return new Date(iso ?? new Date().toISOString())
                 </span>
               </button>
               <button v-if="chatting" class="w-24 text-sm border border-accented rounded py-1.5 hover:bg-muted" @click="stop">{{ $t('fix.stop') }}</button>
-              <button v-else class="w-24 text-sm bg-inverted text-inverted rounded py-1.5 hover:bg-inverted/90 disabled:opacity-40" :disabled="!input.trim() || busy" @click="send">{{ $t('global.send') }}</button>
+              <button v-else class="w-24 text-sm bg-inverted text-inverted rounded py-1.5 hover:bg-inverted/90 disabled:opacity-40" :disabled="!input.trim() || busy" @click="send()">{{ $t('global.send') }}</button>
             </div>
           </div>
         </template>

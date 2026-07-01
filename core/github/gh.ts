@@ -14,9 +14,11 @@ export class GhError extends Error {
 }
 
 // 统一调用本地已登录的 gh CLI（继承用户的 GitHub 认证）。
-async function gh(args: string[]): Promise<string> {
+// timeoutMs：可选，给「在 review 'posting' 认领窗口内跑」的调用用（如 fetchPrDiff）——gh 无限挂起会把行永久卡住。
+// 默认不设超时（分页 --paginate/--slurp 的长拉取不该被砍）。
+async function gh(args: string[], timeoutMs?: number): Promise<string> {
   try {
-    const { stdout } = await pexec('gh', args, { maxBuffer: 1024 * 1024 * 32 })
+    const { stdout } = await pexec('gh', args, { maxBuffer: 1024 * 1024 * 32, ...(timeoutMs ? { timeout: timeoutMs } : {}) })
     return stdout
   } catch (e: any) {
     const stderr = e?.stderr?.toString?.() ?? ''
@@ -292,7 +294,8 @@ export async function fetchTimeline(repo: string, prNumber: number): Promise<Tim
 
 const MAX_DIFF = 400_000 // 超大 diff 截断，避免拖垮 drawer
 export async function fetchPrDiff(repo: string, prNumber: number): Promise<{ diff: string; truncated: boolean }> {
-  const out = await gh(['pr', 'diff', String(prNumber), '--repo', repo])
+  // 60s 超时：发评论时在 review 的 'posting' 窗口内跑，gh 挂起不能让行永久卡在 'posting'（超时→抛→端点 restore）。
+  const out = await gh(['pr', 'diff', String(prNumber), '--repo', repo], 60_000)
   if (out.length > MAX_DIFF) return { diff: out.slice(0, MAX_DIFF), truncated: true }
   return { diff: out, truncated: false }
 }
