@@ -14,5 +14,6 @@ data/
 dist
 .cache
 release/
+electron/build-info.json
 .vscode/
 .idea/

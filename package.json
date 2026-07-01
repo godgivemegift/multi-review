@@ -15,7 +15,7 @@
     "typecheck": "nuxt typecheck",
     "test": "for f in tests/*.test.ts tests/*.contract.ts; do echo \"▸ $f\"; tsx \"$f\" || exit 1; done",
     "electron:dev": "concurrently -k -n nuxt,electron \"nuxt dev\" \"wait-on tcp:127.0.0.1:3000 && cross-env ELECTRON_RENDERER_URL=http://localhost:3000 electron .\"",
-    "electron:build": "nuxt build && node scripts/prepare-electron-sqlite.mjs",
+    "electron:build": "nuxt build && node scripts/prepare-electron-sqlite.mjs && node scripts/write-build-info.mjs",
     "electron:preview": "pnpm electron:build && electron .",
     "electron:dist": "pnpm electron:build && electron-builder --publish=never"
   },
