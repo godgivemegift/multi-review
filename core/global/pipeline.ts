@@ -1,15 +1,20 @@
 import { eq } from 'drizzle-orm'
+import { join } from 'node:path'
 import { appendTurns } from '../db/turns'
 import { makeEmit } from '../streaming/emit'
 import { runGlobalChat } from '../agent/globalChat'
+import { sessionFields } from '../agent/session'
+import { fetchIssueContext } from '../github/issueAssets'
 import type { ChildProcess } from 'node:child_process'
+import type { ReviewProvider } from '../agent/runners'
 
-// 全局会话 = 一个常驻的「啥都能干」对话。照 fix/pipeline 的骨架（并发锁/turns/SSE/停止/自愈），
-// 但没有 worktree/上传那些阶段——它就是自由聊天 + 直接动手。SSE 频道用 `g:<sessionId>` 防与 fix/review 撞。
+// 全局会话 = 一个常驻的「啥都能干」对话。和 feature/fix 统一：claude/codex 双 provider、图片读取、ultracode、
+// 危险命令守卫、决策卡都走共享能力（chat.ts / runCodexChat）。SSE 频道用 `g:<sessionId>`。
 export const globalChan = (id: string) => `g:${id}`
 
 const chatLocks = new Set<string>()
 const activeChats = new Map<string, ChildProcess>()
+const activeChatStops = new Map<string, () => void>() // codex runner 的 abort 句柄
 const stopRequested = new Set<string>()
 
 export function isGlobalChatting(id: string): boolean {
@@ -17,20 +22,20 @@ export function isGlobalChatting(id: string): boolean {
 }
 
 export function stopGlobalChat(id: string): boolean {
+  const stop = activeChatStops.get(id)
+  if (stop) { stopRequested.add(id); stop(); return true }
   const cp = activeChats.get(id)
   if (!cp || cp.pid == null) return false
   stopRequested.add(id)
   const pid = cp.pid
-  // 子进程 detached 起的进程组组长 → 给整组发 SIGINT（等同 Ctrl+C），1.5s 没退强杀。
   try { process.kill(-pid, 'SIGINT') } catch { try { cp.kill('SIGINT') } catch { /* 已退出 */ } }
   setTimeout(() => { try { process.kill(-pid, 'SIGKILL') } catch { /* 已退出 */ } }, 1500)
   return true
 }
 
-// 进程退出(app 关闭)时把所有在跑的全局会话停掉,别把 detached agent 留成孤儿。
 export function stopAllGlobalChats(): boolean {
   let any = false
-  for (const id of [...activeChats.keys()]) any = stopGlobalChat(id) || any
+  for (const id of new Set([...activeChats.keys(), ...activeChatStops.keys()])) any = stopGlobalChat(id) || any
   return any
 }
 
@@ -38,11 +43,14 @@ export type GlobalChatJobCtx = {
   db: any
   schema: any
   sessionId: string
+  provider: ReviewProvider
   cwd: string
   model: string
-  effort?: string // 空 = claude 默认
-  allowDanger?: boolean // 用户开了「允许危险命令」开关 → 放行 PreToolUse 守卫
-  ultracode?: boolean // 用户开了「ultracode」后台激活 → 给 agent 的消息前缀注入 `ultracode:`（存库仍是干净消息）
+  effort?: string // 空 = 默认
+  lang: string
+  allowDanger?: boolean // 用户开了「允许危险命令」开关 → 放行守卫
+  ultracode?: boolean // 后台激活 ultracode（前缀由运行器注入）
+  assetsDir: string // issue/PR 配图下载根目录
 }
 
 export async function runGlobalChatJob(ctx: GlobalChatJobCtx, message: string): Promise<void> {
@@ -50,42 +58,62 @@ export async function runGlobalChatJob(ctx: GlobalChatJobCtx, message: string): 
   const now = () => new Date().toISOString()
   const emit = makeEmit({ channel: globalChan(sessionId), now }) // global 不落库（不传 eventTable）
   const row = () => db.select().from(schema.globalSessions).where(eq(schema.globalSessions.id, sessionId)).get()
+  const saveSession = (sid: string | null) => sessionFields(ctx.provider, sid)
 
-  // 并发锁：进函数立即占，整个 job 结束才释放。
   if (chatLocks.has(sessionId)) return
   chatLocks.add(sessionId)
 
-  let asstId = '' // appendTurns 里赋值；flush 闭包按变量捕获（赋值在流式开始前完成）。
+  let asstId = ''
   let acc = ''
   let lastWrite = 0
   const flush = (status: string) =>
     db.update(schema.globalTurns).set({ content: acc, status }).where(eq(schema.globalTurns.id, asstId)).run()
 
-  // 整段放进 try/finally：建轮/写库即使抛了也保证释放锁（否则会话永久卡 busy）。
   try {
-    // append-only：user 轮 + assistant 占位轮（流式写入）。
     asstId = appendTurns({ db, turnTable: schema.globalTurns, fkField: 'sessionId', fkValue: sessionId, now, message }).assistantId
     db.update(schema.globalSessions).set({ status: 'streaming', lastUsedAt: now() }).where(eq(schema.globalSessions.id, sessionId)).run()
     emit('chat', 'user')
 
-    let stopped = false
-    let newSessionId: string | null = row()?.sessionId ?? null
+    // 图片/issue 读取（统一）：消息里引用的 GitHub issue/PR → 抓正文 + 下载配图（含私有附件，用 gh token）→ 喂路径。
+    let agentMessage = message
     try {
-      const cur = row()
-      const r = await runGlobalChat({
+      const ic = await fetchIssueContext(message, join(ctx.assetsDir, `g-${sessionId}`))
+      if (ic) {
+        agentMessage = `${message}\n\n【消息里引用的 issue/PR 内容（后端已抓取）】\n${ic.enrichedText}`
+        if (ic.imagePaths.length) {
+          agentMessage += `\n\n【配图（已下载到本地，先用 Read 逐张打开看）】\n${ic.imagePaths.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
+        }
+        emit('stage', `已抓取 issue/PR 内容（${ic.summary}）`)
+      }
+    } catch (e) {
+      emit('stage', `issue/PR 抓取失败，用原始消息继续：${(e as Error).message}`)
+    }
+
+    let stopped = false
+    const cur = row()
+    const resumeId: string | null = (ctx.provider === 'codex' ? cur?.codexSessionId : cur?.sessionId) ?? null
+    let newSessionId: string | null = resumeId
+    try {
+      const r = await runGlobalChat(ctx.provider, {
         cwd: ctx.cwd,
         model: ctx.model,
         effort: ctx.effort,
+        lang: ctx.lang,
+        sessionId: resumeId,
+        message: agentMessage,
         allowDanger: ctx.allowDanger,
-        sessionId: cur?.sessionId ?? null,
-        // 后台激活 ultracode：只在送给 agent 的消息上加前缀（harness 认这个关键词），入库/展示仍是干净消息。
-        message: ctx.ultracode ? `ultracode: ${message}` : message,
+        ultracode: ctx.ultracode,
         onSpawn: (cp) => activeChats.set(sessionId, cp),
+        onStop: (stop) => activeChatStops.set(sessionId, stop),
+        onSessionId: (sid) => {
+          newSessionId = sid
+          db.update(schema.globalSessions).set({ ...saveSession(sid), lastUsedAt: now() }).where(eq(schema.globalSessions.id, sessionId)).run()
+        },
         onTool: (name, info) => emit('tool', `${name} ${info}`),
         onText: (t) => {
           acc += t
           const n = new Date().getTime()
-          if (n - lastWrite > 400) { lastWrite = n; flush('streaming') } // 节流写库
+          if (n - lastWrite > 400) { lastWrite = n; flush('streaming') }
           emit('text', t)
         },
       })
@@ -96,19 +124,20 @@ export async function runGlobalChatJob(ctx: GlobalChatJobCtx, message: string): 
       else throw e
     } finally {
       activeChats.delete(sessionId)
+      activeChatStops.delete(sessionId)
       stopRequested.delete(sessionId)
     }
     flush(stopped ? 'stopped' : 'done')
-    // 首条消息后用它做标题（截断），方便历史列表展示。
-    const cur = row()
-    const title = cur?.title || message.trim().slice(0, 60)
+    const c2 = row()
+    const title = c2?.title || message.trim().slice(0, 60)
     db.update(schema.globalSessions)
-      .set({ sessionId: newSessionId, status: 'idle', error: null, title, lastUsedAt: now() })
+      .set({ ...saveSession(newSessionId), status: 'idle', error: null, title, lastUsedAt: now() })
       .where(eq(schema.globalSessions.id, sessionId))
       .run()
     emit('chat', stopped ? 'stopped' : 'done')
   } catch (e) {
     activeChats.delete(sessionId)
+    activeChatStops.delete(sessionId)
     stopRequested.delete(sessionId)
     flush('error')
     const errMsg = (e as Error).message
@@ -117,6 +146,7 @@ export async function runGlobalChatJob(ctx: GlobalChatJobCtx, message: string): 
   } finally {
     chatLocks.delete(sessionId)
     activeChats.delete(sessionId)
+    activeChatStops.delete(sessionId)
     stopRequested.delete(sessionId)
   }
 }

@@ -149,8 +149,7 @@ export async function runFeatureDevelopJob(ctx: FeatureDevelopJobCtx, message: s
         .then((title) => { if (title) db.update(schema.featureTasks).set({ title, updatedAt: now() }).where(eq(schema.featureTasks.id, taskId)).run() })
         .catch(() => { /* 生成失败无所谓，列表回退显示描述 */ })
     }
-    // ultracode 后台激活：harness 认这个关键词 → agent 走 xhigh + 多代理。
-    if (ctx.ultracode) agentMessage = `ultracode: ${agentMessage}`
+    // ultracode 前缀由共享运行器（chat.ts / runCodexChat）按 flag 注入，这里不再拼。
 
     // 确保新分支 worktree（首轮建；之后复用）。绝不碰真实本地 clone。
     const wtPath = await ensureFeatureWorktree({
@@ -169,6 +168,7 @@ export async function runFeatureDevelopJob(ctx: FeatureDevelopJobCtx, message: s
         sessionId: (ctx.provider === 'codex' ? cur?.codexSessionId : cur?.sessionId) ?? null,
         message: agentMessage,
         allowDanger: ctx.allowDanger,
+        ultracode: ctx.ultracode, // 前缀由运行器注入
         baseBranch: cur?.baseBranch || ctx.defaultBranch, // 开 PR 时 gh pr create --base 用它
 
         onSpawn: (cp) => activeFeatureChats.set(taskId, cp),

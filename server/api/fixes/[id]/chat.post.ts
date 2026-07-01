@@ -1,15 +1,16 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
+import { dirname, resolve } from 'node:path'
 import { schema } from '~core/db/client'
 import { runFixChatJob, isChatting, type FixJobCtx } from '~core/fix/pipeline'
 
 // 对话工作区：fix task 创建后就能直接聊、直接让 AI 改代码，不必先跑一轮批量修复。
 // 一个会话就能干完后续精修。open/ready/error/pushed 可发；同一 fix 同时只允许一个 chat。
-const Body = z.object({ message: z.string().min(1).max(8000) })
+const Body = z.object({ message: z.string().min(1).max(8000), allowDanger: z.boolean().optional(), ultracode: z.boolean().optional() })
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
-  const { message } = Body.parse((await readBody(event)) || {})
+  const { message, allowDanger, ultracode } = Body.parse((await readBody(event)) || {})
   const cfg = useRuntimeConfig()
   const d = db()
 
@@ -37,6 +38,9 @@ export default defineEventHandler(async (event) => {
     model: rc.model,
     effort: rc.effort,
     lang: fix.lang || 'zh',
+    allowDanger: !!allowDanger,
+    ultracode: !!ultracode,
+    assetsDir: resolve(process.cwd(), dirname(cfg.dbPath as string), 'issue-assets'),
   }
   // fire-and-forget：长任务，进度走 SSE；错误已在 job 内部捕获落库。
   // 这里再兜底 log，避免 job 收尾自身抛错被静默吞掉。

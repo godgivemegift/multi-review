@@ -1,8 +1,10 @@
 import { nanoid } from 'nanoid'
 import { eq } from 'drizzle-orm'
 import { existsSync } from 'node:fs'
+import { join } from 'node:path'
 import { execFile } from 'node:child_process'
 import { promisify } from 'node:util'
+import { fetchIssueContext } from '../github/issueAssets'
 import { prepareWorktree, removeWorktree } from '../git/worktree'
 import { claudeChatRunner } from '../agent/claudeRunners'
 import { codexChatRunner } from '../agent/codexChat'
@@ -77,6 +79,9 @@ export type FixJobCtx = {
   model: string // 当前 provider 的实模型（不混用）
   effort?: string
   lang: string
+  allowDanger?: boolean // 放行危险命令守卫（含 git push / gh pr create），默认拦
+  ultracode?: boolean // 后台激活 ultracode（前缀由运行器注入）
+  assetsDir: string // issue/PR 配图下载根目录（读图统一）
 }
 
 // ── 共用的小工具 ──────────────────────────────────────────────
@@ -155,6 +160,20 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
       const wt = await ensureWorktree(ctx, h)
       const fix = h.row()
       let stopped = false
+      // 读图（统一）：reviewer 消息里引用的 GitHub issue/PR → 抓正文 + 下载配图（含私有附件，用 gh token）→ 喂路径。
+      let agentMessage = message
+      try {
+        const ic = await fetchIssueContext(message, join(ctx.assetsDir, `fix-${fixId}`))
+        if (ic) {
+          agentMessage = `${message}\n\n【消息里引用的 issue/PR 内容（后端已抓取）】\n${ic.enrichedText}`
+          if (ic.imagePaths.length) {
+            agentMessage += `\n\n【配图（已下载到本地，先用 Read 逐张打开看）】\n${ic.imagePaths.map((p, i) => `${i + 1}. ${p}`).join('\n')}`
+          }
+          h.emit('stage', `已抓取 issue/PR 内容（${ic.summary}）`)
+        }
+      } catch (e) {
+        h.emit('stage', `issue/PR 抓取失败，用原始消息继续：${(e as Error).message}`)
+      }
       // session 按 provider 各存各的列：claude→session_id，codex→codex_session_id。
       // 切换 provider 时各自 resume 自己的线程，不会拿对方的 id 去 resume（避免报错 / 串上下文 / 混用）。
       const saveSession = (sid: string | null) => sessionFields(ctx.provider, sid)
@@ -169,7 +188,9 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
           effort: ctx.effort,
           lang: ctx.lang,
           sessionId: resumeId,
-          message,
+          message: agentMessage,
+          allowDanger: ctx.allowDanger,
+          ultracode: ctx.ultracode,
           conflictHint: await conflictHint(wt.path),
           onSpawn: (cp) => activeChats.set(fixId, cp),
           onStop: (stop) => activeChatStops.set(fixId, stop),
