@@ -49,7 +49,10 @@ export default defineNitroPlugin((nitroApp) => {
       } catch (e: any) {
         const code = e?.statusCode ?? e?.response?.status
         const msg = e?.data?.statusMessage || e?.statusMessage || e?.message || '发评论失败'
-        // 不管哪种失败都把 review 推出 draft 止损，避免每轮重撞同一个错（用户要的「出问题就停止」）。
+        // 409 = 该 review 正被别的发布者/任务占用（posting / 审核在跑）→ 别碰状态（会踩掉持有者的 'posting' 认领）、
+        // 别止损、别停自动化，让持有者收尾即可；下一轮再看。
+        if (code === 409) return { posted: false }
+        // 其余失败把 review 推出 draft 止损，避免每轮重撞同一个错（post 端点失败时已把状态恢复到 draft，这里抬到 ready_to_post）。
         d.update(schema.reviews).set({ status: 'ready_to_post', updatedAt: now() }).where(eq(schema.reviews.id, reviewId)).run()
         // 400 = 没有可发内容（复查把 finding 全过滤）→ 正常，不算错误，静默；其它（翻译失败/网络/422）→ 当错误上报时间线。
         if (code === 400) return { posted: false }

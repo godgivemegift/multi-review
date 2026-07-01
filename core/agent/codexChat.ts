@@ -2,6 +2,7 @@ import { type ThreadEvent, type ThreadOptions } from '@openai/codex-sdk'
 import { classifyCodexError, extractCodexErrorMessage, formatCodexProviderError } from './codexErrors'
 import { isForbiddenRemoteOrGitMutation, newCodex, toCodexEffort } from './codexAgent'
 import { outputLangClause } from './lang'
+import { askUserClause } from './chat'
 import type { ChatRunner } from './runners'
 import type { FixChatOptions, FixChatResult } from './fixer'
 
@@ -26,6 +27,7 @@ export function shouldRetryCodexChatWithoutThread(error: unknown, hadSessionId: 
 
 function buildCodexChatPrompt(opts: FixChatOptions): string {
   if (opts.promptKind === 'feature') return buildCodexFeaturePrompt(opts)
+  if (opts.promptKind === 'global') return buildCodexGlobalPrompt(opts)
   const opening = opts.sessionId
     ? 'You are continuing the same Codex thread for this pull-request fix task in the same git worktree.'
     : 'You are starting a Codex chat for this pull-request fix task in a git worktree.'
@@ -44,7 +46,9 @@ This is a CONVERSATION, not a fresh review. Treat the reviewer's message below a
 Reviewer's message:
 ${opts.message}
 
-Reply briefly: answer their question, or describe what you changed. ${outputLangClause(opts.lang)}`
+Reply briefly: answer their question, or describe what you changed. ${outputLangClause(opts.lang)}
+
+${askUserClause(opts.lang)}`
 }
 
 // Feature 开发：在「从默认分支拉的新功能分支」worktree 里自由开发（不是修 PR）。
@@ -63,12 +67,32 @@ The current directory is that worktree — implement what the user asks by editi
 User's message:
 ${opts.message}
 
-Reply briefly: answer their question, or describe what you changed / propose next steps. ${outputLangClause(opts.lang)}`
+Reply briefly: answer their question, or describe what you changed / propose next steps. ${outputLangClause(opts.lang)}
+
+${askUserClause(opts.lang)}`
+}
+
+// 全局「啥都能干」助手（codex）：自由聊 + 直接动手。git 写/push 类会被「执行后」守卫拦（codex 的固有限制）。
+function buildCodexGlobalPrompt(opts: FixChatOptions): string {
+  const opening = opts.sessionId
+    ? 'You are continuing the same Codex thread as a general-purpose coding assistant.'
+    : 'You are a general-purpose coding assistant in a Codex thread.'
+  return `${opening}
+
+The current directory is the user's chosen working directory. Investigate and do whatever the user asks by editing files / running commands directly. Keep answers focused.
+
+User's message:
+${opts.message}
+
+Reply briefly. ${outputLangClause(opts.lang)}
+
+${askUserClause(opts.lang)}`
 }
 
 function emitCodexChatEvent(
   event: ThreadEvent,
   seenTextByItem: Map<string, number>,
+  enforceGitGuard: boolean, // fix/feature 有上传门控 → 拦 git 写；global 是「啥都能干」助手 → 不拦（沙箱/断网即边界，对齐 claude-global）
   onTool?: (name: string, info: string) => void,
   onText?: (text: string) => void,
 ): string | null {
@@ -89,7 +113,7 @@ function emitCodexChatEvent(
 
   if (item.type === 'command_execution') {
     onTool?.('CodexCommand', item.command.slice(0, 100))
-    if (isForbiddenRemoteOrGitMutation(item.command)) {
+    if (enforceGitGuard && isForbiddenRemoteOrGitMutation(item.command)) {
       throw new CodexChatError(`Codex chat attempted a forbidden git/GitHub mutation: ${item.command}`)
     }
   } else if (item.type === 'file_change') {
@@ -108,7 +132,8 @@ function emitCodexChatEvent(
 
 export async function runCodexChat(opts: FixChatOptions): Promise<FixChatResult> {
   const runTurn = async (sessionId: string | null): Promise<FixChatResult> => {
-    const runOpts = { ...opts, sessionId }
+    // ultracode 后台激活：给 agent 的消息注入前缀（与 claude 运行器一致；存库/展示仍是干净消息）。
+    const runOpts = { ...opts, sessionId, message: opts.ultracode ? `ultracode: ${opts.message}` : opts.message }
     // 用共享的 newCodex()：它带 codexPathOverride，绕开 nitro 打包后找不到二进制的问题。
     const codex = newCodex()
     const effort = toCodexEffort(runOpts.effort)
@@ -140,7 +165,7 @@ export async function runCodexChat(opts: FixChatOptions): Promise<FixChatResult>
     let text = ''
     for await (const event of events) {
       if (event.type === 'thread.started') runOpts.onSessionId?.(event.thread_id)
-      const finalText = emitCodexChatEvent(event, seenTextByItem, runOpts.onTool, runOpts.onText)
+      const finalText = emitCodexChatEvent(event, seenTextByItem, runOpts.promptKind !== 'global', runOpts.onTool, runOpts.onText)
       if (finalText != null) text = finalText
     }
 

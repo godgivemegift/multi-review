@@ -1,5 +1,6 @@
 import { eq } from 'drizzle-orm'
 import { z } from 'zod'
+import { dirname, resolve } from 'node:path'
 import { schema } from '~core/db/client'
 import { runFixChatJob, isChatting, type FixJobCtx } from '~core/fix/pipeline'
 
@@ -39,6 +40,7 @@ export default defineEventHandler(async (event) => {
     lang: fix.lang || 'zh',
     allowDanger: !!allowDanger,
     ultracode: !!ultracode,
+    assetsDir: resolve(process.cwd(), dirname(cfg.dbPath as string), 'issue-assets'),
   }
   // fire-and-forget：长任务，进度走 SSE；错误已在 job 内部捕获落库。
   // 这里再兜底 log，避免 job 收尾自身抛错被静默吞掉。

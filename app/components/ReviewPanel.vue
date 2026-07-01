@@ -90,10 +90,10 @@ onBeforeUnmount(() => { alive = false; es?.close() })
 // 审核状态文案：存 i18n 键，缺失回退原始 status 码
 const STATUS: Record<string, string> = {
   queued: 'review.status.queued', cloning: 'review.status.cloning', reviewing: 'review.status.reviewing', draft: 'review.status.draft',
-  ready_to_post: 'review.status.ready_to_post', posted: 'review.status.posted', recheck_requested: 'review.status.recheck_requested', rechecking: 'review.status.rechecking', error: 'review.status.error',
+  ready_to_post: 'review.status.ready_to_post', posting: 'review.status.posting', posted: 'review.status.posted', recheck_requested: 'review.status.recheck_requested', rechecking: 'review.status.rechecking', error: 'review.status.error',
 }
 function statusLabel(s: string) { const k = STATUS[s]; return k ? t(k) : s }
-const running = computed(() => ['queued', 'cloning', 'reviewing', 'recheck_requested', 'rechecking'].includes(data.value?.review?.status))
+const running = computed(() => ['queued', 'cloning', 'reviewing', 'recheck_requested', 'rechecking', 'posting'].includes(data.value?.review?.status))
 
 async function startReview() {
   busy.value = 'start'

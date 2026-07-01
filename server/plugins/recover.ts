@@ -38,6 +38,18 @@ export default defineNitroPlugin(async () => {
     console.error('[recover] 审核任务启动恢复失败', e)
   }
 
+  // 1.5) 发评论中断（posting）：agent 阶段早已结束、findings 完好，只是发布窗口随进程崩了。
+  // 重置为 ready_to_post（不自动重发——发布可能已到 GitHub，自动重发会重复评论；由用户在 UI 决定是否再发）。
+  try {
+    const stuck = d.select().from(schema.reviews).where(eq(schema.reviews.status, 'posting' as any)).all()
+    for (const r of stuck as any[]) {
+      d.update(schema.reviews).set({ status: 'ready_to_post', updatedAt: now() }).where(eq(schema.reviews.id, r.id)).run()
+    }
+    if (stuck.length) console.log(`[recover] 重置了 ${stuck.length} 个中断的发布（posting → ready_to_post，请在 GitHub 确认后再决定是否重发）`)
+  } catch (e) {
+    console.error('[recover] posting 启动恢复失败', e)
+  }
+
   // 2) pushing 中断：push 可能已经到 GitHub 了（只是没写回 DB）。对账 origin/<branch> 与 fixHeadSha：
   // 一致 = 已成功 → pushed；否则 → error（让用户重新上传，push 幂等无副作用）。
   try {

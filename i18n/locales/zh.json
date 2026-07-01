@@ -63,7 +63,8 @@
       "posted": "已发评论",
       "recheck_requested": "待复审",
       "rechecking": "复审中",
-      "error": "出错"
+      "error": "出错",
+      "posting": "发布中"
     },
     "pr": {
       "open": "进行中",
@@ -412,7 +413,8 @@
       "posted": "已发评论",
       "recheck_requested": "待复审",
       "rechecking": "复审中",
-      "error": "出错"
+      "error": "出错",
+      "posting": "发布中"
     },
     "rc": {
       "fixed": "✓ 已修复",
@@ -515,7 +517,13 @@
     "openPrMsg": "请帮我开这个 PR：用英文 conventional commit 提交、推送分支、用 gh pr create 开 PR（英文标题 + 正文），完成后把 PR 链接发我。",
     "chatPlaceholder": "继续聊来开发 / 让它改…（满意了点「开 PR」）",
     "discard": "删除任务",
-    "discardConfirm": "删除这个任务？（含 worktree，不可恢复）"
+    "discardConfirm": "删除这个任务？（含 worktree，不可恢复）",
+    "col": {
+      "title": "标题",
+      "status": "状态",
+      "pr": "PR",
+      "updated": "更新"
+    }
   },
   "remote": {
     "title": "远程访问",

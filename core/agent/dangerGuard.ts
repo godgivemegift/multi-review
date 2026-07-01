@@ -15,11 +15,13 @@ if ((inp.tool_name || '') !== 'Bash') process.exit(0)
 const cmd = String((inp.tool_input || {}).command || '')
 const DANGER = [
   /\\brm\\s+-[rf]/i, /\\brm\\b[^|;&]*--(recursive|force)\\b/i, /\\bfind\\b[^|;&]*-(delete|exec)\\b/i,
-  /\\bsudo\\b/i, /\\bgit\\s+push\\b/i, /\\bgit\\s+reset\\s+--hard\\b/i,
-  /\\bgit\\s+clean\\s+-[a-z]*f/i, /\\b(mkfs|shred)\\b/i, /\\bdd\\s+if=/i, /\\bchmod\\s+-R\\b/i, /\\bchown\\s+-R\\b/i,
+  /\\bsudo\\b/i,
+  // git/gh：动词允许夹在前导 flag 之后（防 \`git -C dir push\` / \`gh --repo o/r pr create\` 绕过守卫）。[^|;&] 限在单条命令内。
+  /\\bgit\\b[^|;&]*\\bpush\\b/i, /\\bgit\\b[^|;&]*\\breset\\b[^|;&]*--hard\\b/i,
+  /\\bgit\\b[^|;&]*\\bclean\\b[^|;&]*-[a-z]*f/i, /\\b(mkfs|shred)\\b/i, /\\bdd\\s+if=/i, /\\bchmod\\s+-R\\b/i, /\\bchown\\s+-R\\b/i,
   /\\b(curl|wget)\\b[^|]*\\|\\s*(sh|bash|zsh|python3?|node|perl|ruby)\\b/i,
-  /:\\(\\)\\s*\\{/, />\\s*\\/dev\\/sd/i, /\\bgh\\s+repo\\s+delete\\b/i,
-  /\\bgh\\s+(pr|issue|release)\\b[^|;&]*\\bcreate\\b/i,
+  /:\\(\\)\\s*\\{/, />\\s*\\/dev\\/sd/i, /\\bgh\\b[^|;&]*\\brepo\\b[^|;&]*\\bdelete\\b/i,
+  /\\bgh\\b[^|;&]*\\b(pr|issue|release)\\b[^|;&]*\\bcreate\\b/i,
 ]
 if (DANGER.some((re) => re.test(cmd))) {
   process.stderr.write('pr-cockpit danger guard blocked: ' + cmd.slice(0, 160) + ' — turn on "allow dangerous commands" and resend to permit.')
