@@ -89,6 +89,14 @@ export async function prepareFeatureWorktree(opts: {
     onStep?.(`创建新分支 worktree（${newBranch} ← ${baseRef}）`)
     // -B：强制建/重置功能分支到 baseRef，并在新 worktree 里 checkout
     await git(localPath, ['worktree', 'add', '-B', newBranch, wtPath, baseRef])
+    // 从 origin/<default> 建的新功能分支：autoSetupMerge 会把它的 upstream 设成默认分支。
+    // 那样裸 `git push`（push.default=simple）会被拒，且 git 首条建议是 push 到默认分支——
+    // agent 照做就把功能提交直接推上了 base，污染基线并绕过 PR。→ 清掉这个误导性 upstream，
+    // 让裸 push 转而给出可自纠的 `--set-upstream origin <newBranch>` 提示。
+    // 恢复场景（baseRef=origin/<newBranch>，同名）保留跟踪不动，push 正常更新 PR 分支。
+    if (baseRef === `origin/${defaultBranch}`) {
+      await git(wtPath, ['branch', '--unset-upstream']).catch(() => { /* 没设 upstream 就忽略 */ })
+    }
     return sha
   })
 

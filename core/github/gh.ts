@@ -105,6 +105,17 @@ export async function fetchPrState(
   return { state: normState(j.state, !!j.isDraft), headSha: j.headRefOid ?? '', reviewDecision: j.reviewDecision ?? '', author: j.author?.login ?? '' }
 }
 
+// 按分支回查该分支已建的 PR。feature 开发里 agent 自己 commit/push/开 PR 后，后端据此
+// 联动状态（status=opened + prUrl/prNumber）——不管 PR 是「开 PR」按钮开的还是聊天里顺手开的都能抓到。
+export async function findPrByBranch(repo: string, branch: string): Promise<{ url: string; number: number } | null> {
+  try {
+    const out = await gh(['pr', 'list', '--repo', repo, '--head', branch, '--state', 'all', '--json', 'url,number', '--limit', '1'])
+    const first = (JSON.parse(out.trim() || '[]') as Array<{ url?: string; number?: number }>)[0]
+    if (first?.url) return { url: String(first.url), number: Number(first.number) || 0 }
+  } catch { /* 没建 PR / gh 出错 → 当作还没开 */ }
+  return null
+}
+
 // 取 issue / PR 的标题 + 正文（feature 开发贴 issue/PR 链接时，把正文喂给只读 agent；
 // agent 自己上不了网、下不了图，所以正文 + 配图都由后端先抓好再交给它）。
 export async function fetchIssueBody(repo: string, kind: 'issue' | 'pr', number: number): Promise<{ title: string; body: string }> {

@@ -1,7 +1,7 @@
 import { stopFeatureImpl } from '~core/feature/pipeline'
 
-// 停止当前任务：阶段1（claude 分析）abort SDK query，阶段2（实现）kill 子进程 / runner stop。
-// codex 的只读分析阶段暂无中断句柄 → 那种情况返回 false（按钮无效，是已知限制）。
+// 停止当前 develop 回合（单段式）：codex 走 runner 暴露的 abort 句柄；claude 走子进程组 SIGINT→SIGKILL。
+// 没有在跑（没句柄也没子进程）时返回 false。
 export default defineEventHandler((event) => {
   const id = getRouterParam(event, 'id')!
   const ok = stopFeatureImpl(id)

@@ -5,24 +5,32 @@ import { langName } from './lang'
 import type { ReviewProvider } from './runners'
 import type { FixChatOptions, FixChatResult } from './fixer'
 
-// Feature 开发的「开发模式」聊天：和全局助手一样的 bypassPermissions 全权限体验，
-// 只是 cwd 锁在 feature 的隔离 worktree（新功能分支），并且默认「别 commit / push」——
-// 改动留在 worktree，用户点「开 PR」才提交。危险命令由共享守卫拦（allowDanger 放行）。
+// Feature 开发 · 单段式（原生 agent）：bypassPermissions 全权限，cwd 锁在隔离 worktree（新功能分支）。
+// agent 直接动手实现；遇到真决策点用 ```ask-user 块问用户（前端渲染成决策卡）；用户让「开 PR」时它自己
+// commit/push/gh pr create（英文）。默认别 push（危险命令守卫会拦，除非 allowDanger）。
 //
 // claude 路径：headless `claude -p --permission-mode bypassPermissions`（同 globalChat），
-// 用 --append-system-prompt 注入 feature 上下文，用户消息原样当 prompt（保留开头的 `ultracode:` 前缀，
-// 让子 agent 识别 → 和全局助手的 ultracode 行为一致）。
+// 用 --append-system-prompt 注入方法学 + 开发上下文。ultracode 前缀由管线注入（不在此处理）。
 
-export type FeatureChatOptions = FixChatOptions & { allowDanger?: boolean }
+export type FeatureChatOptions = FixChatOptions & { allowDanger?: boolean; baseBranch?: string }
 
-function featureSystemPrompt(lang: string): string {
-  return `You are a feature-development assistant working inside an isolated git worktree on a NEW feature branch (created from the repository's default branch). The current directory IS that worktree — implement what the user asks by editing files directly.
+function featureSystemPrompt(lang: string, baseBranch?: string): string {
+  const base = baseBranch || 'the default branch'
+  return `You are a senior engineer implementing a feature directly inside an isolated git worktree on a NEW feature branch (created from ${base}). The current directory IS that worktree — implement what the user asks by editing files directly. You have the full toolset and full permissions (bash, git, gh, network, tests).
 
-You have the full toolset and full permissions (bash, git, gh, network, tests). Investigate the repo freely and keep each change a focused, reviewable slice.
+Working principles:
+- Explore before acting: read the relevant code first, reuse existing patterns/conventions, and keep each change a small, focused, reviewable slice. If the request is too big, propose the smallest first slice.
+- Just do it when it's clear: if the change is unambiguous (e.g. a pure CSS/label tweak) with no real fork, implement it directly — do NOT ask.
+- Ask ONLY on genuine decision points (architecture / data model / external contract / a real user-facing tradeoff). When you must ask, STOP and emit EXACTLY one fenced block, then END your turn and wait (the user's answer arrives as the next message):
+\`\`\`ask-user
+<your question in one or two lines>
+- <option A>
+- <option B (推荐)>
+\`\`\`
+  Mark your recommended option with (推荐). Batch related questions; never ask about implementation details you can decide yourself; keep the number of questions minimal.
+- Do NOT commit or push by default — leave your edits uncommitted in the worktree. EXCEPTION: when the user explicitly asks you to open a PR (e.g. "开 PR" / "open a PR"), then: commit with an English conventional-commit message; push the current branch with \`git push -u origin HEAD\` (NEVER a bare \`git push\` — its upstream is intentionally unset, and never push to ${base}); then run \`gh pr create --base ${base} --title <English> --body <English>\` and report the resulting PR URL.
 
-Do NOT commit or push. Leave your edits uncommitted in the worktree — the user reviews them in the UI and clicks "Open PR", which commits and pushes for them. (Only commit/push if the user explicitly tells you to.)
-
-Respond in ${langName(lang)}.`
+Respond in ${langName(lang)}. Keep PR title/body, commit messages, and code comments in English.`
 }
 
 async function runFeatureClaudeChat(opts: FeatureChatOptions): Promise<FixChatResult> {
@@ -32,7 +40,7 @@ async function runFeatureClaudeChat(opts: FeatureChatOptions): Promise<FixChatRe
     '--output-format', 'stream-json',
     '--permission-mode', 'bypassPermissions',
     '--settings', dangerSettingsJson(),
-    '--append-system-prompt', featureSystemPrompt(opts.lang),
+    '--append-system-prompt', featureSystemPrompt(opts.lang, opts.baseBranch),
   ]
   if (opts.model) args.push('--model', opts.model)
   if (opts.effort) args.push('--effort', opts.effort)
