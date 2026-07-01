@@ -107,7 +107,8 @@ jobs:
           files: dist-artifacts/**/*
 
   # push 到 main 时,把三平台产物覆盖到滚动的 `nightly` 预发布上。
-  # 每次先删旧 release+tag 再重建 → 资产永远干净(哪怕以后 version 变了也不留旧文件)。
+  # 就地更新(而非先删后建):把 nightly tag 力推到本次 commit、--clobber 覆盖同名资产,
+  #   再清掉版本变化后不再产出的旧资产 → 资产保持干净,且「固定下载地址」全程不消失(无 404 空窗)。
   # 固定下载地址:github.com/<repo>/releases/tag/nightly(公开仓库免登录直下)。
   nightly:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
@@ -129,14 +130,59 @@ jobs:
           set -euo pipefail
           # merge-multiple 把产物拍平进 dist-artifacts/;用 find 收集(不靠 shell glob,任何层级都稳)。
           mapfile -t assets < <(find dist-artifacts -type f)
-          if [ "${#assets[@]}" -eq 0 ]; then echo "no build artifacts found" >&2; exit 1; fi
-          # 删掉旧的 nightly release 和它的 tag(首次没有 → 忽略失败)。
-          gh release delete nightly --repo "$GITHUB_REPOSITORY" --yes --cleanup-tag || true
-          # 在本次合并的 commit 上重建。标记 prerelease,不会顶替以后的正式 Release。
-          gh release create nightly \
-            --repo "$GITHUB_REPOSITORY" \
-            --target "$GITHUB_SHA" \
-            --prerelease \
-            --title "Nightly (main)" \
-            --notes "Rolling build from the latest \`main\` (${GITHUB_SHA:0:7}). Overwritten on every merge — not a versioned release. macOS/Windows builds are unsigned; you may need to bypass Gatekeeper/SmartScreen on first launch." \
-            "${assets[@]}"
+          if [ "${#assets[@]}" -eq 0 ]; then echo "没有找到任何构建产物" >&2; exit 1; fi
+
+          # F1:nightly 是无人值守的自动发布,必须三平台齐全,否则会静默发出「缺平台」的预发布。
+          # 用各平台的标志性安装包断言:mac=.dmg、win=.exe、linux=.AppImage,缺任一则整个 job 失败。
+          for pattern in "*.dmg" "*.exe" "*.AppImage"; do
+            if [ -z "$(find dist-artifacts -type f -name "$pattern" -print -quit)" ]; then
+              echo "::error::缺少必需的平台安装包($pattern);nightly 需要 mac/windows/linux 三平台齐全,已中止发布" >&2
+              exit 1
+            fi
+          done
+
+          title="Nightly (main)"
+          notes="Rolling build from the latest \`main\` (${GITHUB_SHA:0:7}). Overwritten on every merge — not a versioned release. macOS/Windows builds are unsigned; you may need to bypass Gatekeeper/SmartScreen on first launch."
+
+          # F2:「固定下载地址」不能有空窗。先删后建非原子 —— 配合 cancel-in-progress,若在删与建之间
+          #   被取消、或 create 因网络/一致性延迟失败,nightly release 与 tag 会被删掉却没重建,短时 404。
+          #   改为「就地更新」:release 已存在时全程不删除,只覆盖资产与元数据;首次才创建(create 加重试)。
+          if gh release view nightly --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            echo "nightly 已存在:就地覆盖资产与元数据(全程 release 不消失,无下载空窗)"
+            # 把 nightly tag 原子地力推到本次 commit(force update,不经历删除,无空窗);失败仅告警不阻断发布。
+            gh api -X PATCH "repos/$GITHUB_REPOSITORY/git/refs/tags/nightly" -f sha="$GITHUB_SHA" -F force=true \
+              || echo "::warning::移动 nightly tag 到 ${GITHUB_SHA:0:7} 失败,release 资产仍会照常更新"
+            # 刷新标题/说明/prerelease 标记。
+            gh release edit nightly --repo "$GITHUB_REPOSITORY" --prerelease --title "$title" --notes "$notes"
+            # 覆盖同名资产(--clobber:同名先删后传)。
+            gh release upload nightly --repo "$GITHUB_REPOSITORY" --clobber "${assets[@]}"
+            # 清掉版本号变化后不再产出的旧资产,保持 release 资产干净(逐行整行比对,允许文件名含空格)。
+            new_names="$(for f in "${assets[@]}"; do basename "$f"; done)"
+            gh release view nightly --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name' \
+              | while IFS= read -r name; do
+                  [ -n "$name" ] || continue
+                  if ! grep -Fxq -- "$name" <<<"$new_names"; then
+                    echo "删除过时资产:$name"
+                    gh release delete-asset nightly "$name" --repo "$GITHUB_REPOSITORY" --yes || true
+                  fi
+                done
+          else
+            echo "nightly 尚不存在:创建预发布(create 加重试,抵御网络/一致性抖动)"
+            for attempt in 1 2 3; do
+              if gh release create nightly \
+                --repo "$GITHUB_REPOSITORY" \
+                --target "$GITHUB_SHA" \
+                --prerelease \
+                --title "$title" \
+                --notes "$notes" \
+                "${assets[@]}"; then
+                break
+              fi
+              if [ "$attempt" -eq 3 ]; then
+                echo "::error::创建 nightly 预发布失败(已重试 3 次),固定下载地址可能缺失,请人工介入" >&2
+                exit 1
+              fi
+              echo "创建失败(第 ${attempt}/3 次),10 秒后重试..." >&2
+              sleep 10
+            done
+          fi
