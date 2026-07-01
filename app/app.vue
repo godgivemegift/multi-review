@@ -73,6 +73,8 @@ async function createProject() {
           <span class="text-sm font-medium tracking-[0.18em] uppercase">Multi&nbsp;<span class="text-dimmed">Review</span></span>
         </NuxtLink>
         <div class="flex items-center gap-1" style="-webkit-app-region: no-drag">
+          <UpdateCheckButton />
+          <RemoteAccessButton />
           <LanguageSwitcher />
           <ColorModeToggle />
         </div>

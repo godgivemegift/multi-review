@@ -1,16 +1,23 @@
-import { app, BrowserWindow, shell, dialog } from 'electron'
+import { app, BrowserWindow, shell, dialog, Menu, ipcMain } from 'electron'
 import path from 'node:path'
 import net from 'node:net'
 import fs from 'node:fs'
 import { spawn, execFileSync } from 'node:child_process'
 import { fileURLToPath } from 'node:url'
+import { checkForUpdates, setUpdaterLocale } from './updater.mjs'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+
+let didAutoCheckUpdates = false // 启动只自动查一次更新(重开窗口不重复弹)
 
 // dev 模式由启动脚本注入(指向 nuxt dev server)。打包态忽略该 env：
 // 否则任何能设置启动环境的人都能把「可信」app 悄悄重定向到任意 URL 并自动开 DevTools。
 const DEV_URL = app.isPackaged ? '' : process.env.ELECTRON_RENDERER_URL || ''
-const HOST = '127.0.0.1'
+// Nitro 绑 0.0.0.0（所有网卡），让局域网设备「有可能」连上；到底放不放行由
+// server/middleware/00.lan-guard.ts 按请求鉴权（默认关闭、远端 403）。桌面窗口
+// 始终走回环地址，与远程访问开关无关。
+const BIND_HOST = '0.0.0.0'
+const LOOPBACK = '127.0.0.1'
 
 let mainWindow = null
 let serverProc = null
@@ -47,7 +54,7 @@ function getFreePort() {
     const srv = net.createServer()
     srv.unref()
     srv.on('error', reject)
-    srv.listen(0, HOST, () => {
+    srv.listen(0, BIND_HOST, () => {
       const { port } = srv.address()
       srv.close(() => resolve(port))
     })
@@ -72,7 +79,7 @@ function waitForServer(port, child, timeoutMs = 30000) {
       done(reject, new Error(`Nitro server exited before it was ready (code ${code ?? signal}).${tail()}`)))
     const tryonce = () => {
       if (settled) return
-      const sock = net.connect(port, HOST)
+      const sock = net.connect(port, LOOPBACK)
       sock.once('connect', () => {
         sock.destroy()
         done(resolve)
@@ -81,7 +88,7 @@ function waitForServer(port, child, timeoutMs = 30000) {
         sock.destroy()
         if (settled) return
         if (Date.now() - start > timeoutMs) {
-          done(reject, new Error(`Server not ready on ${HOST}:${port} after ${timeoutMs}ms.${tail()}`))
+          done(reject, new Error(`Server not ready on ${LOOPBACK}:${port} after ${timeoutMs}ms.${tail()}`))
         } else {
           setTimeout(tryonce, 250)
         }
@@ -113,8 +120,8 @@ async function startNitro() {
       ...process.env,
       ELECTRON_RUN_AS_NODE: '1',
       PATH: envPath,
-      NITRO_HOST: HOST,
-      HOST,
+      NITRO_HOST: BIND_HOST,
+      HOST: BIND_HOST,
       NITRO_PORT: String(port),
       PORT: String(port),
       NUXT_DB_PATH: path.join(userData, 'cockpit.db'),
@@ -139,7 +146,7 @@ async function startNitro() {
   })
 
   await waitForServer(port, child)
-  serverUrl = `http://${HOST}:${port}`
+  serverUrl = `http://${LOOPBACK}:${port}`
   return serverUrl
 }
 
@@ -174,6 +181,7 @@ function createWindow(url) {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
+      preload: path.join(__dirname, 'preload.cjs'), // 暴露 window.mrUpdates.check()
     },
   })
 
@@ -257,6 +265,40 @@ async function openMainWindow() {
   return openingPromise
 }
 
+// 应用菜单：保留各平台标准项，额外挂一个「检查更新…」入口(手动触发,非 silent)。
+function setupAppMenu() {
+  const isMac = process.platform === 'darwin'
+  const checkItem = {
+    label: isMac ? 'Check for Updates…' : 'Check for Updates',
+    click: () => checkForUpdates(mainWindow, { silent: false }),
+  }
+  const template = [
+    ...(isMac
+      ? [{ label: app.name, submenu: [{ role: 'about' }, checkItem, { type: 'separator' }, { role: 'services' }, { type: 'separator' }, { role: 'hide' }, { role: 'hideOthers' }, { role: 'unhide' }, { type: 'separator' }, { role: 'quit' }] }]
+      : []),
+    { role: 'fileMenu' },
+    { role: 'editMenu' },
+    { role: 'viewMenu' },
+    { role: 'windowMenu' },
+    {
+      role: 'help',
+      submenu: [
+        ...(isMac ? [] : [checkItem, { type: 'separator' }]),
+        { label: 'Multi Review on GitHub', click: () => shell.openExternal('https://github.com/taovc/multi-review') },
+      ],
+    },
+  ]
+  Menu.setApplicationMenu(Menu.buildFromTemplate(template))
+}
+
+// 启动后台静默查一次更新(仅打包态；开发/首窗失败时不打扰)。
+function maybeAutoCheckUpdates() {
+  if (didAutoCheckUpdates || !app.isPackaged) return
+  didAutoCheckUpdates = true
+  const t = setTimeout(() => checkForUpdates(mainWindow, { silent: true }), 3000)
+  if (typeof t.unref === 'function') t.unref()
+}
+
 // 单实例锁：随机端口去掉了旧固定端口的 EADDRINUSE 天然单例保护。两个实例会共用同一个
 // userData(DB + worktrees)→ worktree 操作跨进程 race(repoLocks 只在进程内)。
 if (!app.requestSingleInstanceLock()) {
@@ -269,9 +311,16 @@ if (!app.requestSingleInstanceLock()) {
     }
   })
 
+  // 渲染进程把 app 内选择的语言推来 → 原生更新对话框用它(而非系统语言)。
+  ipcMain.on('updates:locale', (_e, locale) => setUpdaterLocale(locale))
+  // 顶栏「检查更新」按钮 → 渲染进程通过 preload 桥调这里(手动、非 silent)。
+  ipcMain.handle('updates:check', (_e, locale) => checkForUpdates(mainWindow, { silent: false, locale }))
+
   app.whenReady().then(async () => {
+    setupAppMenu()
     try {
       await openMainWindow()
+      maybeAutoCheckUpdates()
     } catch (err) {
       console.error('[main] failed to start:', err)
       dialog.showErrorBox('Multi Review — startup failed', String(err?.message || err))
