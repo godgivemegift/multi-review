@@ -577,5 +577,8 @@
     "modeLabel": "Review mode",
     "fixAuthorHint": "Empty author = only your own PRs are auto-fixed. Add authors to auto-fix others' PRs (runs an agent + pushes).",
     "coolingHint": "Cooling down · {n} min left (you can still turn it off)"
+  },
+  "update": {
+    "check": "Check for updates"
   }
 }

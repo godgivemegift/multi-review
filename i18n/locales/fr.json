@@ -577,5 +577,8 @@
     "modeLabel": "Mode de revue",
     "fixAuthorHint": "Vide = seulement vos propres PR. Ajoutez des auteurs pour corriger celles des autres (lance un agent + push).",
     "coolingHint": "En attente · {n} min restantes (vous pouvez encore désactiver)"
+  },
+  "update": {
+    "check": "Vérifier les mises à jour"
   }
 }
