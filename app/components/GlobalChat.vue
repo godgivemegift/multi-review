@@ -16,7 +16,21 @@ const input = ref('')
 const liveAssistant = ref('')
 const logLines = ref<string[]>([]) // 工具/阶段日志（实时；面板状态在 ChatLogPanel 内部）
 const busy = ref(false)
-const allowDanger = ref(false) // 「允许危险命令」开关 → 放行 PreToolUse 守卫
+// 「允许危险命令」+「ultracode 后台激活」：一次开启后永久记住（localStorage，跨会话/刷新），
+// 不再每条消息重点。ultracode 不再往输入框塞前缀，改由后端在发给 agent 时注入（你永远看不到前缀）。
+const allowDanger = ref(false)
+const ultracodeOn = ref(false)
+const LS_DANGER = 'mr.global.allowDanger'
+const LS_ULTRA = 'mr.global.ultracode'
+onMounted(() => {
+  allowDanger.value = localStorage.getItem(LS_DANGER) === '1'
+  ultracodeOn.value = localStorage.getItem(LS_ULTRA) === '1'
+})
+watch(allowDanger, (v) => { if (import.meta.client) localStorage.setItem(LS_DANGER, v ? '1' : '0') })
+function toggleUltracode() {
+  ultracodeOn.value = !ultracodeOn.value
+  if (import.meta.client) localStorage.setItem(LS_ULTRA, ultracodeOn.value ? '1' : '0')
+}
 const { confirming } = useInlineConfirm() // '' | 'delete'（抽屉内联确认，不用弹窗）
 const renaming = ref(false)
 const renameVal = ref('')
@@ -157,15 +171,6 @@ async function handleSlash(raw: string): Promise<boolean> {
 
 const pendingCwd = ref<string | null>(null)
 
-// ultracode 便捷开关：在输入开头切换 `ultracode: ` 前缀（method ① —— 让这条用 xhigh + 多代理 workflow 跑）。
-const ULTRA_PREFIX = 'ultracode: '
-const ultracodeActive = computed(() => /^ultracode:/i.test(input.value))
-function toggleUltracode() {
-  input.value = ultracodeActive.value
-    ? input.value.replace(/^ultracode:\s*/i, '')
-    : ULTRA_PREFIX + input.value
-}
-
 async function send() {
   const msg = input.value.trim()
   if (!msg || chatting.value || busy.value) return
@@ -175,7 +180,7 @@ async function send() {
   liveAssistant.value = ''
   try {
     const id = await ensureSession()
-    await $fetch(`/api/global/sessions/${id}/chat`, { method: 'POST', body: { message: msg, cwd: pendingCwd.value || undefined, allowDanger: allowDanger.value } })
+    await $fetch(`/api/global/sessions/${id}/chat`, { method: 'POST', body: { message: msg, cwd: pendingCwd.value || undefined, allowDanger: allowDanger.value, ultracode: ultracodeOn.value } })
     pendingCwd.value = null
     await load()
   } catch (e: any) {
@@ -311,12 +316,13 @@ function hhmmss(iso?: string) { return new Date(iso ?? new Date().toISOString())
               class="w-full text-sm border border-default rounded px-2 py-1.5 resize-y outline-none focus:border-inverted"
             />
             <div class="flex items-center justify-between gap-2 mt-1.5">
-              <!-- ultracode 便捷按钮：紫色 + 左→右光效；点击在输入开头切换「ultracode:」前缀 -->
+              <!-- ultracode 后台激活开关：未激活=灰渐变(无扫光)，激活=紫渐变+扫光。点一次永久记住，不再每条都点。 -->
               <button
                 type="button"
                 class="ultra-btn relative overflow-hidden shrink-0 text-xs rounded px-2.5 py-1.5 font-medium text-white shadow-sm transition"
-                :class="ultracodeActive ? 'bg-purple-600 ring-2 ring-purple-300' : 'bg-purple-600/90 hover:bg-purple-600'"
+                :class="ultracodeOn ? 'is-active bg-gradient-to-r from-purple-600 to-fuchsia-600 ring-2 ring-purple-300' : 'bg-gradient-to-r from-neutral-500 to-neutral-600 opacity-80 hover:opacity-100'"
                 :title="$t('global.ultracodeHint')"
+                :aria-pressed="ultracodeOn"
                 @click="toggleUltracode"
               >
                 <span class="relative z-10 flex items-center gap-1">
@@ -337,8 +343,8 @@ function hhmmss(iso?: string) { return new Date(iso ?? new Date().toISOString())
 </template>
 
 <style scoped>
-/* ultracode 按钮：一束高光从左到右扫过（扫完停一下再来）*/
-.ultra-btn::after {
+/* ultracode 按钮：激活态才有一束高光从左到右扫过（扫完停一下再来）；未激活是灰的、不扫光。*/
+.ultra-btn.is-active::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -352,6 +358,6 @@ function hhmmss(iso?: string) { return new Date(iso ?? new Date().toISOString())
   60%, 100% { transform: translateX(100%); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ultra-btn::after { animation: none; }
+  .ultra-btn.is-active::after { animation: none; }
 }
 </style>

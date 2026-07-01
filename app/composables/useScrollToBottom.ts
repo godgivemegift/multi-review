@@ -3,9 +3,15 @@
 export function useScrollToBottom() {
   const scrollEl = ref<HTMLElement | null>(null)
   function scrollToBottom() {
+    // 单次 nextTick 常常滚不到真正的底：MarkdownBody 是异步(动态 import marked/dompurify)渲染的，
+    // 首次跳时内容高度还没撑开。补两帧 rAF + 一次延时，等异步渲染 / 图片 / 方案卡把高度撑满再滚。
+    const go = () => { const el = scrollEl.value; if (el) el.scrollTop = el.scrollHeight }
     nextTick(() => {
-      const el = scrollEl.value
-      if (el) el.scrollTop = el.scrollHeight
+      go()
+      if (typeof requestAnimationFrame === 'function') {
+        requestAnimationFrame(() => { go(); requestAnimationFrame(go) })
+      }
+      setTimeout(go, 120)
     })
   }
   return { scrollEl, scrollToBottom }

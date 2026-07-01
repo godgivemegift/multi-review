@@ -261,13 +261,14 @@ export const featureTasks = sqliteTable('feature_tasks', {
   provider: text('provider', { enum: ['claude', 'codex'] }).notNull().default('claude'),
   model: text('model'),
   lang: text('lang').notNull().default('en'),
+  // 单段式状态：working=在开发/可继续 · awaiting=agent 在等你拍板(ask-user) · opened=PR 已开 · error。
   status: text('status', {
-    enum: ['analyzing', 'planned', 'building', 'built', 'opened', 'error'],
+    enum: ['working', 'awaiting', 'opened', 'error'],
   })
     .notNull()
-    .default('analyzing'),
-  planJson: text('plan_json'),
-  decisions: text('decisions'),
+    .default('working'),
+  planJson: text('plan_json'), // 遗留列（两段式方案已删，保留列避免破坏旧库；不再写）
+  decisions: text('decisions'), // 遗留列，同上
   baseBranch: text('base_branch'),
   branch: text('branch'),
   worktreePath: text('worktree_path'),
