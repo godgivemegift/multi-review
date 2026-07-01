@@ -77,6 +77,8 @@ export type FixJobCtx = {
   model: string // 当前 provider 的实模型（不混用）
   effort?: string
   lang: string
+  allowDanger?: boolean // 用户开了「允许危险命令」→ 放行危险命令守卫（含 git push / gh pr create）
+  ultracode?: boolean // 后台激活 ultracode → 给 agent 的消息注入 `ultracode:` 前缀（入库/展示仍是干净消息）
 }
 
 // ── 共用的小工具 ──────────────────────────────────────────────
@@ -169,7 +171,9 @@ export async function runFixChatJob(ctx: FixJobCtx, message: string): Promise<vo
           effort: ctx.effort,
           lang: ctx.lang,
           sessionId: resumeId,
-          message,
+          // ultracode 后台激活：只前缀送给 agent 的消息（harness 认关键词）；入库的 user 轮仍是干净 message。
+          message: ctx.ultracode ? `ultracode: ${message}` : message,
+          allowDanger: ctx.allowDanger,
           conflictHint: await conflictHint(wt.path),
           onSpawn: (cp) => activeChats.set(fixId, cp),
           onStop: (stop) => activeChatStops.set(fixId, stop),

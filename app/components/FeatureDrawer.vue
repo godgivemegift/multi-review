@@ -182,16 +182,21 @@ async function doDelete() {
 </script>
 
 <template>
-  <USlideover v-model:open="open" :title="task ? (task.title || $t('feature.tab')) : $t('feature.newTitle')" :ui="{ content: 'w-[calc(100vw-15rem)] max-w-none min-w-[640px]' }">
-    <template #body>
-      <div class="flex flex-col h-full min-h-0">
-        <!-- header（有任务时）：标题 + 状态 + 在 GitHub 打开 + 删除 -->
+  <USlideover v-model:open="open" :ui="{ content: 'w-[calc(100vw-15rem)] max-w-none min-w-[640px]' }">
+    <template #content>
+      <div class="h-full flex flex-col bg-default text-default">
+        <!-- 顶部 header：标题 + 在 GitHub 打开 + ✕（同 PR 详情抽屉；GitHub 链接就在 X 旁边）-->
+        <div class="shrink-0 flex items-center gap-3 px-6 py-4 border-b border-default">
+          <h2 class="text-base font-medium truncate min-w-0 flex-1">{{ task ? (task.title || task.description || $t('feature.tab')) : $t('feature.newTitle') }}</h2>
+          <a v-if="task?.prUrl" :href="task.prUrl" target="_blank" class="text-xs text-muted hover:text-highlighted whitespace-nowrap shrink-0">{{ $t('prDrawer.openInGithub') }}</a>
+          <button class="text-dimmed hover:text-highlighted text-lg leading-none shrink-0" @click="open = false">✕</button>
+        </div>
+
+        <!-- body -->
+        <div class="flex-1 min-h-0 flex flex-col px-6 py-4">
+        <!-- 状态 + 删除任务（标题 / GitHub 已上移到顶部 header）-->
         <div v-if="task" class="shrink-0 flex items-center gap-2 pb-2 mb-2 border-b border-default">
-          <span class="text-sm font-medium truncate min-w-0">{{ task.title || task.description || $t('feature.untitled') }}</span>
           <span class="shrink-0 text-[10px] uppercase tracking-wider px-2 py-0.5 border rounded-full" :class="STATUS_CLS[status] || 'text-dimmed border-default'">{{ $t('feature.status.' + status) }}</span>
-          <a v-if="task.prUrl" :href="task.prUrl" target="_blank" class="shrink-0 inline-flex items-center gap-1 text-xs text-highlighted hover:underline">
-            {{ $t('prDrawer.openInGithub') }}<span aria-hidden="true">↗</span>
-          </a>
           <template v-if="confirming === 'discard'">
             <span class="ml-auto text-xs text-dimmed">{{ $t('feature.discardConfirm') }}</span>
             <button class="text-xs text-error font-medium hover:underline disabled:opacity-40" :disabled="busy" @click="doDelete">{{ $t('common.delete') }}</button>
@@ -284,6 +289,7 @@ async function doDelete() {
             </button>
             <button class="w-24 text-sm bg-inverted text-inverted py-1.5 rounded hover:bg-inverted/90 disabled:opacity-40" :disabled="!input.trim() || !canChat" @click="sendChat()">{{ sending && !featureId ? $t('feature.creating') : $t('global.send') }}</button>
           </div>
+        </div>
         </div>
       </div>
     </template>
