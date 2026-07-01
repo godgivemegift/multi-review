@@ -490,7 +490,7 @@
     "dangerOn": "⚠️ Commandes dangereuses AUTORISÉES (rm -rf / git push non bloqués)",
     "rename": "Renommer",
     "ultracode": "mode ultracode",
-    "ultracodeHint": "Préfixe « ultracode: » — exécute ce message en raisonnement xhigh + workflow multi-agents (plus puissant, mais plus lent et plus coûteux)"
+    "ultracodeHint": "Active le mode ultracode (reste activé) — raisonnement xhigh + workflow multi-agents (plus puissant, mais plus lent et plus coûteux). Tapez normalement, c'est appliqué en arrière-plan."
   },
   "feature": {
     "tab": "Dév feature",

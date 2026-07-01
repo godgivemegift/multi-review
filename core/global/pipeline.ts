@@ -42,6 +42,7 @@ export type GlobalChatJobCtx = {
   model: string
   effort?: string // 空 = claude 默认
   allowDanger?: boolean // 用户开了「允许危险命令」开关 → 放行 PreToolUse 守卫
+  ultracode?: boolean // 用户开了「ultracode」后台激活 → 给 agent 的消息前缀注入 `ultracode:`（存库仍是干净消息）
 }
 
 export async function runGlobalChatJob(ctx: GlobalChatJobCtx, message: string): Promise<void> {
@@ -77,7 +78,8 @@ export async function runGlobalChatJob(ctx: GlobalChatJobCtx, message: string): 
         effort: ctx.effort,
         allowDanger: ctx.allowDanger,
         sessionId: cur?.sessionId ?? null,
-        message,
+        // 后台激活 ultracode：只在送给 agent 的消息上加前缀（harness 认这个关键词），入库/展示仍是干净消息。
+        message: ctx.ultracode ? `ultracode: ${message}` : message,
         onSpawn: (cp) => activeChats.set(sessionId, cp),
         onTool: (name, info) => emit('tool', `${name} ${info}`),
         onText: (t) => {

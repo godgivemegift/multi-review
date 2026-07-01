@@ -6,11 +6,11 @@ import { schema } from '~core/db/client'
 import { runGlobalChatJob, isGlobalChatting, type GlobalChatJobCtx } from '~core/global/pipeline'
 
 // 发一条全局会话消息（fire-and-forget，进度走 SSE）。可带 cwd（/cd）：校验存在后持久化到 session。
-const Body = z.object({ message: z.string().min(1).max(20000), cwd: z.string().optional(), allowDanger: z.boolean().optional() })
+const Body = z.object({ message: z.string().min(1).max(20000), cwd: z.string().optional(), allowDanger: z.boolean().optional(), ultracode: z.boolean().optional() })
 
 export default defineEventHandler(async (event) => {
   const id = getRouterParam(event, 'id')!
-  const { message, cwd, allowDanger } = Body.parse((await readBody(event)) || {})
+  const { message, cwd, allowDanger, ultracode } = Body.parse((await readBody(event)) || {})
   const d = db()
   const session = d.select().from(schema.globalSessions).where(eq(schema.globalSessions.id, id)).get()
   if (!session) throw createError({ statusCode: 404, statusMessage: 'session 不存在' })
@@ -31,6 +31,7 @@ export default defineEventHandler(async (event) => {
     model: session.model || (cfg.anthropicModel as string) || '',
     effort: session.effort || (cfg.globalEffort as string) || undefined,
     allowDanger: !!allowDanger,
+    ultracode: !!ultracode,
   }
   void runGlobalChatJob(ctx, message).catch((e) => console.error('[global-chat] job failed', e))
   return { ok: true, cwd: workdir }

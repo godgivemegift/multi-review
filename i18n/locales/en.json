@@ -490,7 +490,7 @@
     "dangerOn": "⚠️ Dangerous commands ALLOWED (rm -rf / git push not blocked)",
     "rename": "Rename",
     "ultracode": "ultracode mode",
-    "ultracodeHint": "Prepend \"ultracode:\" — run this message with xhigh reasoning + multi-agent workflow (stronger, but slower and pricier)"
+    "ultracodeHint": "Toggle ultracode mode (stays on) — runs with xhigh reasoning + multi-agent workflow (stronger, but slower and pricier). Just type normally; it's applied in the background."
   },
   "feature": {
     "tab": "Feature dev",

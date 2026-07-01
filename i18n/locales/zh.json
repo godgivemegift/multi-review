@@ -490,7 +490,7 @@
     "dangerOn": "⚠️ 已允许危险命令（rm -rf / git push 等不再拦）",
     "rename": "重命名",
     "ultracode": "ultracode模式",
-    "ultracodeHint": "点一下在开头加 ultracode: —— 让助手用 xhigh + 多代理 workflow 跑这条（更强，但更慢更贵）"
+    "ultracodeHint": "开关 ultracode 模式（开了就一直生效）—— 用 xhigh + 多代理 workflow 跑（更强，但更慢更贵）。正常打字即可，后台自动激活。"
   },
   "feature": {
     "tab": "Feature 开发",
