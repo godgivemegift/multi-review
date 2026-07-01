@@ -275,47 +275,43 @@ function codexAuthClass(status: CodexSdkStatus | null) {
 
     <!-- 模型 -->
     <section class="mt-8">
-      <div class="flex flex-wrap items-end justify-between gap-3 mb-3">
-        <div>
+      <!-- 三列：标签都对齐「审核 Provider」基线（text-[10px] uppercase），说明都对齐「当前选择」基线（text-xs），控件在下一行 -->
+      <div class="flex flex-wrap items-start gap-x-10 gap-y-4 mb-3">
+        <!-- 审核 Provider -->
+        <div class="flex flex-col">
           <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed">{{ $t('config.providerSection') }}</div>
           <p class="text-xs text-dimmed mt-1">{{ $t('config.selectedProvider', { provider: selectedProviderLabel }) }}</p>
-        </div>
-      </div>
-      <div class="flex flex-wrap items-end gap-8">
-        <div class="inline-flex border border-default rounded overflow-hidden">
-          <button
-            class="px-3 py-1.5 text-sm border-r border-default"
-            :class="form.provider === 'claude' ? 'bg-muted text-highlighted' : 'hover:bg-muted'"
-            @click="form.provider = 'claude'"
-          >{{ $t('config.providerClaude') }}</button>
-          <button
-            class="px-3 py-1.5 text-sm"
-            :class="form.provider === 'codex' ? 'bg-muted text-highlighted' : 'hover:bg-muted'"
-            @click="form.provider = 'codex'"
-          >{{ $t('config.providerCodex') }}</button>
-        </div>
-        <!-- 自动化「修复↔复查」回合上限：放在 provider 选择右边 -->
-        <label class="block">
-          <span class="text-xs text-dimmed">{{ $t('config.autoMaxRounds') }}</span>
-          <div class="flex items-center gap-2">
-            <input
-              v-model.number="form.autoMaxRounds" type="number" min="1" max="10"
-              class="w-16 text-sm border-b border-default py-1 bg-transparent outline-none focus:border-inverted"
-            />
-            <span class="text-[11px] text-dimmed max-w-[16rem] leading-snug">{{ $t('config.autoMaxRoundsHint') }}</span>
+          <div class="inline-flex border border-default rounded overflow-hidden mt-2 self-start">
+            <button
+              class="px-3 py-1.5 text-sm border-r border-default"
+              :class="form.provider === 'claude' ? 'bg-muted text-highlighted' : 'hover:bg-muted'"
+              @click="form.provider = 'claude'"
+            >{{ $t('config.providerClaude') }}</button>
+            <button
+              class="px-3 py-1.5 text-sm"
+              :class="form.provider === 'codex' ? 'bg-muted text-highlighted' : 'hover:bg-muted'"
+              @click="form.provider = 'codex'"
+            >{{ $t('config.providerCodex') }}</button>
           </div>
-        </label>
-        <!-- 自动化冷却期（分钟）：head 第一次被看到后等这么久才动手，0=不冷却 -->
-        <label class="block">
-          <span class="text-xs text-dimmed">{{ $t('config.autoCooldown') }}</span>
-          <div class="flex items-center gap-2">
-            <input
-              v-model.number="form.autoCooldownMinutes" type="number" min="0" max="120"
-              class="w-16 text-sm border-b border-default py-1 bg-transparent outline-none focus:border-inverted"
-            />
-            <span class="text-[11px] text-dimmed max-w-[16rem] leading-snug">{{ $t('config.autoCooldownHint') }}</span>
-          </div>
-        </label>
+        </div>
+        <!-- 自动修复回合上限 -->
+        <div class="flex flex-col">
+          <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed">{{ $t('config.autoMaxRounds') }}</div>
+          <p class="text-xs text-dimmed mt-1">{{ $t('config.autoMaxRoundsHint') }}</p>
+          <input
+            v-model.number="form.autoMaxRounds" type="number" min="1" max="10"
+            class="w-16 text-sm border-b border-default py-1 bg-transparent outline-none focus:border-inverted mt-2"
+          />
+        </div>
+        <!-- 自动化冷却期（分钟） -->
+        <div class="flex flex-col">
+          <div class="text-[10px] uppercase tracking-[0.15em] text-dimmed">{{ $t('config.autoCooldown') }}</div>
+          <p class="text-xs text-dimmed mt-1">{{ $t('config.autoCooldownHint') }}</p>
+          <input
+            v-model.number="form.autoCooldownMinutes" type="number" min="0" max="120"
+            class="w-16 text-sm border-b border-default py-1 bg-transparent outline-none focus:border-inverted mt-2"
+          />
+        </div>
       </div>
 
       <div class="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_18rem] max-w-4xl min-w-0">

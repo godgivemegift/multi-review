@@ -349,9 +349,9 @@
       "contentPlaceholder": "# 审核方法学\n..."
     },
     "autoMaxRounds": "自动修复回合上限",
-    "autoMaxRoundsHint": "每条 PR「修复↔复查」最多来回几轮，到顶就暂停等你。",
+    "autoMaxRoundsHint": "修复↔复查最多几轮，到顶暂停",
     "autoCooldown": "自动化冷却期(分钟)",
-    "autoCooldownHint": "PR 有新提交后等这么久才自动跑，给你时间进去关掉。0=不冷却。"
+    "autoCooldownHint": "新提交后等待再动手，0=不冷却"
   },
   "review": {
     "noTask": "该 PR 还没有审核任务",

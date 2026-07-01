@@ -349,9 +349,9 @@
       "contentPlaceholder": "# Méthodologie de revue\n..."
     },
     "autoMaxRounds": "Limite de tours d'auto-correction",
-    "autoMaxRoundsHint": "Tours max correction↔re-revue par PR avant la mise en pause de l'automatisation.",
+    "autoMaxRoundsHint": "Tours correction↔re-revue max, puis pause",
     "autoCooldown": "Délai d'automatisation (min)",
-    "autoCooldownHint": "Attendre ce délai après un nouveau commit avant d'agir, pour pouvoir annuler. 0 = désactivé."
+    "autoCooldownHint": "Délai après un nouveau commit, 0 = off"
   },
   "review": {
     "noTask": "Cette PR n'a pas encore de tâche de revue",

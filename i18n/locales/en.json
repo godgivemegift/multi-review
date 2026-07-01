@@ -349,9 +349,9 @@
       "contentPlaceholder": "# Review methodology\n..."
     },
     "autoMaxRounds": "Auto-fix round limit",
-    "autoMaxRoundsHint": "Max fix↔re-review rounds per PR before automation pauses for you.",
+    "autoMaxRoundsHint": "Max fix↔re-review rounds, then pause",
     "autoCooldown": "Automation cooldown (min)",
-    "autoCooldownHint": "Wait this long after a new commit before automation acts, so you can cancel. 0 = off."
+    "autoCooldownHint": "Delay after a new commit, 0 = off"
   },
   "review": {
     "noTask": "This PR has no review task yet",
