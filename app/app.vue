@@ -12,6 +12,14 @@ useHead({
 const { data: projects, refresh } = await useFetch<Project[]>('/api/projects')
 const route = useRoute()
 
+// Electron(macOS)隐藏了原生标题栏 → 顶栏左侧给 traffic light 留位
+const isElectronMac = ref(false)
+onMounted(() => {
+  if (typeof navigator !== 'undefined') {
+    isElectronMac.value = /Electron/.test(navigator.userAgent) && /Mac/i.test(navigator.userAgent)
+  }
+})
+
 const showCreate = ref(false)
 const showDepotPicker = ref(false)
 const showClonePicker = ref(false)
@@ -55,12 +63,16 @@ async function createProject() {
   <UApp :toaster="{ position: 'top-right' }">
     <div class="h-[100dvh] min-h-[100dvh] flex flex-col bg-default text-default antialiased">
       <!-- 顶部 header：左 logo / 右 控件簇（语言切换 + 深浅色） -->
-      <header class="h-16 shrink-0 border-b border-default flex items-center justify-between px-6">
-        <NuxtLink to="/" class="flex items-center gap-2.5">
+      <header
+        class="h-16 shrink-0 border-b border-default flex items-center justify-between pr-6"
+        :class="isElectronMac ? 'pl-[5.5rem]' : 'pl-6'"
+        style="-webkit-app-region: drag"
+      >
+        <NuxtLink to="/" class="flex items-center gap-2.5" style="-webkit-app-region: no-drag">
           <img src="/logo.svg" alt="" class="w-6 h-6 rounded-md" />
           <span class="text-sm font-medium tracking-[0.18em] uppercase">Multi&nbsp;<span class="text-dimmed">Review</span></span>
         </NuxtLink>
-        <div class="flex items-center gap-1">
+        <div class="flex items-center gap-1" style="-webkit-app-region: no-drag">
           <LanguageSwitcher />
           <ColorModeToggle />
         </div>

@@ -1,5 +1,6 @@
 import { existsSync, readdirSync } from 'node:fs'
-import { join } from 'node:path'
+import { join, delimiter } from 'node:path'
+import os from 'node:os'
 import { Codex, type ModelReasoningEffort, type ThreadEvent } from '@openai/codex-sdk'
 import { extractCodexErrorMessage } from './codexErrors'
 
@@ -45,6 +46,19 @@ function codexBinCandidates(triple: string, binName: string): string[] {
   return out
 }
 
+// production 兜底：node_modules 里没 vendor 二进制时（打包后 cwd 不在项目根），
+// 用 PATH / 常见安装目录里用户全局装的 codex CLI。和 claude-bin 的 fromPath 对称。
+function codexFromPath(binName: string): string | undefined {
+  const dirs = (process.env.PATH || '').split(delimiter)
+  dirs.push(join(os.homedir(), '.local', 'bin'), '/opt/homebrew/bin', '/usr/local/bin')
+  for (const d of dirs) {
+    if (!d) continue
+    const p = join(d, binName)
+    if (existsSync(p)) return p
+  }
+  return undefined
+}
+
 let _codexBin: string | null | undefined
 export function resolveCodexExecutable(): string | undefined {
   if (_codexBin !== undefined) return _codexBin ?? undefined
@@ -56,6 +70,8 @@ export function resolveCodexExecutable(): string | undefined {
     for (const cand of codexBinCandidates(triple, binName)) {
       if (existsSync(cand)) return (_codexBin = cand)
     }
+    const fromPath = codexFromPath(binName)
+    if (fromPath) return (_codexBin = fromPath)
   }
   _codexBin = null
   return undefined

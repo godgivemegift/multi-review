@@ -186,6 +186,13 @@ export function stopFeatureImpl(taskId: string): boolean {
   return true
 }
 
+// 进程退出(app 关闭)时把所有在跑的 feature 实现停掉(plan SDK abort + impl 子进程组),别留孤儿。
+export function stopAllFeatureImpl(): boolean {
+  let any = false
+  for (const id of new Set([...activeFeatureChats.keys(), ...featureStops.keys()])) any = stopFeatureImpl(id) || any
+  return any
+}
+
 // 把已批准方案 + 决策答复拼成实现阶段的首条指令。
 export function buildImplementMessage(plan: Plan, decisions: Record<string, string>, lang: string): string {
   const dlines = plan.decisionPoints.map((d) => {
